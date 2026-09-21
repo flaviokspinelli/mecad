@@ -6,6 +6,7 @@
 #include <QPointF>
 #include <TopoDS_Shape.hxx>
 #include "dependencies.h"
+#include "sketch_system.h"
 #include <vector>
 
 struct Feature {
@@ -38,6 +39,11 @@ class Model {
     void rebuild();
     DependencyGraph dependencyGraph() const;
     void moveFeature(const QString &id, int destination);
+    sketch::System sketchSystem(const QString &id) const;
+    QString sketchEntityId(const QString &id, const QString &kind, int index) const;
+    QString constrainSketch(const QString &id, sketch::Relation relation, const QString &first,
+                            const QString &second = {}, QPointF value = {});
+    void removeSketchConstraint(const QString &id, const QString &constraint);
     Feature &get(const QString &id);
     const Feature &get(const QString &id) const;
     bool consumed(const QString &id) const;
@@ -68,5 +74,6 @@ class Model {
     void checkpoint(const QJsonObject &before);
     void restore(const QJsonObject &root);
     void rebuildGeometry();
+    static void resolveSketch(Feature &feature);
     TopoDS_Shape exportShape(const QString &id) const;
 };

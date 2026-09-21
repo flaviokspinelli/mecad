@@ -171,10 +171,14 @@ Solution System::solve() const {
         basis.append(row); contributors.append(involved); ++independentRows[row.id];
     }
     auto solution = initial;
-    for (const auto &row : basis) {
-        const auto correction = row.b-dot(row.a,initial);
-        for (int i = 0; i < n; ++i) solution[i] += correction*row.a[i];
-    }
+    bool alreadySolved = true;
+    for (const auto &row : rows)
+        if (std::abs(dot(row.a,initial)-row.b)>tolerance) alreadySolved=false;
+    if (!alreadySolved)
+        for (const auto &row : basis) {
+            const auto correction = row.b-dot(row.a,initial);
+            for (int i = 0; i < n; ++i) solution[i] += correction*row.a[i];
+        }
     for (const auto &row : rows)
         result.maximumResidual = std::max(result.maximumResidual,std::abs(dot(row.a,solution)-row.b));
     check(std::isfinite(result.maximumResidual) && result.maximumResidual <= tolerance,

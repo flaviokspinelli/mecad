@@ -317,6 +317,17 @@ QIcon icon(const QString &kind) {
         line({45, 5}, {45, 33});
         line({45, 33}, {36, 24});
         line({45, 33}, {54, 24});
+    } else if (kind == "constraint_horizontal" || kind == "constraint_vertical") {
+        p.setPen(QPen(blue,5,Qt::SolidLine,Qt::RoundCap));
+        if(kind=="constraint_horizontal") { p.drawLine(12,25,52,25); p.drawLine(12,39,52,39); }
+        else { p.drawLine(25,12,25,52); p.drawLine(39,12,39,52); }
+    } else if (kind == "constraint_fixed") {
+        p.setPen(QPen(ink,3)); p.drawArc(QRectF(22,9,20,28),0,180*16);
+        p.setBrush(blue); p.drawRoundedRect(QRectF(15,28,34,27),3,3);
+        p.setPen(QPen(side,4)); p.drawLine(32,36,32,47);
+    } else if (kind == "constraint_coincident") {
+        p.setPen(QPen(ink,3)); p.drawLine(8,12,32,32); p.drawLine(32,32,56,48);
+        p.setBrush(blue); p.drawEllipse(QPointF(32,32),8,8);
     } else if (kind == "parallel" || kind == "constraint" || kind == "offset" || kind == "tangent") {
         p.setPen(QPen(blue, 4));
         line({15, 49}, {31, 12});
@@ -681,6 +692,42 @@ Window::Window(QString recoveryDirectory, bool promptRecovery) {
                 fields.first()->selectAll();
             }
         }
+    });
+    for (auto key : {QString("constraint_horizontal"),QString("constraint_vertical"),QString("constraint_fixed")}) {
+        const QMap<QString,QString> labels{{"constraint_horizontal","Horizontal"},{"constraint_vertical","Vertical"},
+            {"constraint_fixed","Fixar ponto"},{"constraint_coincident","Coincidente"}};
+        command(key,labels[key],"",[this,key] {
+            const auto items=canvas->selectedDetails;
+            const bool pair=key=="constraint_coincident", line=key=="constraint_horizontal" || key=="constraint_vertical";
+            if(items.size()!=(pair ? 2 : 1)) throw std::runtime_error("Selecione uma linha, um ponto para fixar, ou dois pontos com Shift para coincidência.");
+            QString owner=items.front().feature;
+            QStringList entities;
+            for(const auto &item:items) {
+                if(item.feature!=owner || item.kind!=(line ? "edge" : "vertex"))
+                    throw std::runtime_error("Selecione os elementos exigidos no mesmo sketch.");
+                entities.append(model.sketchEntityId(owner,item.kind,item.index));
+            }
+            auto relation=key=="constraint_horizontal" ? sketch::Relation::Horizontal :
+                key=="constraint_vertical" ? sketch::Relation::Vertical : pair ? sketch::Relation::Coincident : sketch::Relation::Fixed;
+            QPointF value;
+            if(relation==sketch::Relation::Fixed)
+                for(const auto &point:model.sketchSystem(owner).points) if(point.id==entities.front()) value=point.position;
+            model.constrainSketch(owner,relation,entities.front(),pair ? entities.back() : QString(),value);
+            selected=owner; canvas->selectedDetails.clear(); canvas->selectedDetail={}; refresh();
+            status->setText(QString("Restrição aplicada · %1 graus de liberdade").arg(model.sketchSystem(owner).solve().degreesOfFreedom));
+        });
+    }
+    command("constraint_remove","Remover restrição…","",[this] {
+        if(selected.isEmpty()) throw std::runtime_error("Selecione um sketch com restrições.");
+        auto system=model.sketchSystem(selected);
+        if(system.constraints.empty()) throw std::runtime_error("O sketch não tem restrições.");
+        const QStringList labels{"Coincidente","Horizontal","Vertical","Ponto fixo","Distância X","Distância Y"};
+        QStringList choices;
+        for(const auto &c:system.constraints) choices.append(labels[int(c.relation)]+" · "+c.first+" "+c.second+" ["+c.id+"]");
+        bool ok=false;
+        auto choice=QInputDialog::getItem(this,"Restrições do sketch","Restrição a remover",choices,0,false,&ok);
+        if(!ok) return;
+        model.removeSketchConstraint(selected,system.constraints[choices.indexOf(choice)].id); refresh();
     });
     command("exact", "Create by dimensions…", "", [this] { exactSketch(); });
     command("extrude", "Extrude", "E", [this] { extrude(); });
@@ -1251,9 +1298,9 @@ void Window::buildRibbon() {
               {"polyline", "rectangle", "circle", "polygon", "arc", "exact"}, {"Spline", "Slot", "Text"});
         group("MODIFY", {"dimension"}, {"dimension"}, {"Trim", "Extend", "Offset", "Mirror"},
               {"trim", "offset"});
-        group("CONSTRAINTS", {}, {},
-              {"Coincident", "Horizontal / Vertical", "Parallel", "Perpendicular", "Tangent", "Equal"},
-              {"constraint", "parallel", "tangent"});
+        group("CONSTRAINTS", {"constraint_horizontal","constraint_vertical","constraint_fixed"},
+              {"constraint_horizontal","constraint_vertical","constraint_fixed","constraint_remove"},
+              {"Coincident", "Parallel", "Perpendicular", "Tangent", "Equal"});
         row->addStretch();
         auto *finish = new QToolButton;
         finish->setDefaultAction(commands["finish"]);
@@ -1408,6 +1455,14 @@ void Window::buildProperties() {
             propertyForm->addRow(labels.value(key, key), spin);
         }
     if (f.type == "sketch") {
+        if(f.p.contains("constraintSystem")) {
+            const auto solved=model.sketchSystem(f.id).solve();
+            auto *state=new QLabel(QString("%1 graus de liberdade · %2 restrições redundantes")
+                .arg(solved.degreesOfFreedom).arg(solved.redundantConstraints.size()));
+            state->setObjectName("sketchConstraintStatus"); state->setWordWrap(true); propertyForm->addRow(state);
+            auto *remove=new QPushButton("Remover restrição…"); propertyForm->addRow(remove);
+            connect(remove,&QPushButton::clicked,commands["constraint_remove"],&QAction::trigger);
+        }
         auto *note =
             new QLabel("Plane: " + (f.p["plane"].toString().startsWith("FACE:") ? QString("Face da peça") : f.p["plane"].toString()) + "\nProfile: " + f.p["profile"].toString() +
                        "\nDimensions drive the profile.");

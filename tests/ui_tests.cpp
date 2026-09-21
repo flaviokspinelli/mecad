@@ -9,11 +9,53 @@
 #include <QPushButton>
 #include <QSurfaceFormat>
 #include <QTemporaryDir>
+#include <QToolButton>
 #include <QtTest>
 
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void sketchConstraintsSelectionAndPersistence() {
+        QTemporaryDir dir; QVERIFY(dir.isValid());
+        Model source;
+        auto id=source.add("sketch",{{"profile","polyline"},{"closed",false},{"plane","XY"},
+            {"points",QJsonArray{QJsonArray{0,0},QJsonArray{20,5}}}},"Line");
+        source.save(dir.filePath("line.mcad"));
+        Window window(dir.filePath("recovery"),false); window.openPath(source.filePath);
+        window.show(); QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto *v=window.findChild<Viewport *>(); QVERIFY(v);
+        v->onEditSketch(id);
+        v->view("top"); v->fit(); v->selectionFilter="edge";
+        QTest::qWait(300);
+        QTest::mouseClick(v,Qt::LeftButton,Qt::NoModifier,v->project({10,2.5,0}).toPoint());
+        QCOMPARE(v->selectedDetail.kind,QString("edge"));
+        QToolButton *horizontal=nullptr;
+        for(auto *button:window.findChildren<QToolButton *>())
+            if(button->defaultAction()==window.findChild<QAction *>("constraint_horizontal")) horizontal=button;
+        QVERIFY(horizontal); QVERIFY(horizontal->isVisible());
+        QTest::mouseClick(horizontal,Qt::LeftButton);
+        QCOMPARE(window.model.json()["version"].toInt(),2);
+        auto system=window.model.sketchSystem(id);
+        QCOMPARE(system.constraints.size(),1);
+        QVERIFY(std::abs(system.points[0].position.y()-system.points[1].position.y())<1e-8);
+        QVERIFY(window.findChild<QLabel *>("sketchConstraintStatus"));
+        window.findChild<QDockWidget *>("propertiesDock")->show();
+        window.grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("sketch-constraints.png"));
+        auto constrained=window.model.json();
+        window.findChild<QAction *>("undo")->trigger(); QCOMPARE(window.model.json(),source.json());
+        window.findChild<QAction *>("redo")->trigger(); QCOMPARE(window.model.json(),constrained);
+        auto *timeline=window.findChild<QListWidget *>("timeline");
+        QTest::mouseClick(timeline->viewport(),Qt::LeftButton,Qt::NoModifier,timeline->visualItemRect(timeline->item(0)).center());
+        QTimer::singleShot(100,[&]{for(auto *d:window.findChildren<QInputDialog *>()) d->reject();});
+        window.findChild<QAction *>("constraint_remove")->trigger(); QCOMPARE(window.model.json(),constrained);
+        QTimer::singleShot(100,[&]{for(auto *d:window.findChildren<QInputDialog *>()) d->accept();});
+        window.findChild<QAction *>("constraint_remove")->trigger();
+        QVERIFY(window.model.sketchSystem(id).constraints.empty());
+        window.findChild<QAction *>("undo")->trigger(); QCOMPARE(window.model.json(),constrained);
+        window.model.save(dir.filePath("constrained.mcad"));
+        Model reopened; reopened.load(window.model.filePath); QCOMPARE(reopened.json(),constrained);
+        QVERIFY(window.close());
+    }
     void historyDependenciesAndReorder() {
         QTemporaryDir directory; QVERIFY(directory.isValid());
         Model source;

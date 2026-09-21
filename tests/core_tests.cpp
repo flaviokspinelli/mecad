@@ -11,6 +11,63 @@
 class CoreTests : public QObject {
     Q_OBJECT
   private slots:
+    void constrainedSketchDocumentRoundTrip() {
+        Model m;
+        auto sk=m.add("sketch",{{"profile","rectangle"},{"w",10},{"h",10}},"Constrained");
+        const auto v1=m.json(); QCOMPARE(v1["version"].toInt(),1);
+        auto fix=m.constrainSketch(sk,sketch::Relation::Fixed,"p0",{},{0,0});
+        auto width=m.constrainSketch(sk,sketch::Relation::DistanceX,"p0","p1",{20,0});
+        m.constrainSketch(sk,sketch::Relation::DistanceY,"p0","p3",{0,30});
+        QCOMPARE(m.sketchSystem(sk).solve().degreesOfFreedom,0);
+        auto body=m.add("extrude",{{"source",sk},{"d",2}});
+        QVERIFY(std::abs(Model::volume(m.get(body).shape)-1200)<1e-5);
+        const auto before=m.json(); QCOMPARE(before["version"].toInt(),2);
+        QTemporaryDir dir; QVERIFY(dir.isValid());
+        m.save(dir.filePath("constraints.mcad"));
+        Model loaded; loaded.load(m.filePath); QCOMPARE(loaded.json(),before);
+        loaded.rebuild(); QCOMPARE(loaded.json(),before);
+        QVERIFY(std::abs(Model::volume(loaded.get(body).shape)-1200)<1e-5);
+        QVERIFY_THROWS_EXCEPTION(std::exception,m.constrainSketch(sk,sketch::Relation::DistanceX,"p0","p1",{25,0}));
+        QCOMPARE(m.json(),before); QVERIFY(!m.dirty);
+        m.removeSketchConstraint(sk,width); QCOMPARE(m.sketchSystem(sk).solve().degreesOfFreedom,1);
+        QVERIFY(m.undo()); QCOMPARE(m.json(),before); QVERIFY(!m.dirty);
+        auto stale=before; stale["version"]=1;
+        QVERIFY_THROWS_EXCEPTION(std::exception,loaded.loadJson(stale)); QCOMPARE(loaded.json(),before);
+        auto points=m.get(sk).p["points"].toArray(); points[2]=QJsonArray{999,999};
+        auto p=m.get(sk).p; p["points"]=points;
+        m.edit(sk,p,m.get(sk).name); // Fully constrained: direct edits must not break dimensions.
+        QCOMPARE(m.json(),before); QVERIFY(!m.dirty);
+        QVERIFY(std::abs(Model::volume(m.get(body).shape)-1200)<1e-5);
+        QVERIFY(!fix.isEmpty());
+    }
+    void constrainedSketchRejectsInvalidContours() {
+        Model m; auto sk=m.add("sketch",{{"profile","rectangle"},{"w",10},{"h",10}});
+        const auto before=m.json();
+        QVERIFY_THROWS_EXCEPTION(std::exception,m.constrainSketch(sk,sketch::Relation::Coincident,"p0","p1"));
+        QCOMPARE(m.json(),before);
+        auto fixed=m.constrainSketch(sk,sketch::Relation::Fixed,"p0",{},{0,0});
+        const auto good=m.json();
+        QVERIFY(!m.sketchEntityId(sk,"edge",0).isEmpty());
+        QVERIFY(!m.sketchEntityId(sk,"vertex",0).isEmpty());
+        QVERIFY_THROWS_EXCEPTION(std::exception,m.sketchEntityId(sk,"edge",999));
+        QVERIFY_THROWS_EXCEPTION(std::exception,m.editSketchElements(sk,{0},{},{},true));
+        QCOMPARE(m.json(),good);
+        auto p=m.get(sk).p; auto points=p["points"].toArray(); points[2]=QJsonArray{20,15}; p["points"]=points;
+        m.edit(sk,p,m.get(sk).name);
+        const auto system=m.sketchSystem(sk); QCOMPARE(system.constraints.back().id,fixed);
+        QCOMPARE(system.points.front().position,QPointF(0,0));
+        QVERIFY(std::abs(system.points[1].position.x()-system.points[2].position.x())<1e-8);
+        Model restored; restored.loadJson(m.json()); QCOMPARE(restored.json(),m.json());
+        const auto safe=m.json();
+        auto crossing=m.sketchSystem(sk); crossing.constraints.clear();
+        crossing.points[0].position={0,0}; crossing.points[1].position={10,10};
+        crossing.points[2].position={0,10}; crossing.points[3].position={10,0};
+        p=m.get(sk).p; p["constraintSystem"]=crossing.json();
+        QVERIFY_THROWS_EXCEPTION(std::exception,m.edit(sk,p,"Crossing")); QCOMPARE(m.json(),safe);
+        for(int i=0;i<4;++i) crossing.points[i].position={double(i),0};
+        p["constraintSystem"]=crossing.json();
+        QVERIFY_THROWS_EXCEPTION(std::exception,m.edit(sk,p,"Collinear")); QCOMPARE(m.json(),safe);
+    }
     void historyReorderingIsTransactional() {
         Model model;
         auto base = model.add("box",{{"w",10},{"h",10},{"d",10}},"Base");
@@ -154,7 +211,7 @@ class CoreTests : public QObject {
         const bool dirty = m.dirty;
         QList<QJsonObject> invalid;
         auto wrongVersion = original; wrongVersion["version"] = 1.5; invalid.append(wrongVersion);
-        auto future = original; future["version"] = 2; invalid.append(future);
+        auto future = original; future["version"] = 3; invalid.append(future);
         auto units = original; units["units"] = "in"; invalid.append(units);
         auto extra = original; extra["unrecognizedData"] = true; invalid.append(extra);
         const auto feature = original["features"].toArray().first().toObject();

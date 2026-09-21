@@ -65,7 +65,7 @@ double positive(const QJsonObject &p, const char *k, double fallback = 1) {
 }
 void validateDocument(const QJsonObject &root) {
     require(root["format"] == "MecaCAD" && root["version"].isDouble() &&
-                root["version"].toDouble() == 1 && root["units"] == "mm",
+                (root["version"].toDouble() == 1 || root["version"].toDouble() == 2) && root["units"] == "mm",
             "Formato, versão ou unidade de projeto não suportado.");
     const QSet<QString> rootKeys = {"format", "version", "units", "features"};
     for (auto it = root.begin(); it != root.end(); ++it)
@@ -89,6 +89,9 @@ void validateDocument(const QJsonObject &root) {
         require(f["visible"].isUndefined() || f["visible"].isBool(), "Visibilidade de operação inválida.");
         require(f["parameters"].isObject(), "Parâmetros de operação inválidos.");
         const auto p = f["parameters"].toObject();
+        if (p.contains("constraintSystem"))
+            require(root["version"].toInt() == 2 && type == "sketch" && p["constraintSystem"].isObject() &&
+                    p["profile"] == "polyline", "Restrições de sketch exigem documento v2 e perfil poligonal.");
         auto enumeration = [&](const char *key, const QSet<QString> &allowed) {
             const auto entry = p[key];
             require(entry.isUndefined() || (entry.isString() && allowed.contains(entry.toString())),
@@ -258,9 +261,13 @@ const Feature &Model::get(const QString &id) const {
 }
 QJsonObject Model::json() const {
     QJsonArray a;
+    int version = 1;
     for (auto &f : features)
+    {
         a.append(f.json());
-    return {{"format", "MecaCAD"}, {"version", 1}, {"units", "mm"}, {"features", a}};
+        if (f.p.contains("constraintSystem")) version = 2;
+    }
+    return {{"format", "MecaCAD"}, {"version", version}, {"units", "mm"}, {"features", a}};
 }
 void Model::restore(const QJsonObject &root) {
     validateDocument(root);
@@ -314,6 +321,29 @@ QString Model::add(QString type, QJsonObject p, QString name) {
 }
 void Model::edit(const QString &id, QJsonObject p, const QString &name) {
     auto before = json();
+    const auto &old = get(id).p;
+    if (old.contains("constraintSystem")) {
+        require(p.contains("constraintSystem") && p["profile"] == "polyline" && p["closed"] == old["closed"],
+                "Não remova as restrições nem altere a conectividade pela edição genérica.");
+        if (p["constraintSystem"] == old["constraintSystem"] && p["points"] != old["points"]) {
+            auto system = sketch::System::fromJson(p["constraintSystem"].toObject());
+            const auto points = p["points"].toArray();
+            require(points.size() == system.points.size(), "Edição deve preservar os IDs e a quantidade de pontos restritos.");
+            for (int i=0;i<points.size();++i) {
+                const auto point = points[i].toArray();
+                require(point.size()==2 && point[0].isDouble() && point[1].isDouble(), "Coordenadas inválidas.");
+                system.points[i].position = {point[0].toDouble(),point[1].toDouble()};
+            }
+            const auto solution=system.solve();
+            require(solution.consistent,"A edição entra em conflito com as restrições do sketch.");
+            if(solution.degreesOfFreedom==0) {
+                // A fully constrained sketch cannot be moved by a point gesture.
+                // Keep exact stored values so numerical projection creates no undo step.
+                p["constraintSystem"]=old["constraintSystem"];
+                p["points"]=old["points"];
+            } else p["constraintSystem"] = system.json();
+        }
+    }
     Model candidate;
     candidate.features = features;
     candidate.get(id).p = p;
@@ -400,6 +430,7 @@ void Model::rebuildGeometry() {
     for (const auto &id : dependencyGraph().order()) {
         auto &f = get(id);
         try {
+            if (f.type == "sketch" && f.p.contains("constraintSystem")) resolveSketch(f);
             if (f.type == "sketch" && !f.p.value("support").toString().isEmpty()) {
                 const auto &support = get(f.p["support"].toString());
                 require(!support.shape.IsNull() && !isMesh(support.id), "O plano do sketch depende de um corpo CAD anterior válido.");

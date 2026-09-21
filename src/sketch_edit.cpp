@@ -63,6 +63,8 @@ void Model::editSketchElements(const QString &id, const QVector<int> &edgeIndice
     }
     if (affected.empty())
         return;
+    if (erase && parameters.contains("constraintSystem"))
+        throw std::runtime_error("Exclusão de subelementos de sketches paramétricos ainda não disponível. O contorno e seus vínculos foram preservados.");
     Model work = *this;
     auto serialize = [&](const QVector<QPointF> &chain, bool loop) {
         QJsonObject p = parameters;

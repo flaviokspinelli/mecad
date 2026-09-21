@@ -23,7 +23,7 @@ struct Solution {
     QStringList redundantConstraints;
     double maximumResidual = 0;
 };
-// Internal sketch domain. This format is NOT yet part of the native .mcad file.
+// Sketch domain embedded in native .mcad v2 for constrained single-chain profiles.
 class System {
 public:
     QVector<Point> points;

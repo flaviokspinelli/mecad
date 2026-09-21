@@ -3,6 +3,22 @@
 Atualização: 21/09/2026. Base: MecaCAD 0.2.25, macOS Apple Silicon.
 
 Progresso após essa versão: [registro de execução](docs/PROGRESSO.md).
+Escopo da próxima entrega, solicitado pelo usuário: **fechar os 35 itens que
+estavam parciais em 21/09/2026**, mais suas dependências indispensáveis. Os outros
+itens ficam para depois. Lista congelada para não aumentar o escopo conforme novos
+itens passam a parciais:
+
+- PROD-03, PROD-05;
+- REL-01, REL-02, REL-03, REL-04, REL-06, REL-07;
+- UX-01, UX-03, UX-04, UX-05, UX-06, UX-07, UX-08;
+- SK-01, SK-02, SK-03, SK-04, SK-05, SK-11;
+- PAR-01, PAR-02, PAR-03, PAR-05, PAR-06;
+- GEO-01, GEO-02, GEO-03, GEO-08, GEO-13;
+- FAB-01, FAB-05; QA-01, QA-02.
+
+Fechar significa cumprir o aceite integral de cada linha abaixo, não apenas
+implementar parte dela. Restrições de disco e de testes permanecem em vigor.
+
 Política de testes: grupos direcionados e sem janelas durante o desenvolvimento;
 interface somente quando necessária, com aviso; suíte completa antes da entrega consolidada.
 

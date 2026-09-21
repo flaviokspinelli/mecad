@@ -166,3 +166,45 @@ interface ou ao formato .mcad: o aplicativo distribuído não ganhou ferramentas
 de restrição nesta etapa. Falta integrar edição/arraste e migração, validar
 contornos após resolver e oferecer diagnóstico visual. Curvas, tangência e
 ângulos exigem solver não linear; não são suportados por este núcleo afim.
+
+## 21/09/2026 — integração inicial das restrições e escopo fixo de 35 itens
+
+O usuário solicitou fechar os 35 itens parciais, não todo o produto nesta entrega.
+A lista foi congelada no início do BACKLOG.md e a retomada automática ajustada.
+Dependências indispensáveis entram no trabalho, mas novos itens parciais não
+aumentam automaticamente essa lista. Nenhum item foi marcado concluído nesta etapa.
+
+- SK-01/02/04 e REL-04: constraintSystem passa a ser persistido em .mcad v2;
+  projetos sem restrições continuam v1. v1 contendo restrições é recusado.
+  A versão v2 é do formato de documento, não um novo pacote do aplicativo.
+- Conversão de retângulo/polilinha em contorno restrito com IDs preservados;
+  retângulo mantém relações horizontal/vertical, mas não ganha cotas fixas implícitas.
+- Solver integrado à reconstrução transacional. Pontos resolvidos alimentam
+  geometria CAD e extrusões dependentes. Reabertura e rebuild são idempotentes.
+- Comandos Horizontal, Vertical e Fixar ponto por seleção no canvas, com ícones,
+  indicação de graus de liberdade e remoção individual de restrições.
+- Prévia/resolução inválida não altera o documento; contornos colapsados,
+  cruzados, sobrepostos ou sem área são recusados.
+
+Validações já executadas: suíte core (29 resultados incluindo setup/cleanup),
+sketch_system (10) e UI sketchConstraintsSelectionAndPersistence (3), sem falhas.
+O teste de UI clica na linha e no botão Horizontal e verifica remover/cancelar,
+undo/redo e persistência. Captura inspecionada em build/sketch-constraints.png.
+Na verificação adicional passaram constrainedSketchDocumentRoundTrip,
+constrainedSketchRejectsInvalidContours, legacyV1FixtureRoundTrip,
+savedStateTracksUndoRedo e os cinco casos de recovery, além de setup/cleanup.
+
+Limites: somente contorno simples de segmentos. Coincidência entre entidades
+independentes, curvas, cotas gerais, conflito com realce no canvas, diagnóstico
+completo e arraste com prioridade do cursor ainda faltam. Excluir subelementos
+paramétricos é recusado para não quebrar vínculos. Conversão de retângulo muda a
+representação para polilinha; cotas retangulares antigas não são mostradas nesse
+perfil, pendência de SK-03. Não há nova distribuição; dist continua preservado.
+
+Verificação final da revisão: reconstrução limpa dos quatro executáveis de teste,
+seguida de core (29), sketch_system (10), recovery (7) e do teste de UI acima (3):
+49 resultados incluindo setup/cleanup, zero falhas. Inclui rejeição de contorno
+cruzado/sem área e gesto em sketch totalmente fixo sem criar alteração ou undo.
+A pasta build/ desapareceu durante uma compilação intermediária, sem comando de
+remoção desta tarefa; foi recriada somente para desenvolvimento/testes. Nenhum
+arquivo em dist foi substituído. Os 35 itens continuam em execução, não aceitos.

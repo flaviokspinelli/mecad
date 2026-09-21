@@ -1,7 +1,7 @@
 # Decisão de arquitetura: domínio de sketch e primeiro solver
 
-Estado: implementação interna experimental, não exposta na interface nem gravada
-em projetos .mcad. Data: 21/09/2026. Responsável: Codex.
+Estado: núcleo afim com integração de contorno simples em desenvolvimento, por
+constraintSystem no documento .mcad v2. Data: 21/09/2026. Responsável: Codex.
 Itens relacionados: PROD-03/04, SK-01/02/04. Nenhum aceite completo declarado.
 
 ## Investigação de motores
@@ -45,10 +45,12 @@ apenas quando a solução satisfaz a tolerância, preservando todos os IDs.
 
 1. Validar geometria após resolver: coincidência pode colapsar uma linha; convergência
    algébrica não implica contorno CAD válido, fechado ou sem auto-interseção.
-2. Integrar edição/arraste, histórico de um gesto e representação de restrições
-   na interface; não há botão funcional de restrição novo nesta etapa.
-3. Definir migração do formato nativo. MecaCADSketch v1 é um formato interno de
-   teste, não a versão do .mcad. Não inserir dados que versões antigas descartem.
+2. Completar edição/arraste, cotas e representação de restrições na interface.
+   Horizontal, vertical, fixação e remoção estão em integração; coincidência não
+   é oferecida para o contorno simples porque fundir pontos exige editar a topologia.
+3. Validar a migração do formato nativo. MecaCADSketch v1 é o formato embutido
+   em constraintSystem de .mcad v2; a versão do sistema não é a do documento.
+   Projetos sem restrições continuam v1. Versões anteriores devem recusar v2.
 4. Implementar curvas e relações não lineares por um backend adequado; o motor
    afim atual não suporta comprimentos gerais, ângulos, tangência ou raios.
 5. Validar solver não linear, diagnóstico visual e produtividade antes de afirmar
