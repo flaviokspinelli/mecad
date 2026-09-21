@@ -40,6 +40,7 @@ class Model {
     void exportStl(const QString &path, const QString &id = {}) const;
     void exportDxf(const QString &path, const QString &id) const;
     QString importStep(const QString &path);
+    QString importStl(const QString &path);
     bool undo();
     bool redo();
     void clear();

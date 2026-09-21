@@ -158,6 +158,13 @@ perfil reabre seu sketch. Outros tipos ainda usam o painel de propriedades.
 
 ## Exportação de arquivos
 
+Para importar STL, use **File → Import STEP / STL** ou **Insert → Import STEP / STL**.
+STL binário e ASCII são aceitos. **File → Open** abre STL como um novo documento.
+A malha é interpretada em milímetros e incorporada ao salvar `.mcad`, sem depender
+do STL original. Limites atuais: 50 MB e 1 milhão de triângulos. Importar não
+converte malha em sólido CAD: operações de sólidos e exportação STEP de malhas
+ainda não estão disponíveis. É possível visualizar e reexportar em STL.
+
 - **STEP**: sólido selecionado; sem seleção de sólido, exporta os corpos finais visíveis.
 - **STL**: mesma regra de seleção. É uma malha de triângulos, sem histórico. As
   coordenadas são em mm; confirme mm ao abrir no fatiador, pois STL não registra unidade.

@@ -25,8 +25,10 @@
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QSaveFile>
+#include <QTemporaryFile>
 #include <QTextStream>
 #include <QUuid>
+#include <RWStl.hxx>
 #include <STEPControl_Reader.hxx>
 #include <STEPControl_Writer.hxx>
 #include <Standard_Failure.hxx>
@@ -60,8 +62,10 @@ gp_Pnt planePointExact(const QString &plane, double u, double v, double offset =
     require(plane == "XY" || plane == "XZ" || plane == "YZ", "Plano inválido.");
     require(std::isfinite(u) && std::isfinite(v) && std::abs(u) <= 1e6 && std::abs(v) <= 1e6,
             "Ponto fora do intervalo permitido.");
-    if (plane == "XZ") return {u, -offset, v};
-    if (plane == "YZ") return {offset, u, v};
+    if (plane == "XZ")
+        return {u, -offset, v};
+    if (plane == "YZ")
+        return {offset, u, v};
     return {u, v, offset};
 }
 TopoDS_Shape profile(const QJsonObject &p) {
@@ -257,6 +261,8 @@ void Model::rebuild() {
         try {
             const auto &p = f.p;
             auto source = [&](const char *key) {
+                require(get(p[key].toString()).type != "mesh",
+                        "Esta operação requer um sólido CAD. Conversão de malha STL ainda não disponível.");
                 auto s = get(p[key].toString()).shape;
                 require(!s.IsNull(), "A operação depende de uma etapa futura ou inválida.");
                 return s;
@@ -287,7 +293,8 @@ void Model::rebuild() {
                     double d = value(p, "d", 10);
                     require(std::abs(d) > 1e-5, "A extrusão não pode ter distância zero.");
                     auto n = planeNormal(sketch.p["plane"].toString("XY"));
-                    f.shape = BRepPrimAPI_MakePrism(face.Face(), gp_Vec(n.x()*d, n.y()*d, n.z()*d)).Shape();
+                    f.shape =
+                        BRepPrimAPI_MakePrism(face.Face(), gp_Vec(n.x() * d, n.y() * d, n.z() * d)).Shape();
                 } else {
                     double angle = positive(p, "angle", 360);
                     require(angle <= 360, "Ângulo máximo: 360°.");
@@ -295,8 +302,8 @@ void Model::rebuild() {
                              planePoint(sketch.p["plane"].toString("XY"), 0, 0);
                     f.shape = BRepPrimAPI_MakeRevol(
                                   face.Face(),
-                                  gp_Ax1(planePointExact(sketch.p["plane"].toString("XY"), value(p, "axis"), 0,
-                                                       value(sketch.p, "offset")),
+                                  gp_Ax1(planePointExact(sketch.p["plane"].toString("XY"), value(p, "axis"),
+                                                         0, value(sketch.p, "offset")),
                                          gp_Dir(a.x(), a.y(), a.z())),
                                   angle * M_PI / 180)
                                   .Shape();
@@ -346,6 +353,28 @@ void Model::rebuild() {
                 fillet.Build();
                 require(fillet.IsDone(), "Não foi possível aplicar este raio a todas as arestas.");
                 f.shape = fillet.Shape();
+            } else if (f.type == "mesh") {
+                auto encoded = p["stl"].toString().toLatin1();
+                require(!encoded.isEmpty() && encoded.size() <= 70000000,
+                        "STL vazio ou muito grande (limite 50 MB).");
+                auto data = QByteArray::fromBase64(encoded);
+                QTemporaryFile file;
+                require(file.open() && file.write(data) == data.size() && file.flush(),
+                        "Não foi possível preparar o STL.");
+                auto triangulation = RWStl::ReadFile(file.fileName().toUtf8().constData());
+                require(!triangulation.IsNull() && triangulation->NbTriangles() > 0,
+                        "STL inválido ou sem triângulos.");
+                require(triangulation->NbTriangles() <= 1000000,
+                        "STL excede o limite de 1 milhão de triângulos.");
+                for (int i = 1; i <= triangulation->NbNodes(); ++i) {
+                    auto point = triangulation->Node(i);
+                    require(std::isfinite(point.X()) && std::isfinite(point.Y()) && std::isfinite(point.Z()),
+                            "STL contém coordenadas inválidas.");
+                }
+                TopoDS_Face face;
+                BRep_Builder builder;
+                builder.MakeFace(face, triangulation);
+                f.shape = face;
             } else if (f.type == "import") {
                 auto encoded = p["brep"].toString().toLatin1();
                 require(encoded.size() < 150000000, "Modelo importado muito grande.");
@@ -354,9 +383,9 @@ void Model::rebuild() {
                 BRepTools::Read(f.shape, stream, builder);
             } else
                 throw std::runtime_error("Operação desconhecida.");
-            require(!f.shape.IsNull() && BRepCheck_Analyzer(f.shape).IsValid(),
+            require(!f.shape.IsNull() && (f.type == "mesh" || BRepCheck_Analyzer(f.shape).IsValid()),
                     "A operação produziu geometria inválida.");
-            if (f.type != "sketch")
+            if (f.type != "sketch" && f.type != "mesh")
                 require(TopExp_Explorer(f.shape, TopAbs_SOLID).More(),
                         "A operação não produziu um sólido. Confira posições e interseções.");
         } catch (const Standard_Failure &e) {
@@ -391,7 +420,8 @@ std::vector<Triangle> Model::triangles() const {
     std::vector<Triangle> result;
     for (int i : bodies()) {
         const auto &shape = features[i].shape;
-        BRepMesh_IncrementalMesh mesh(shape, 0.15, false, 0.35, true);
+        if (features[i].type != "mesh")
+            BRepMesh_IncrementalMesh mesh(shape, 0.15, false, 0.35, true);
         for (TopExp_Explorer it(shape, TopAbs_FACE); it.More(); it.Next()) {
             auto face = TopoDS::Face(it.Current());
             TopLoc_Location location;
@@ -448,6 +478,13 @@ TopoDS_Shape Model::exportShape(const QString &id) const {
     return compound;
 }
 void Model::exportStep(const QString &path, const QString &id) const {
+    if (!id.isEmpty())
+        require(get(id).type != "mesh",
+                "STL é uma malha, não um sólido CAD. Conversão para STEP ainda não disponível.");
+    else
+        for (int i : bodies())
+            require(features[i].type != "mesh",
+                    "Selecione um sólido CAD para exportar STEP; há malhas STL visíveis.");
     STEPControl_Writer w;
     require(w.Transfer(exportShape(id), STEPControl_AsIs) == IFSelect_RetDone,
             "Falha ao converter o sólido em STEP.");
@@ -470,6 +507,13 @@ QString Model::importStep(const QString &path) {
     BRepTools::Write(shape, stream);
     return add("import", {{"brep", QString::fromLatin1(QByteArray::fromStdString(stream.str()).toBase64())}},
                QFileInfo(path).completeBaseName());
+}
+QString Model::importStl(const QString &path) {
+    QFile file(path);
+    require(file.open(QIODevice::ReadOnly), file.errorString());
+    require(file.size() > 0 && file.size() <= 50000000, "STL vazio ou muito grande (limite 50 MB).");
+    return add("mesh", {{"stl", QString::fromLatin1(file.readAll().toBase64())}},
+               QFileInfo(path).completeBaseName() + " (STL)");
 }
 void Model::exportDxf(const QString &path, const QString &id) const {
     const auto &sk = get(id);

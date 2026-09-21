@@ -17,7 +17,7 @@ int main(int argc, char **argv) {
     QApplication app(argc, argv);
     app.setOrganizationName("MecaCAD");
     app.setApplicationName("MecaCAD");
-    app.setApplicationVersion("0.2.12");
+    app.setApplicationVersion("0.2.13");
     Window window;
     window.show();
     auto args = app.arguments();
@@ -34,7 +34,7 @@ int main(int argc, char **argv) {
             window.model.exportDxf(dir.filePath("Base-profile.dxf"), window.model.features.front().id);
     }
     for (auto arg : args)
-        if (arg.endsWith(".mcad")) {
+        if (arg.endsWith(".mcad", Qt::CaseInsensitive) || arg.endsWith(".stl", Qt::CaseInsensitive)) {
             try {
                 window.openPath(arg);
             } catch (const std::exception &e) {

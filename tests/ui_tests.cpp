@@ -11,6 +11,27 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void importedMeshViewport() {
+        QTemporaryDir dir;
+        Model source;
+        source.add("box", {{"w", 20}, {"h", 30}, {"d", 10}});
+        source.exportStl(dir.filePath("box.stl"));
+        Window window;
+        auto id = window.model.importStl(dir.filePath("box.stl"));
+        window.model.save(dir.filePath("mesh.mcad"));
+        window.openPath(dir.filePath("mesh.mcad"));
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto *v = window.findChild<Viewport *>();
+        QCOMPARE(v->mesh.size(), size_t(12));
+        window.grab().save(QDir::currentPath() + "/imported-stl-test.png");
+        QVERIFY(v->span > 1);
+        QCOMPARE(window.model.get(id).type, QString("mesh"));
+        window.openPath(dir.filePath("box.stl"));
+        QCOMPARE(window.model.features.size(), size_t(1));
+        QVERIFY(window.model.filePath.isEmpty());
+        QCOMPARE(v->mesh.size(), size_t(12));
+    }
     void regularPolygons() {
         Model model;
         Viewport v(&model);
@@ -78,6 +99,9 @@ class UiTests : public QObject {
         Window window;
         window.show();
         QVERIFY(QTest::qWaitForWindowExposed(&window));
+        window.raise();
+        window.activateWindow();
+        QVERIFY(QTest::qWaitForWindowActive(&window));
         auto *v = window.findChild<Viewport *>();
         auto id = window.model.add(
             "sketch",

@@ -39,7 +39,8 @@ QString displayType(const QString &s) {
         {"box", "Box"},       {"cylinder", "Cylinder"},    {"sphere", "Sphere"},
         {"sketch", "Sketch"}, {"extrude", "Extrude"},      {"revolve", "Revolve"},
         {"hole", "Hole"},     {"boolean", "Combine"},      {"transform", "Move"},
-        {"copy", "Copy"},     {"import", "Imported body"}, {"fillet", "Fillet"}};
+        {"copy", "Copy"},     {"import", "Imported body"}, {"fillet", "Fillet"},
+        {"mesh", "STL mesh"}};
     return names.value(s, s);
 }
 QString symbol(const QString &s) {
@@ -491,11 +492,20 @@ Window::Window() {
     file->addAction(command("save", "Save", "Ctrl+S", [this] { save(); }));
     file->addAction(command("saveas", "Save As…", "Ctrl+Shift+S", [this] { save(true); }));
     file->addSeparator();
-    file->addAction(command("import", "Import STEP…", "", [this] {
-        auto path = QFileDialog::getOpenFileName(this, "Import STEP", {}, "STEP (*.step *.stp)");
+    file->addAction(command("import", "Import STEP / STL…", "", [this] {
+        auto path = QFileDialog::getOpenFileName(
+            this, "Import STEP / STL", {},
+            "CAD / Mesh (*.step *.stp *.stl *.STEP *.STP *.STL);;STL (*.stl *.STL);;STEP (*.step *.stp)");
         if (!path.isEmpty()) {
-            selected = model.importStep(path);
+            bool mesh = QFileInfo(path).suffix().compare("stl", Qt::CaseInsensitive) == 0;
+            selected = mesh ? model.importStl(path) : model.importStep(path);
             refresh(true);
+            if (mesh)
+                QMessageBox::information(this, "STL importado",
+                                         "Importado como malha, usando milímetros.\n"
+                                         "STL não registra unidades nem histórico paramétrico.\n"
+                                         "A malha será incorporada ao salvar o projeto .mcad. Conversão para "
+                                         "sólido ainda não disponível.");
         }
     }));
     auto *exports = file->addMenu("Export");
@@ -1101,7 +1111,7 @@ void Window::buildRibbon() {
         group("CONFIGURE", {}, {}, {"Configuration Table"}, {"configure"});
         group("CONSTRUCT", {}, {}, {"Offset Plane", "Midplane", "Axis"}, {"plane"});
         group("INSPECT", {"measure"}, {"measure"}, {"Section Analysis", "Interference"});
-        group("INSERT", {"import"}, {"import"}, {"Canvas", "Mesh"});
+        group("INSERT", {"import"}, {"import"}, {"Canvas"});
         group("SELECT", {"search"}, {"search"});
         group("POSITION", {"transform"}, {"transform", "copy"});
         row->addStretch();
@@ -1267,6 +1277,9 @@ void Window::buildProperties() {
                 });
             });
         }
+    } else if (f.type == "mesh") {
+        propertyForm->addRow(
+            new QLabel("Malha STL · unidades: mm\nVolume não calculado; não é um sólido paramétrico."));
     } else {
         double v = Model::volume(f.shape);
         auto *l = new QLabel(QString("Volume: %1 cm³").arg(v / 1000, 0, 'f', 3));
@@ -1615,6 +1628,16 @@ void Window::measure() {
     BRepBndLib::AddOptimal(f.shape, b);
     double x, y, z, X, Y, Z;
     b.Get(x, y, z, X, Y, Z);
+    if (f.type == "mesh") {
+        QMessageBox::information(
+            this, "Measure — STL",
+            QString("%1\n\nX: %2 mm\nY: %3 mm\nZ: %4 mm\n\nVolume não calculado para malhas.")
+                .arg(f.name)
+                .arg(X - x, 0, 'f', 3)
+                .arg(Y - y, 0, 'f', 3)
+                .arg(Z - z, 0, 'f', 3));
+        return;
+    }
     QMessageBox::information(this, "Measure",
                              QString("%1\n\nBounding box\nX: %2 mm\nY: %3 mm\nZ: %4 mm\n\nVolume: %5 "
                                      "cm³\n\nOrigin min: (%6, %7, %8) mm")
@@ -1684,11 +1707,21 @@ bool Window::canLeave() {
 void Window::open() {
     if (!canLeave())
         return;
-    auto path = QFileDialog::getOpenFileName(this, "Open Design", {}, "MecaCAD (*.mcad)");
+    auto path = QFileDialog::getOpenFileName(
+        this, "Open Design", {}, "MecaCAD / STL (*.mcad *.stl *.STL);;MecaCAD (*.mcad);;STL (*.stl *.STL)");
     if (!path.isEmpty())
         openPath(path);
 }
 void Window::openPath(const QString &path) {
+    if (QFileInfo(path).suffix().compare("stl", Qt::CaseInsensitive) == 0) {
+        Model imported;
+        auto id = imported.importStl(path);
+        model = std::move(imported);
+        selected = id;
+        finishSketch();
+        refresh(true);
+        return;
+    }
     model.load(path);
     selected.clear();
     finishSketch();

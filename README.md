@@ -8,7 +8,7 @@ desenvolvida e testada em macOS 14, Apple Silicon.
 
 ## Abrir
 
-Abra `dist/MecaCAD-0.2.12.app`. O pacote local reúne o executável e suas bibliotecas.
+Abra `dist/MecaCAD-0.2.13.app`. O pacote local reúne o executável e suas bibliotecas.
 O código-fonte não depende da pasta `dist`, que é gerada e ignorada pelo Git.
 
 Para começar: **File → Open example — mounting bracket**. Também existem os
@@ -17,6 +17,13 @@ arquivos `examples/Mounting-bracket.mcad`, `.step`, `.stl` e `Base-profile.dxf`.
 Leia o [guia de uso](docs/GUIA.md) e o [estado da entrega](docs/ENTREGA-0.2.md).
 
 ## Novidades de interação
+
+Na 0.2.13, File → Import STEP / STL e Insert aceitam STL binário e ASCII.
+File → Open também abre STL em um novo documento. A malha é incorporada ao `.mcad`,
+sem depender do arquivo original, e pode ser reexportada em STL. Coordenadas são
+interpretadas em mm (STL não contém unidades). Limite: 50 MB e 1 milhão de triângulos.
+Importação não converte malhas em sólidos paramétricos: operações de sólidos e
+exportação STEP de malhas ainda não estão disponíveis.
 
 Na 0.2.12, Sketch → Create → Polygon cria polígonos regulares de 3 a 64 lados.
 Escolha a quantidade, clique no centro e em um vértice (ou pressione e arraste).

@@ -5,11 +5,53 @@
 #include <QTemporaryDir>
 #include <QtTest>
 #include <StlAPI_Reader.hxx>
+#include <StlAPI_Writer.hxx>
 #include <cmath>
 
 class CoreTests : public QObject {
     Q_OBJECT
   private slots:
+    void importStlMeshes() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        Model source;
+        auto box = source.add("box", {{"w", 20}, {"h", 30}, {"d", 10}});
+        auto binary = dir.filePath("peça.STL");
+        source.exportStl(binary, box);
+        auto ascii = dir.filePath("ascii.stl");
+        StlAPI_Writer writer;
+        writer.ASCIIMode() = true;
+        QVERIFY(writer.Write(source.get(box).shape, ascii.toUtf8().constData()));
+        for (const auto &path : {binary, ascii}) {
+            Model model;
+            auto id = model.importStl(path);
+            QCOMPARE(model.get(id).type, QString("mesh"));
+            QCOMPARE(model.triangles().size(), size_t(12));
+            QVERIFY(model.undo());
+            QVERIFY(model.features.empty());
+            QVERIFY(model.redo());
+            auto saved = dir.filePath("mesh.mcad");
+            model.save(saved);
+            QVERIFY(QFile::remove(path));
+            Model loaded;
+            loaded.load(saved);
+            QCOMPARE(loaded.triangles().size(), size_t(12));
+            loaded.exportStl(dir.filePath("roundtrip.stl"));
+            Model again;
+            again.importStl(dir.filePath("roundtrip.stl"));
+            QCOMPARE(again.triangles().size(), size_t(12));
+            QVERIFY_THROWS_EXCEPTION(std::runtime_error, loaded.exportStep(dir.filePath("mesh.step")));
+        }
+        QFile invalid(dir.filePath("invalid.stl"));
+        QVERIFY(invalid.open(QIODevice::WriteOnly));
+        invalid.write("not an STL");
+        invalid.close();
+        Model unchanged;
+        unchanged.add("box", {{"w", 1}, {"h", 1}, {"d", 1}});
+        auto before = unchanged.json();
+        QVERIFY_THROWS_EXCEPTION(std::runtime_error, unchanged.importStl(invalid.fileName()));
+        QCOMPARE(unchanged.json(), before);
+    }
     void parametricRoundTrip() {
         Model m;
         auto s = m.add("sketch", {{"profile", "rectangle"}, {"plane", "XY"}, {"w", 40}, {"h", 30}});
