@@ -65,9 +65,15 @@ double positive(const QJsonObject &p, const char *k, double fallback = 1) {
 }
 void validateDocument(const QJsonObject &root) {
     require(root["format"] == "MecaCAD" && root["version"].isDouble() &&
-                (root["version"].toDouble() == 1 || root["version"].toDouble() == 2) && root["units"] == "mm",
+                (root["version"].toDouble() == 1 || root["version"].toDouble() == 2 || root["version"].toDouble() == 3) && root["units"] == "mm",
             "Formato, versão ou unidade de projeto não suportado.");
-    const QSet<QString> rootKeys = {"format", "version", "units", "features"};
+    const QSet<QString> rootKeys = {"format", "version", "units", "features", "namedParameters"};
+    if(root.contains("namedParameters")) {
+        require(root["version"].toInt()==3 && root["namedParameters"].isObject(), "Parâmetros nomeados exigem documento v3.");
+        const auto definitions=root["namedParameters"].toObject();
+        for(auto it=definitions.begin();it!=definitions.end();++it)
+            require(it.value().isString(),"A fórmula do parâmetro deve ser texto.");
+    }
     for (auto it = root.begin(); it != root.end(); ++it)
         require(rootKeys.contains(it.key()), "O projeto contém dados não suportados: " + it.key());
     require(root["features"].isArray() && root["features"].toArray().size() <= 2000,
@@ -90,8 +96,15 @@ void validateDocument(const QJsonObject &root) {
         require(f["parameters"].isObject(), "Parâmetros de operação inválidos.");
         const auto p = f["parameters"].toObject();
         if (p.contains("constraintSystem"))
-            require(root["version"].toInt() == 2 && type == "sketch" && p["constraintSystem"].isObject() &&
+            require(root["version"].toInt() >= 2 && type == "sketch" && p["constraintSystem"].isObject() &&
                     p["profile"] == "polyline", "Restrições de sketch exigem documento v2 e perfil poligonal.");
+        if(p.contains("expressions")) {
+            require(root["version"].toInt()==3 && p["expressions"].isObject(),"Expressões exigem documento v3.");
+            const auto expressions=p["expressions"].toObject();
+            for(auto it=expressions.begin();it!=expressions.end();++it)
+                require(Model::expressionFields(type).contains(it.key()) && it.value().isString(),
+                        "Campo de expressão inválido: "+it.key());
+        }
         auto enumeration = [&](const char *key, const QSet<QString> &allowed) {
             const auto entry = p[key];
             require(entry.isUndefined() || (entry.isString() && allowed.contains(entry.toString())),
@@ -265,13 +278,22 @@ QJsonObject Model::json() const {
     for (auto &f : features)
     {
         a.append(f.json());
-        if (f.p.contains("constraintSystem")) version = 2;
+        if (f.p.contains("constraintSystem")) version = std::max(version,2);
+        if (f.p.contains("expressions")) version = 3;
     }
-    return {{"format", "MecaCAD"}, {"version", version}, {"units", "mm"}, {"features", a}};
+    QJsonObject root{{"format", "MecaCAD"}, {"version", version}, {"units", "mm"}, {"features", a}};
+    if(!namedParameters.isEmpty()) {
+        QJsonObject definitions;
+        for(auto it=namedParameters.begin();it!=namedParameters.end();++it) definitions[it.key()]=it.value();
+        root["version"]=3;root["namedParameters"]=definitions;
+    }
+    return root;
 }
 void Model::restore(const QJsonObject &root) {
     validateDocument(root);
     Model candidate;
+    const auto definitions=root["namedParameters"].toObject();
+    for(auto it=definitions.begin();it!=definitions.end();++it) candidate.namedParameters[it.key()]=it.value().toString();
     for (auto v : root["features"].toArray()) {
         auto o = v.toObject();
         Feature f{o["id"].toString(),         o["name"].toString(),      o["type"].toString(),
@@ -281,6 +303,7 @@ void Model::restore(const QJsonObject &root) {
     }
     candidate.rebuildGeometry();
     features = std::move(candidate.features);
+    namedParameters=std::move(candidate.namedParameters);
 }
 void Model::checkpoint(const QJsonObject &before) {
     if (before == json())
@@ -312,6 +335,7 @@ QString Model::add(QString type, QJsonObject p, QString name) {
         name = type + QString(" %1").arg(features.size() + 1);
     Model candidate;
     candidate.features = features;
+    candidate.namedParameters = namedParameters;
     candidate.features.push_back({id, name, type, p, true, {}});
     validateDocument(candidate.json());
     candidate.rebuildGeometry();
@@ -322,6 +346,11 @@ QString Model::add(QString type, QJsonObject p, QString name) {
 void Model::edit(const QString &id, QJsonObject p, const QString &name) {
     auto before = json();
     const auto &old = get(id).p;
+    if(old.contains("expressions") && !p.contains("expressions")) p["expressions"]=old["expressions"];
+    const auto bindings=old["expressions"].toObject();
+    for(auto it=bindings.begin();it!=bindings.end();++it)
+        require(p["expressions"].toObject()[it.key()]!=it.value() || p[it.key()]==old[it.key()],
+                "Esta medida é controlada por fórmula. Edite ou remova a expressão primeiro.");
     if (old.contains("constraintSystem")) {
         require(p.contains("constraintSystem") && p["profile"] == "polyline" && p["closed"] == old["closed"],
                 "Não remova as restrições nem altere a conectividade pela edição genérica.");
@@ -346,6 +375,7 @@ void Model::edit(const QString &id, QJsonObject p, const QString &name) {
     }
     Model candidate;
     candidate.features = features;
+    candidate.namedParameters = namedParameters;
     candidate.get(id).p = p;
     candidate.get(id).name = name;
     validateDocument(candidate.json());
@@ -395,6 +425,7 @@ bool Model::redo() {
 }
 void Model::clear() {
     features.clear();
+    namedParameters.clear();
     past.clear();
     future.clear();
     filePath.clear();
@@ -405,6 +436,7 @@ void Model::rebuild() {
     validateDocument(json());
     Model candidate;
     candidate.features = features;
+    candidate.namedParameters = namedParameters;
     candidate.rebuildGeometry();
     features = std::move(candidate.features);
 }
@@ -425,11 +457,18 @@ void Model::moveFeature(const QString &id, int destination) {
     commit(document); // Validation rejects moving inputs after their consumers.
 }
 void Model::rebuildGeometry() {
+    const auto values=parameters::resolve(namedParameters);
     for (auto &f : features)
         f.shape.Nullify();
     for (const auto &id : dependencyGraph().order()) {
         auto &f = get(id);
         try {
+            const auto expressions=f.p.value("expressions").toObject();
+            for(auto it=expressions.begin();it!=expressions.end();++it) {
+                const auto quantity=parameters::evaluate(it.value().toString(),values);
+                require(quantity.length==1 && quantity.angle==0,"A expressão de "+it.key()+" deve resultar em comprimento (use mm, cm, m ou in).");
+                f.p[it.key()]=quantity.value;
+            }
             if (f.type == "sketch" && f.p.contains("constraintSystem")) resolveSketch(f);
             if (f.type == "sketch" && !f.p.value("support").toString().isEmpty()) {
                 const auto &support = get(f.p["support"].toString());

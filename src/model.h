@@ -7,6 +7,7 @@
 #include <TopoDS_Shape.hxx>
 #include "dependencies.h"
 #include "sketch_system.h"
+#include "expressions.h"
 #include <vector>
 
 struct Feature {
@@ -44,6 +45,10 @@ class Model {
     QString constrainSketch(const QString &id, sketch::Relation relation, const QString &first,
                             const QString &second = {}, QPointF value = {});
     void removeSketchConstraint(const QString &id, const QString &constraint);
+    QMap<QString, QString> parameters() const { return namedParameters; }
+    void setParameters(const QMap<QString, QString> &definitions);
+    void setExpression(const QString &id, const QString &field, const QString &expression);
+    static QStringList expressionFields(const QString &type);
     Feature &get(const QString &id);
     const Feature &get(const QString &id) const;
     bool consumed(const QString &id) const;
@@ -69,6 +74,7 @@ class Model {
     static QString facePlane(const TopoDS_Shape &shape, int index);
 
   private:
+    QMap<QString, QString> namedParameters;
     QJsonObject savedDocument;
     std::vector<QJsonObject> past, future;
     void checkpoint(const QJsonObject &before);

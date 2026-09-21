@@ -37,6 +37,8 @@
 #include <QStyle>
 #include <QToolBar>
 #include <QToolButton>
+#include <QTableWidget>
+#include <QLineEdit>
 #include <QVBoxLayout>
 #include <Standard_Failure.hxx>
 
@@ -742,6 +744,59 @@ Window::Window(QString recoveryDirectory, bool promptRecovery) {
     command("common", "Combine — Intersect", "", [this] { booleanOp("common"); });
     command("fillet", "Fillet", "", [this] { fillet(); });
     command("measure", "Measure", "I", [this] { measure(); });
+    command("parameters", "Change Parameters", "", [this] {
+        QDialog dialog(this); dialog.setObjectName("parameterEditor");dialog.setWindowTitle("Parâmetros do projeto");dialog.resize(650,420);
+        auto *layout=new QVBoxLayout(&dialog);
+        layout->addWidget(new QLabel("Use unidades nas medidas: 20 mm, 2 cm, largura / 2. Nomes sem espaços.",&dialog));
+        auto *table=new QTableWidget(0,2,&dialog);table->setObjectName("parameterTable");
+        table->setHorizontalHeaderLabels({"Nome","Expressão"});table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+        const auto definitions=model.parameters();
+        for(auto it=definitions.begin();it!=definitions.end();++it) {
+            int row=table->rowCount();table->insertRow(row);
+            table->setItem(row,0,new QTableWidgetItem(it.key()));table->setItem(row,1,new QTableWidgetItem(it.value()));
+        }
+        layout->addWidget(table);
+        auto *row=new QHBoxLayout;layout->addLayout(row);
+        auto *add=new QPushButton("Adicionar",&dialog);add->setObjectName("addParameter");row->addWidget(add);
+        auto *remove=new QPushButton("Remover linha",&dialog);row->addWidget(remove);row->addStretch();
+        connect(add,&QPushButton::clicked,&dialog,[table]{table->insertRow(table->rowCount());});
+        connect(remove,&QPushButton::clicked,&dialog,[table]{if(table->currentRow()>=0)table->removeRow(table->currentRow());});
+        auto *buttons=new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel,&dialog);layout->addWidget(buttons);
+        connect(buttons,&QDialogButtonBox::rejected,&dialog,&QDialog::reject);
+        connect(buttons,&QDialogButtonBox::accepted,&dialog,[&]{
+            try {
+                QMap<QString,QString> values;
+                for(int i=0;i<table->rowCount();++i) {
+                    auto name=table->item(i,0)?table->item(i,0)->text().trimmed():QString();
+                    auto expression=table->item(i,1)?table->item(i,1)->text().trimmed():QString();
+                    if(name.isEmpty() && expression.isEmpty())continue;
+                    if(values.contains(name))throw std::runtime_error("Nome de parâmetro duplicado.");
+                    values[name]=expression;
+                }
+                model.setParameters(values);dialog.accept();
+            } catch(const std::exception &e) {QMessageBox::warning(&dialog,"Parâmetros não aplicados",e.what());}
+        });
+        if(dialog.exec()==QDialog::Accepted)refresh();
+    });
+    command("expression", "Link Dimension to Expression", "", [this] {
+        if(selected.isEmpty() || Model::expressionFields(model.get(selected).type).isEmpty())
+            throw std::runtime_error("Selecione um bloco, cilindro, esfera, extrusão ou filete no Browser.");
+        const auto id=selected;
+        QDialog dialog(this);dialog.setObjectName("expressionEditor");dialog.setWindowTitle("Expressão da medida");
+        auto *layout=new QVBoxLayout(&dialog);auto *field=new QComboBox(&dialog);field->setObjectName("expressionField");
+        field->addItems(Model::expressionFields(model.get(id).type));layout->addWidget(field);
+        auto *input=new QLineEdit(&dialog);input->setObjectName("expressionInput");layout->addWidget(input);
+        auto load=[&]{input->setText(model.get(id).p.value("expressions").toObject().value(field->currentText()).toString());};
+        connect(field,&QComboBox::currentTextChanged,&dialog,load);load();
+        layout->addWidget(new QLabel("Resultado em comprimento. Ex.: largura / 2.\nDeixe vazio para desvincular e manter a medida atual.",&dialog));
+        auto *buttons=new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel,&dialog);layout->addWidget(buttons);
+        connect(buttons,&QDialogButtonBox::rejected,&dialog,&QDialog::reject);
+        connect(buttons,&QDialogButtonBox::accepted,&dialog,[&]{
+            try {model.setExpression(id,field->currentText(),input->text());dialog.accept();}
+            catch(const std::exception &e) {QMessageBox::warning(&dialog,"Expressão não aplicada",e.what());}
+        });
+        if(dialog.exec()==QDialog::Accepted)refresh();
+    });
     command("search", "Design Shortcuts", "S", [this] { search(); });
     auto *selectionMenu = viewMenu->addMenu("Seleção");
     auto *selectionGroup = new QActionGroup(this);
@@ -1315,7 +1370,7 @@ void Window::buildRibbon() {
               {"sketch", "extrude", "revolve", "hole", "box", "cylinder", "sphere"},
               {"Sweep", "Loft", "Pattern", "Mirror"});
         group("MODIFY", {"fillet", "boolean", "cut", "copy", "transform"},
-              {"fillet", "transform", "copy", "boolean", "cut", "common"},
+              {"fillet", "transform", "copy", "boolean", "cut", "common", "parameters", "expression"},
               {"Chamfer", "Shell", "Draft", "Scale", "Split Body"});
         group("ASSEMBLE", {}, {}, {"New Component", "Joint", "As-Built Joint"}, {"joint", "component"});
         group("CONFIGURE", {}, {}, {"Configuration Table"}, {"configure"});
@@ -1451,6 +1506,11 @@ void Window::buildProperties() {
             spin->setSuffix(QString(key) == "angle" ? " °" : " mm");
             spin->setValue(f.p[key].toDouble());
             spin->setKeyboardTracking(false);
+            const auto expression=f.p["expressions"].toObject()[key].toString();
+            if(!expression.isEmpty()) {
+                spin->setReadOnly(true);
+                spin->setToolTip("Controlado por: "+expression+"\nEdite em Modify → Link Dimension to Expression.");
+            }
             fields[key] = spin;
             propertyForm->addRow(labels.value(key, key), spin);
         }
@@ -1525,7 +1585,7 @@ void Window::buildProperties() {
 void Window::applyProperties() {
     auto p = model.get(selected).p;
     for (auto it = fields.begin(); it != fields.end(); ++it)
-        p[it.key()] = it.value()->value();
+        if(!model.get(selected).p.value("expressions").toObject().contains(it.key())) p[it.key()] = it.value()->value();
     model.edit(selected, p, featureName->text());
     refresh();
 }

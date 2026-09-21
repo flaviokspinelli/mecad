@@ -13,7 +13,7 @@ namespace {
 void requireSketch(bool ok, const QString &message) {
     if (!ok) throw std::runtime_error(message.toStdString());
 }
-QJsonObject parameters(const Feature &feature, const sketch::System &system) {
+QJsonObject constrainedParameters(const Feature &feature, const sketch::System &system) {
     auto p = feature.p;
     p["closed"] = p["profile"] == "rectangle" || p["closed"].toBool();
     p["profile"] = "polyline";
@@ -117,7 +117,7 @@ QString Model::constrainSketch(const QString &id,sketch::Relation relation,const
     auto system=sketchSystem(id);
     auto constraint=QUuid::createUuid().toString(QUuid::WithoutBraces);
     system.constraints.append({constraint,relation,first,second,value});
-    const auto &f=get(id); edit(id,parameters(f,system),f.name); return constraint;
+    const auto &f=get(id); edit(id,constrainedParameters(f,system),f.name); return constraint;
 }
 void Model::removeSketchConstraint(const QString &id,const QString &constraint) {
     auto system=sketchSystem(id);
@@ -125,5 +125,5 @@ void Model::removeSketchConstraint(const QString &id,const QString &constraint) 
     system.constraints.erase(std::remove_if(system.constraints.begin(),system.constraints.end(),
         [&](const auto &c){return c.id==constraint;}),system.constraints.end());
     requireSketch(old!=system.constraints.size(), "Restrição inexistente.");
-    const auto &f=get(id); edit(id,parameters(f,system),f.name);
+    const auto &f=get(id); edit(id,constrainedParameters(f,system),f.name);
 }

@@ -10,11 +10,60 @@
 #include <QSurfaceFormat>
 #include <QTemporaryDir>
 #include <QToolButton>
+#include <QTableWidget>
+#include <QLineEdit>
+#include <QDialogButtonBox>
 #include <QtTest>
 
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void namedParametersEditing() {
+        QTemporaryDir dir;Model source;
+        const auto id=source.add("box",{{"w",10},{"h",10},{"d",10}});
+        source.save(dir.filePath("source.mcad"));
+        Window window(dir.filePath("recovery"),false);window.openPath(source.filePath);
+        window.show();QVERIFY(QTest::qWaitForWindowExposed(&window));
+        QTimer watchdog;watchdog.setInterval(4000);connect(&watchdog,&QTimer::timeout,[&]{
+            for(auto *d:window.findChildren<QDialog *>())if(d->isVisible())d->reject();
+        });watchdog.start();
+        QTimer::singleShot(100,[&]{
+            auto *d=window.findChild<QDialog *>("parameterEditor");if(!d)return;
+            auto *t=d->findChild<QTableWidget *>("parameterTable");t->setRowCount(1);
+            t->setItem(0,0,new QTableWidgetItem("largura"));t->setItem(0,1,new QTableWidgetItem("2 cm"));
+            d->grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("parameter-editor.png"));
+            QTest::mouseClick(d->findChild<QDialogButtonBox *>()->button(QDialogButtonBox::Ok),Qt::LeftButton);
+        });
+        window.findChild<QAction *>("parameters")->trigger();
+        QCOMPARE(window.model.parameters().value("largura"),QString("2 cm"));
+        auto *timeline=window.findChild<QListWidget *>("timeline");
+        QTest::mouseClick(timeline->viewport(),Qt::LeftButton,Qt::NoModifier,timeline->visualItemRect(timeline->item(0)).center());
+        QTimer::singleShot(100,[&]{
+            auto *d=window.findChild<QDialog *>("expressionEditor");if(!d)return;
+            d->findChild<QComboBox *>("expressionField")->setCurrentText("w");
+            d->findChild<QLineEdit *>("expressionInput")->setText("largura");
+            QTest::mouseClick(d->findChild<QDialogButtonBox *>()->button(QDialogButtonBox::Ok),Qt::LeftButton);
+        });
+        window.findChild<QAction *>("expression")->trigger();
+        QCOMPARE(window.model.get(id).p["w"].toDouble(),20.);
+        const auto before=window.model.json();
+        QTimer::singleShot(100,[&]{
+            auto *d=window.findChild<QDialog *>("parameterEditor");if(!d)return;
+            d->findChild<QTableWidget *>("parameterTable")->item(0,1)->setText("30 mm");
+            d->reject();
+        });
+        window.findChild<QAction *>("parameters")->trigger();QCOMPARE(window.model.json(),before);
+        QTimer::singleShot(100,[&]{
+            auto *d=window.findChild<QDialog *>("parameterEditor");if(!d)return;
+            d->findChild<QTableWidget *>("parameterTable")->item(0,1)->setText("30 mm");
+            QTest::mouseClick(d->findChild<QDialogButtonBox *>()->button(QDialogButtonBox::Ok),Qt::LeftButton);
+        });
+        window.findChild<QAction *>("parameters")->trigger();QCOMPARE(window.model.get(id).p["w"].toDouble(),30.);
+        window.findChild<QAction *>("undo")->trigger();QCOMPARE(window.model.json(),before);
+        window.findChild<QAction *>("redo")->trigger();QCOMPARE(window.model.get(id).p["w"].toDouble(),30.);
+        window.model.save(dir.filePath("result.mcad"));Model loaded;loaded.load(window.model.filePath);
+        QCOMPARE(loaded.json(),window.model.json());QVERIFY(window.close());
+    }
     void sketchConstraintsSelectionAndPersistence() {
         QTemporaryDir dir; QVERIFY(dir.isValid());
         Model source;

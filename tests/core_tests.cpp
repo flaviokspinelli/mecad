@@ -11,6 +11,56 @@
 class CoreTests : public QObject {
     Q_OBJECT
   private slots:
+    void expressionsOnSupportedFeatures() {
+        Model m;m.setParameters({{"size","2 mm"}});
+        auto cylinder=m.add("cylinder",{{"r",1},{"d",1}});
+        m.setExpression(cylinder,"r","size");m.setExpression(cylinder,"d","size*3");
+        QVERIFY(std::abs(Model::volume(m.get(cylinder).shape)-24*std::acos(-1))<1e-6);
+        auto sphere=m.add("sphere",{{"r",1}});m.setExpression(sphere,"r","size");
+        QVERIFY(std::abs(Model::volume(m.get(sphere).shape)-32*std::acos(-1)/3)<1e-6);
+        auto sketch=m.add("sketch",{{"profile","rectangle"},{"w",10},{"h",10}});
+        m.constrainSketch(sketch,sketch::Relation::Fixed,"p0",{},{0,0});
+        auto extrusion=m.add("extrude",{{"source",sketch},{"d",1}});m.setExpression(extrusion,"d","-size");
+        QVERIFY(std::abs(Model::volume(m.get(extrusion).shape)-200)<1e-6);
+        auto box=m.add("box",{{"w",20},{"h",20},{"d",20}});
+        auto fillet=m.add("fillet",{{"source",box},{"r",1},{"edges",QJsonArray{0}}});
+        m.setExpression(fillet,"r","size");const double volume=Model::volume(m.get(fillet).shape);
+        m.setParameters({{"size","3 mm"}});
+        QVERIFY(Model::volume(m.get(fillet).shape)<volume);
+        const auto saved=m.json();m.rebuild();QCOMPARE(m.json(),saved);
+        Model restored;restored.loadJson(saved);QCOMPARE(restored.json(),saved);
+        QVERIFY(BRepCheck_Analyzer(restored.get(fillet).shape).IsValid());
+    }
+    void namedParametersDriveGeometry() {
+        Model m; m.setParameters({{"width","2 cm"},{"depth","width/2"}});
+        auto box=m.add("box",{{"w",1},{"h",10},{"d",10},{"expressions",QJsonObject{{"w","width"},{"d","depth"}}}});
+        QCOMPARE(Model::volume(m.get(box).shape),2000.);
+        QCOMPARE(m.json()["version"].toInt(),3);
+        const auto before=m.json();
+        m.setParameters({{"width","3 cm"},{"depth","width/2"}});
+        QVERIFY(std::abs(Model::volume(m.get(box).shape)-4500)<1e-7);
+        QVERIFY(m.undo());QCOMPARE(m.json(),before);QVERIFY(m.redo());
+        QTemporaryDir dir;m.save(dir.filePath("parameters.mcad"));
+        Model loaded;loaded.load(m.filePath);QCOMPARE(loaded.json(),m.json());
+        const auto saved=m.json();
+        auto invalid=saved;invalid["namedParameters"]=QJsonObject{{"width",3}};
+        QVERIFY_THROWS_EXCEPTION(std::exception,loaded.loadJson(invalid));QCOMPARE(loaded.json(),saved);
+        QVERIFY_THROWS_EXCEPTION(std::exception,m.setParameters({{"width","-1 mm"},{"depth","width/2"}}));
+        QVERIFY_THROWS_EXCEPTION(std::exception,m.setParameters({{"width","depth"},{"depth","width"}}));
+        QVERIFY_THROWS_EXCEPTION(std::exception,m.setParameters({}));
+        QVERIFY_THROWS_EXCEPTION(std::exception,m.setExpression(box,"w","3 deg"));
+        QVERIFY_THROWS_EXCEPTION(std::exception,m.setExpression(box,"source","width"));
+        QCOMPARE(m.json(),saved);QVERIFY(!m.dirty);
+        auto p=m.get(box).p;p["w"]=12;
+        QVERIFY_THROWS_EXCEPTION(std::exception,m.edit(box,p,"Box"));QCOMPARE(m.json(),saved);
+        p.remove("expressions");
+        QVERIFY_THROWS_EXCEPTION(std::exception,m.edit(box,p,"Box"));QCOMPARE(m.json(),saved);
+        m.setExpression(box,"w","");p=m.get(box).p;p["w"]=12;m.edit(box,p,"Box");
+        QCOMPARE(m.get(box).p["w"].toDouble(),12.);
+        auto downgrade=saved;downgrade["version"]=2;
+        QVERIFY_THROWS_EXCEPTION(std::exception,loaded.loadJson(downgrade));QCOMPARE(loaded.json(),saved);
+        m.clear();QVERIFY(m.parameters().empty());QCOMPARE(m.json()["version"].toInt(),1);
+    }
     void constrainedSketchDocumentRoundTrip() {
         Model m;
         auto sk=m.add("sketch",{{"profile","rectangle"},{"w",10},{"h",10}},"Constrained");
@@ -211,7 +261,7 @@ class CoreTests : public QObject {
         const bool dirty = m.dirty;
         QList<QJsonObject> invalid;
         auto wrongVersion = original; wrongVersion["version"] = 1.5; invalid.append(wrongVersion);
-        auto future = original; future["version"] = 3; invalid.append(future);
+        auto future = original; future["version"] = 4; invalid.append(future);
         auto units = original; units["units"] = "in"; invalid.append(units);
         auto extra = original; extra["unrecognizedData"] = true; invalid.append(extra);
         const auto feature = original["features"].toArray().first().toObject();

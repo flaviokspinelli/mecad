@@ -3,10 +3,9 @@
 Atualização: 21/09/2026. Base: MecaCAD 0.2.25, macOS Apple Silicon.
 
 Progresso após essa versão: [registro de execução](docs/PROGRESSO.md).
-Escopo da próxima entrega, solicitado pelo usuário: **fechar os 35 itens que
-estavam parciais em 21/09/2026**, mais suas dependências indispensáveis. Os outros
-itens ficam para depois. Lista congelada para não aumentar o escopo conforme novos
-itens passam a parciais:
+Escopo ampliado pelo usuário em 21/09/2026: **65 itens**, sendo os 35 parciais
+originais e mais 30 selecionados por dependência e uso diário de CAD. Inclusão
+no escopo não significa conclusão. Lista dos 35 originais:
 
 - PROD-03, PROD-05;
 - REL-01, REL-02, REL-03, REL-04, REL-06, REL-07;
@@ -15,6 +14,21 @@ itens passam a parciais:
 - PAR-01, PAR-02, PAR-03, PAR-05, PAR-06;
 - GEO-01, GEO-02, GEO-03, GEO-08, GEO-13;
 - FAB-01, FAB-05; QA-01, QA-02.
+
+Os 30 adicionais, sem duplicação dos anteriores:
+
+- PROD-01, PROD-02, PROD-04;
+- REL-05, REL-08, REL-09;
+- UX-02, UX-09;
+- SK-06, SK-07, SK-08, SK-09, SK-10, SK-12;
+- PAR-04, PAR-07;
+- GEO-04, GEO-05, GEO-06, GEO-07, GEO-09, GEO-10, GEO-12;
+- ASM-01, ASM-03, ASM-05;
+- FAB-02, FAB-03, FAB-04, FAB-09.
+
+Sequência interna: integridade e parâmetros; seleção/sketch/referências;
+modelagem; componentes/montagens; desenhos e malhas. Dependências indispensáveis
+continuam autorizadas. Os demais 36 itens não entram automaticamente nesta entrega.
 
 Fechar significa cumprir o aceite integral de cada linha abaixo, não apenas
 implementar parte dela. Restrições de disco e de testes permanecem em vigor.
@@ -149,7 +163,7 @@ PAR-01/02 sustentam projeções, recursos avançados e montagens associativas.
 | PAR-01 | P0 · Parcial | Identificação persistente de topologia | Preservar intenção após mudanças testadas em faces/arestas; ambiguidade pede reparo, nunca aponta silenciosamente para outra entidade. |
 | PAR-02 | P0 · Parcial | Grafo explícito de dependências | Detectar ciclos e entradas inválidas; reconstruir na ordem correta; falha não corrompe o último estado válido. |
 | PAR-03 | P0 · Parcial | Diagnóstico e reparo do histórico | Identificar etapa quebrada e dependentes; substituir referência/perfil; separar excluir, suprimir e rollback. |
-| PAR-04 | P1 · Pendente | Parâmetros e expressões | Nomes, fórmulas e unidades reutilizáveis; validar ciclos, tipos e expressões sem execução arbitrária de código. |
+| PAR-04 | P1 · Parcial | Parâmetros e expressões | Nomes, fórmulas e unidades reutilizáveis; validar ciclos, tipos e expressões sem execução arbitrária de código. Tabela e vínculos de comprimentos em sólidos básicos integrados; expansão para cotas/restrições e campos angulares pendente. |
 | PAR-05 | P1 · Parcial | Reordenar e suprimir recursos | Recusar ordem impossível; reativar etapas e manter estado após salvar/reabrir. |
 | PAR-06 | P1 · Parcial | Editar recurso existente | Reabrir parâmetros/seleções originais sem duplicar peça; cancelar restaura integralmente; histórico e canvas permanecem coerentes. |
 | PAR-07 | P2 · Pendente | Configurações de projeto | Variantes por parâmetros/supressões com identificação clara; exportar configuração escolhida e reconstruir cada variante. |

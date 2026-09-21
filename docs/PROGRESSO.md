@@ -208,3 +208,38 @@ cruzado/sem área e gesto em sketch totalmente fixo sem criar alteração ou und
 A pasta build/ desapareceu durante uma compilação intermediária, sem comando de
 remoção desta tarefa; foi recriada somente para desenvolvimento/testes. Nenhum
 arquivo em dist foi substituído. Os 35 itens continuam em execução, não aceitos.
+
+## 21/09/2026 — mais 30 itens e parâmetros nomeados
+
+Pedido: acrescentar mais 30 itens. BACKLOG.md registra 30 IDs distintos dos 35
+originais, totalizando 65 no escopo. Seleção prioriza CAD diário e dependências;
+não implica 30 implementações concluídas. A continuação automática existente foi
+atualizada, preservando frequência, tarefa e restrições de disco/privacidade.
+
+Responsável: Codex. PAR-04 passa a parcial. Dependências: documento transacional,
+unidades, reconstrução, histórico; riscos: ciclos, incompatibilidade dimensional,
+perda de fórmulas ao editar numericamente e compatibilidade com arquivos anteriores.
+
+- Avaliador próprio sem scripts ou execução de código, limitado a aritmética,
+  unidades e referências nomeadas; isolamento de Qt Widgets e kernel geométrico.
+- Resolução de dependências com detecção de ciclos, valores não finitos e limites.
+- Tabela editável de parâmetros e vínculo de medidas em blocos, cilindros, esferas,
+  extrusões e filetes. Mudança válida reconstrói os dependentes; falha é atômica.
+- Campos vinculados são somente leitura nas propriedades. Edição genérica não
+  descarta vínculos silenciosamente; remoção explícita conserva a medida resolvida.
+- Documento v3 apenas quando necessário; v1/v2 continuam legíveis. Salvar,
+  reconstruir e undo/redo preservam definições e vínculos.
+
+Validação: suíte core completa (30 resultados incluindo setup/cleanup), expressões
+(7), recovery (7) e UI direcionada parâmetros + restrições (4), sem falhas na
+revisão verificada. Teste de UI verifica vincular, redimensionar, cancelar, undo/redo
+e salvar/reabrir. Captura build/parameter-editor.png inspecionada, sem cortes ou
+controles encobertos. A regressão detectou uma leitura Qt que inseria um campo
+nulo em sketches legados; corrigida e testes v1/v2 repetidos com sucesso.
+
+Limitações em [PARAMETERS.md](PARAMETERS.md): vínculos ainda não abrangem cotas de
+sketch, ângulos ou todos os campos; não há renomeação associativa/autocomplete.
+Nenhum item inteiro foi encerrado. Sem pacote, alteração em dist ou projeto do
+usuário; uso de build/ único. A verificação adicional expressionsOnSupportedFeatures
+e namedParametersDriveGeometry passou (4 resultados com setup/cleanup), cobrindo
+cada tipo de recurso compatível e mistura de restrições v2 com parâmetros v3.
