@@ -497,11 +497,16 @@ void Viewport::paintOverlay(QPainter &p) {
                 break;
             }
         planeRegions.clear();
-        QRectF bounds;
         int i = 0;
         for (auto planeName : {"XY", "XZ", "YZ"}) {
             QPolygonF polygon;
-            for (auto q : {QPointF(-15, -15), QPointF(25, -15), QPointF(25, 25), QPointF(-15, 25)})
+            // Three adjacent faces sharing the origin; all still lie on the
+            // real zero-offset planes. No plane passes through another face.
+            const double u0 = QString(planeName) == "YZ" ? 0 : -40;
+            const double u1 = QString(planeName) == "YZ" ? 40 : 0;
+            const double v0 = QString(planeName) == "XY" ? 0 : -40;
+            const double v1 = QString(planeName) == "XY" ? 40 : 0;
+            for (auto q : {QPointF(u0, v0), QPointF(u1, v0), QPointF(u1, v1), QPointF(u0, v1)})
                 polygon << project(Model::planePoint(planeName, q.x(), q.y()));
             QColor c = i == 0   ? QColor(102, 172, 214, 30)
                        : i == 1 ? QColor(211, 172, 105, 30)
@@ -513,18 +518,15 @@ void Viewport::paintOverlay(QPainter &p) {
                           hovered == planeName ? 2 : 1));
             p.drawPolygon(polygon);
             planeRegions.append({planeName, polygon});
-            bounds = bounds.united(polygon.boundingRect());
             ++i;
         }
-        const QPointF labelPoints[] = {QPointF(bounds.center().x(), bounds.bottom() + 24),
-                                       QPointF(bounds.left() - 32, bounds.center().y()),
-                                       QPointF(bounds.right() + 32, bounds.center().y())};
+        const QPointF labelPoints[] = {planeRegions[0].second.boundingRect().center(),
+                                       planeRegions[1].second.boundingRect().center(),
+                                       planeRegions[2].second.boundingRect().center()};
         p.setFont(QFont("Helvetica Neue", 10, QFont::Medium));
         for (int index = 0; index < 3; ++index) {
             auto region = planeRegions[index];
             QRectF badge(labelPoints[index] - QPointF(21, 12), QSizeF(42, 24));
-            p.setPen(QPen(QColor("#71899d"), 1));
-            p.drawLine(region.second.boundingRect().center(), labelPoints[index]);
             p.setBrush(hovered == region.first ? QColor("#345b74") : QColor("#283746"));
             p.setPen(QPen(hovered == region.first ? QColor("#91cee9") : QColor("#71899d"), 1));
             p.drawRoundedRect(badge, 4, 4);

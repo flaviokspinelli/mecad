@@ -11,6 +11,34 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void adjacentPlaneSelection() {
+        Model model;
+        Viewport v(&model);
+        v.resize(900, 600);
+        v.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&v));
+        QString chosen;
+        double offset = 1;
+        v.onPlaneChosen = [&](QString name, double distance) {
+            chosen = name;
+            offset = distance;
+        };
+        for (int i = 0; i < 3; ++i) {
+            v.choosingPlane = true;
+            v.view("iso");
+            v.grab();
+            QCOMPARE(v.planeRegions.size(), 6);
+            const auto face = v.planeRegions[i];
+            auto position = face.second.boundingRect().center();
+            for (int other = 0; other < 3; ++other)
+                if (other != i)
+                    QVERIFY(!v.planeRegions[other].second.containsPoint(position, Qt::OddEvenFill));
+            QTest::mouseClick(&v, Qt::LeftButton, Qt::NoModifier, position.toPoint());
+            QCOMPARE(chosen, face.first);
+            QCOMPARE(offset, 0.);
+            QVERIFY(!v.choosingPlane);
+        }
+    }
     void sketchDragGestures() {
         Model model;
         Viewport v(&model);
@@ -172,7 +200,7 @@ class UiTests : public QObject {
         QTest::qWait(100);
         window.grab().save(QDir::currentPath() + "/plane-selection-test.png");
         QTest::mouseClick(v, Qt::LeftButton, Qt::NoModifier,
-                          v->project(Model::planePoint("XY", 10, 10)).toPoint());
+                          v->project(Model::planePoint("XY", -10, 10)).toPoint());
         QVERIFY(v->sketchMode);
         QCOMPARE(v->tool, QString("rectangle"));
         QTest::qWait(100);
