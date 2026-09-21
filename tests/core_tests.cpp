@@ -11,6 +11,60 @@
 class CoreTests : public QObject {
     Q_OBJECT
   private slots:
+    void sketchElementEditing() {
+        for (auto plane : {"XY", "XZ", "YZ"}) {
+            Model model;
+            auto id = model.add("sketch", {{"profile", "rectangle"}, {"plane", plane}, {"w", 20}, {"h", 20}});
+            auto original = model.json();
+            model.editSketchElements(id, {0,1}, {}, Model::planePoint(plane, 3, 4), false);
+            QCOMPARE(model.get(id).p["profile"].toString(), QString("polyline"));
+            QVERIFY(model.get(id).p["closed"].toBool());
+            auto points = model.get(id).p["points"].toArray();
+            QCOMPARE(points[1].toArray(), (QJsonArray{23,4})); // Shared corner moves once.
+            QVERIFY(model.undo());
+            QCOMPARE(model.json(), original);
+            model.editSketchElements(id, {}, {0}, Model::planePoint(plane, 1, 2), false);
+            auto vertexPoints = model.get(id).p["points"].toArray();
+            QCOMPARE(vertexPoints[0].toArray(), (QJsonArray{1,2}));
+            QCOMPARE(vertexPoints[1].toArray(), (QJsonArray{20,0}));
+            QVERIFY(model.undo());
+            QCOMPARE(model.json(), original);
+            model.editSketchElements(id, {0}, {}, {}, true);
+            QVERIFY(!model.get(id).p["closed"].toBool());
+            QCOMPARE(model.get(id).p["points"].toArray().size(), 4);
+            QVERIFY(model.undo());
+            model.editSketchElements(id, {0,2}, {}, {}, true);
+            QCOMPARE(model.features.size(), size_t(2));
+            QVERIFY(model.undo());
+            QCOMPARE(model.json(), original);
+            model.editSketchElements(id, {}, {0}, {}, true);
+            QCOMPARE(model.get(id).p["points"].toArray().size(), 3);
+            QVERIFY(model.undo());
+            auto solid = model.add("extrude", {{"source", id}, {"d", 10}});
+            auto before = model.json();
+            QVERIFY_THROWS_EXCEPTION(std::exception, model.editSketchElements(id, {0}, {}, {}, true));
+            QCOMPARE(model.json(), before);
+            model.editSketchElements(id, {0,1,2,3}, {}, Model::planePoint(plane, 2, 3), false);
+            QVERIFY(std::abs(Model::volume(model.get(solid).shape)-4000)<.01);
+            QVERIFY(model.undo());
+            QCOMPARE(model.json(), before);
+        }
+    }
+    void atomicBatchEdit() {
+        Model model;
+        auto a = model.add("box", {{"w",10},{"d",10},{"h",10}});
+        auto b = model.add("box", {{"w",10},{"d",10},{"h",10},{"x",30}});
+        auto before = model.json();
+        Model work = model;
+        work.deleteBody(a);
+        work.deleteBody(b);
+        model.commit(work.json());
+        QVERIFY(model.bodies().empty());
+        QVERIFY(model.undo());
+        QCOMPARE(model.json(), before);
+        QVERIFY(model.redo());
+        QVERIFY(model.bodies().empty());
+    }
     void deleteBodyVersusRollback() {
         Model model;
         auto sketch = model.add("sketch", {{"profile", "rectangle"}, {"plane", "XY"}, {"w", 20}, {"h", 30}});

@@ -1007,7 +1007,7 @@ void Viewport::mousePressEvent(QMouseEvent *e) {
                 handleDistance = moveDistances[axis];
             }
         }
-        if (overCenter || (!draggingHandle && !selected.isEmpty() && pick(e->position()) == selected)) {
+        if (overCenter || (!draggingHandle && !selected.isEmpty() && objectSelected(pick(e->position())))) {
             draggingHandle = false;
             draggingMoveFree = true;
             moveStartDistances = moveDistances;

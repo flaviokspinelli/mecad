@@ -185,6 +185,18 @@ void Model::loadJson(const QJsonObject &root) {
     future.clear();
     dirty = false;
 }
+void Model::commit(const QJsonObject &document) {
+    auto before = json();
+    if (before == document)
+        return;
+    try {
+        restore(document);
+    } catch (...) {
+        restore(before);
+        throw;
+    }
+    checkpoint(before);
+}
 QString Model::add(QString type, QJsonObject p, QString name) {
     auto before = json();
     QString id = QUuid::createUuid().toString(QUuid::WithoutBraces);

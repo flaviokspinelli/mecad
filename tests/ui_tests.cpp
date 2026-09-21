@@ -12,6 +12,90 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void editSelectedElementsAndBodies() {
+        Window window;
+        auto id = window.model.add("sketch", {{"profile", "rectangle"}, {"plane", "XY"}, {"w", 20}, {"h", 20}, {"offset",10}});
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        window.activateWindow();
+        QVERIFY(QTest::qWaitForWindowActive(&window));
+        auto *v = window.findChild<Viewport *>();
+        v->refresh();
+        v->fit();
+        auto chooseEdges = [&](int count) {
+            v->onSelect(id);
+            for (int i=0; i<count; ++i)
+                v->selectedDetails.append({id,"edge",i,{{0,0,10},{20,20,10}}});
+            v->selectedDetail = v->selectedDetails.back();
+        };
+        auto before = window.model.json();
+        chooseEdges(2);
+        bool previewed = false;
+        QTimer::singleShot(180, [&] {
+            if (!v->onMoveTranslation) { if (v->onCancelCommand) v->onCancelCommand(); return; }
+            v->onMoveTranslation({3,4,0});
+            QTest::qWait(100);
+            previewed = v->model->get(id).p["profile"] == "polyline" && window.model.json() == before;
+            v->grab().save(QDir::currentPath() + "/sketch-elements-move-test.png");
+            v->onAcceptCommand();
+        });
+        window.findChild<QAction *>("transform")->trigger();
+        QVERIFY(previewed);
+        QVERIFY(window.model.undo());
+        QCOMPARE(window.model.json(), before);
+        window.model.add("box", {{"w",30},{"h",30},{"d",10}});
+        auto contourOnBody = window.model.json();
+        v->refresh();
+        v->fit();
+        chooseEdges(4);
+        bool recognized = false;
+        QTimer::singleShot(180, [&] {
+            recognized = v->handleActive && v->handleDistance == 0;
+            v->grab().save(QDir::currentPath() + "/contour-extrude-test.png");
+            if (v->onCancelCommand) v->onCancelCommand();
+        });
+        window.findChild<QAction *>("extrude")->trigger();
+        QVERIFY(recognized);
+        QCOMPARE(window.model.json(), contourOnBody);
+        QVERIFY(window.model.undo());
+        QCOMPARE(window.model.json(), before);
+        chooseEdges(1);
+        window.findChild<QAction *>("delete")->trigger();
+        QVERIFY(!window.model.get(id).p["closed"].toBool());
+        QVERIFY(window.model.undo());
+        QCOMPARE(window.model.json(), before);
+        auto a = window.model.add("box", {{"w",10},{"d",10},{"h",10}});
+        auto b = window.model.add("box", {{"w",10},{"d",10},{"h",10},{"x",30}});
+        auto bodiesBefore = window.model.json();
+        v->refresh();
+        v->onSelect(b);
+        v->selectedDetails = {{a,"object",-1,{}},{b,"object",-1,{}}};
+        bool moved = false;
+        QTimer::singleShot(180, [&] {
+            if (!v->onMoveTranslation) { if (v->onCancelCommand) v->onCancelCommand(); return; }
+            v->onMoveTranslation({5,6,7});
+            v->onRotateAngle(90);
+            QTest::qWait(100);
+            moved = v->model->bodies().size() == 2 && window.model.json() == bodiesBefore;
+            v->grab().save(QDir::currentPath() + "/batch-move-test.png");
+            v->onAcceptCommand();
+        });
+        window.findChild<QAction *>("transform")->trigger();
+        QVERIFY(moved);
+        QCOMPARE(window.model.features.size(), size_t(5));
+        auto &first = window.model.features[3], &second = window.model.features[4];
+        QCOMPARE(first.p["px"], second.p["px"]);
+        QCOMPARE(first.p["angle"].toDouble(), 90.);
+        QVERIFY(window.model.undo());
+        QCOMPARE(window.model.json(), bodiesBefore);
+        v->refresh();
+        v->onSelect(b);
+        v->selectedDetails = {{a,"object",-1,{}},{b,"object",-1,{}}};
+        window.findChild<QAction *>("delete")->trigger();
+        QVERIFY(window.model.bodies().empty());
+        QVERIFY(window.model.undo());
+        QCOMPARE(window.model.json(), bodiesBefore);
+    }
     void areaSelection() {
         Model model;
         auto a = model.add("sketch", {{"profile", "rectangle"}, {"plane", "XY"}, {"w", 20}, {"h", 20}});

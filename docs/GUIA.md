@@ -166,8 +166,20 @@ O alvo sob o mouse fica amarelo; a seleção confirmada fica azul. Use **View �
 ou **SELECT** para filtrar por tipo. O Browser seleciona o objeto inteiro. Esc ou
 um clique vazio limpa a seleção. Funciona em sketches e sólidos CAD; malhas STL
 ainda são selecionadas por inteiro. **Measure** mostra coordenadas de vértices ou
-comprimento aproximado de arestas. Selecionar não permite ainda arrastar/excluir
-vértices individualmente; comandos de corpo pedem seleção do objeto completo.
+comprimento aproximado de arestas.
+
+Selecione linhas/vértices de retângulos, polígonos ou polilinhas e pressione **M**
+para movê-los pelas hastes ou pelo centro, com prévia no plano do sketch. As linhas
+ligadas aos pontos acompanham o movimento. O retângulo passa a ser uma polilinha,
+sem as antigas cotas de largura/altura. **Delete** remove as linhas selecionadas;
+apagar um vértice também remove as linhas ligadas a ele. Trechos desconectados
+viram sketches separados. Curvas e subelementos de sólidos ainda não são editáveis.
+Alterações que invalidariam extrusões dependentes são rejeitadas sem modificar o projeto.
+
+Selecione todas as arestas de um mesmo perfil fechado e use **E** para extrudar.
+Selecionar somente algumas arestas não basta para formar o sólido. Para várias
+peças inteiras, **M** move/gira o grupo com um pivô comum e **Delete** apaga o grupo.
+Cada ação pode ser desfeita com um único Undo. **Esc** cancela a prévia.
 
 ### Alterar cotas
 

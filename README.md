@@ -8,7 +8,21 @@ desenvolvida e testada em macOS 14, Apple Silicon.
 
 ## Abrir
 
-Abra `dist/MecaCAD-0.2.21.app`. O pacote local reúne o executável e suas bibliotecas.
+Abra `dist/MecaCAD-0.2.22.app`. O pacote local reúne o executável e suas bibliotecas.
+
+Na 0.2.22, selecione linhas/vértices de retângulos, polígonos ou polilinhas e use
+M para movê-los no plano do sketch com prévia. Pontos compartilhados acompanham as
+linhas e são deslocados uma única vez. O perfil passa a ser uma polilinha, deixando
+de usar as cotas de largura/altura de retângulo. Delete remove somente as linhas
+selecionadas; ao apagar um vértice, remove também as linhas ligadas a ele. Trechos
+desconectados tornam-se sketches separados. Alterações inválidas ou que quebrariam
+extrusões dependentes são recusadas sem alterar o projeto. Curvas e subelementos
+de sólidos CAD ainda não podem ser modificados desta maneira.
+
+M também move/gira vários corpos finais selecionados (inclusive STL), usando um
+pivô comum. Delete apaga vários corpos. Cada ação inteira pode ser desfeita com
+um único Undo. Para extrudar um sketch fechado, agora é possível selecionar todas
+as suas arestas com Shift e acionar Extrude; uma seleção parcial continua inválida.
 
 Na 0.2.21, arraste a partir do vazio com a ferramenta de seleção para selecionar
 por área. Da esquerda para a direita inclui somente itens inteiros; da direita

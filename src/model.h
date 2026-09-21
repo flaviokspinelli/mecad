@@ -26,6 +26,9 @@ class Model {
     void edit(const QString &id, QJsonObject p, const QString &name);
     void remove(const QString &id);
     void deleteBody(const QString &id);
+    void commit(const QJsonObject &document);
+    void editSketchElements(const QString &id, const QVector<int> &edges, const QVector<int> &vertices,
+                            QVector3D delta, bool erase);
     void toggle(const QString &id);
     void rebuild();
     Feature &get(const QString &id);

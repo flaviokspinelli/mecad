@@ -1,6 +1,9 @@
 #include "window.h"
 #include <BRepBndLib.hxx>
 #include <Bnd_Box.hxx>
+#include <TopExp.hxx>
+#include <TopTools_IndexedMapOfShape.hxx>
+#include <QSet>
 #include <QActionGroup>
 #include <QApplication>
 #include <QCheckBox>
@@ -423,10 +426,30 @@ QAction *Window::command(QString key, QString label, QString shortcut, std::func
                     return;
                 }
         run([&] {
+            if ((key == "extrude" || key == "revolve") && canvas->hasSubselection()) {
+                const auto items = canvas->selectedDetails;
+                QString owner;
+                QSet<int> edges;
+                bool complete = !items.empty();
+                for (const auto &item : items) {
+                    if (owner.isEmpty()) owner = item.feature;
+                    complete = complete && item.kind == "edge" && item.feature == owner;
+                    edges.insert(item.index);
+                }
+                if (complete && model.get(owner).type == "sketch") {
+                    TopTools_IndexedMapOfShape topology;
+                    TopExp::MapShapes(model.get(owner).shape, TopAbs_EDGE, topology);
+                    const auto p = model.get(owner).p;
+                    bool closed = p["profile"] == "rectangle" || p["profile"] == "circle" || p["closed"].toBool();
+                    if (closed && edges.size() == topology.Extent())
+                        select(owner);
+                }
+            }
             const QStringList bodyCommands = {"delete", "rollback", "transform", "copy",
                                               "fillet", "hole",     "boolean",   "cut",
                                               "common", "extrude",  "revolve",   "dimension"};
-            if ((canvas->hasSubselection() || canvas->selectedDetails.size() > 1) && bodyCommands.contains(key))
+            if (key != "delete" && key != "transform" &&
+                (canvas->hasSubselection() || canvas->selectedDetails.size() > 1) && bodyCommands.contains(key))
                 throw std::runtime_error(
                     "Há subelementos ou vários itens selecionados. Esta ferramenta ainda atua em um objeto inteiro; "
                     "selecione o objeto no Browser ou use o filtro Objetos / perfis.");
@@ -538,6 +561,29 @@ Window::Window() {
         refresh();
     }));
     edit->addAction(command("delete", "Apagar peça", "Backspace", [this] {
+        if (!canvas->selectedDetails.empty()) {
+            const auto items = canvas->selectedDetails;
+            Model work = model;
+            QSet<QString> owners;
+            for (const auto &item : items) owners.insert(item.feature);
+            for (const auto &owner : owners) {
+                QVector<int> edges, vertices;
+                bool whole = false;
+                for (const auto &item : items) if (item.feature == owner) {
+                    if (item.kind == "object") whole = true;
+                    else if (item.kind == "edge") edges.append(item.index);
+                    else if (item.kind == "vertex") vertices.append(item.index);
+                }
+                if (!whole)
+                    work.editSketchElements(owner, edges, vertices, {}, true);
+                else if (work.get(owner).type == "sketch") work.remove(owner);
+                else work.deleteBody(owner);
+            }
+            model.commit(work.json());
+            selected.clear();
+            refresh();
+            return;
+        }
         if (!selected.isEmpty()) {
             if (model.get(selected).type == "sketch")
                 model.remove(selected);
@@ -1241,6 +1287,7 @@ void Window::select(const QString &id) {
     canvas->selectedDetails.clear();
     canvas->selectedDetail = {};
     canvas->hoveredDetail = {};
+    refreshing = true;
     tree->clearSelection();
     selected = id;
     canvas->selected = id;
@@ -1590,13 +1637,44 @@ void Window::booleanOp(const QString &mode) {
     }
 }
 void Window::transform(bool copy) {
+    const auto items = canvas->selectedDetails;
+    const bool subelements = canvas->hasSubselection();
+    QStringList group;
+    QString sketchPlane;
+    for (const auto &item : items) {
+        if (!group.contains(item.feature)) group.append(item.feature);
+        if (subelements) {
+            const auto &feature = model.get(item.feature);
+            if (item.kind == "object" || feature.type != "sketch" ||
+                (feature.p["profile"] != "rectangle" && feature.p["profile"] != "polyline"))
+                throw std::runtime_error("Selecione apenas linhas ou vértices de sketches retos para editar. Não misture com corpos ou curvas.");
+            auto plane = feature.p["plane"].toString("XY");
+            if (!sketchPlane.isEmpty() && sketchPlane != plane)
+                throw std::runtime_error("Mova subelementos de um mesmo plano por vez.");
+            sketchPlane = plane;
+        }
+    }
+    const bool grouped = subelements || group.size() > 1;
     QList<QPair<QString, QString>> bodies;
     for (auto i : model.bodies())
         bodies.append({model.features[i].name, model.features[i].id});
+    if (grouped) {
+        bodies.clear();
+        for (const auto &id : group) {
+            if (!subelements && (model.get(id).type == "sketch" || model.consumed(id)))
+                throw std::runtime_error("Para mover peças juntas, selecione somente corpos finais.");
+            bodies.append({model.get(id).name, id});
+        }
+    }
     if (bodies.empty())
         throw std::runtime_error("Crie um corpo primeiro.");
     Form panel(this, copy ? "Create Copy" : "Move / Copy");
     panel.choice("source", "Body", bodies, selected);
+    if (grouped) {
+        panel.combos["source"]->setEnabled(false);
+        panel.note(subelements ? "Move os pontos selecionados e mantém as linhas conectadas. Movimento limitado ao plano do sketch."
+                               : QString("%1 peças serão movidas/giradas juntas.").arg(group.size()));
+    }
     panel.number("x", "X distance", copy ? 50 : 0);
     panel.number("y", "Y distance", 0);
     panel.number("z", "Z distance", 0);
@@ -1608,6 +1686,7 @@ void Window::transform(bool copy) {
     auto *rotate = new QPushButton("Girar pelo mouse");
     rotate->setObjectName("rotateMode");
     rotate->setCheckable(true);
+    rotate->setVisible(!subelements);
     panel.layout->addRow(rotate);
     connect(rotate, &QPushButton::toggled, &panel, [&](bool enabled) {
         canvas->rotationMode = enabled;
@@ -1627,6 +1706,11 @@ void Window::transform(bool copy) {
         precision->setText(expanded ? "Precise values / rotation ▾" : "Precise values / rotation ▸");
         panel.adjustSize();
     });
+    if (subelements) {
+        rotate->setEnabled(false);
+        panel.nums["angle"]->setEnabled(false);
+        panel.combos["axis"]->setEnabled(false);
+    }
     panel.note("Arraste a peça ou o centro das hastes para mover no plano da tela.\n"
                "Use as setas para restringir a X, Y ou Z. Enter confirma; Esc cancela.");
     auto *feedback = new QLabel;
@@ -1641,7 +1725,17 @@ void Window::transform(bool copy) {
     auto moveParameters = [&] {
         auto parameters = panel.values();
         Bnd_Box sourceBox;
-        BRepBndLib::Add(model.get(parameters["source"].toString()).shape, sourceBox);
+        if (subelements) {
+            for (const auto &item : items)
+                for (auto point : item.geometry) sourceBox.Add(gp_Pnt(point.x(), point.y(), point.z()));
+            auto delta = QVector3D(parameters["x"].toDouble(), parameters["y"].toDouble(), parameters["z"].toDouble());
+            auto normal = Model::planeNormal(sketchPlane);
+            delta -= normal * QVector3D::dotProduct(delta, normal);
+            parameters["x"] = delta.x(); parameters["y"] = delta.y(); parameters["z"] = delta.z();
+        } else if (grouped) {
+            for (const auto &id : group) BRepBndLib::Add(model.get(id).shape, sourceBox);
+        } else
+            BRepBndLib::Add(model.get(parameters["source"].toString()).shape, sourceBox);
         double x, y, z, X, Y, Z;
         sourceBox.Get(x, y, z, X, Y, Z);
         parameters["px"] = (x + X) / 2;
@@ -1649,13 +1743,34 @@ void Window::transform(bool copy) {
         parameters["pz"] = (z + Z) / 2;
         return parameters;
     };
+    auto applyMovement = [&](Model &work, QJsonObject parameters) {
+        QStringList results;
+        const auto sources = grouped ? group : QStringList{parameters["source"].toString()};
+        for (const auto &source : sources) {
+            if (subelements) {
+                QVector<int> edges, vertices;
+                for (const auto &item : items) if (item.feature == source) {
+                    if (item.kind == "edge") edges.append(item.index);
+                    if (item.kind == "vertex") vertices.append(item.index);
+                }
+                work.editSketchElements(source, edges, vertices,
+                    {float(parameters["x"].toDouble()), float(parameters["y"].toDouble()), float(parameters["z"].toDouble())}, false);
+                results.append(source);
+            } else {
+                parameters["source"] = source;
+                results.append(work.add(copy ? "copy" : "transform", parameters, copy ? "Copy" : "Move"));
+            }
+        }
+        return results;
+    };
     auto updatePreview = [&] {
         try {
             auto parameters = moveParameters();
             preview = model;
-            QString id = preview.add(copy ? "copy" : "transform", parameters, "Preview");
+            auto results = applyMovement(preview, parameters);
+            QString id = results.last();
             Bnd_Box box;
-            BRepBndLib::AddOptimal(preview.get(id).shape, box);
+            for (const auto &result : results) BRepBndLib::AddOptimal(preview.get(result).shape, box);
             double x, y, z, X, Y, Z;
             box.Get(x, y, z, X, Y, Z);
             canvas->moveDistances =
@@ -1669,6 +1784,9 @@ void Window::transform(bool copy) {
                                              parameters["pz"].toDouble());
             canvas->selected = id;
             canvas->setModel(&preview);
+            canvas->selectedDetails.clear();
+            for (const auto &result : results)
+                canvas->selectedDetails.append({result, "object", -1, {}});
             feedback->clear();
         } catch (const std::exception &error) {
             feedback->setText(QString::fromUtf8(error.what()));
@@ -1691,6 +1809,7 @@ void Window::transform(bool copy) {
                 debounce.start();
         });
     commandSelection = [&](QString id) {
+        if (grouped) return;
         int index = panel.combos["source"]->findData(id);
         if (index >= 0)
             panel.combos["source"]->setCurrentIndex(index);
@@ -1719,8 +1838,15 @@ void Window::transform(bool copy) {
     canvas->onRotateAngle = {};
     canvas->selected = previousSelection;
     canvas->setModel(&model);
-    if (accepted)
-        selected = model.add(copy ? "copy" : "transform", moveParameters(), copy ? "Copy" : "Move");
+    if (accepted) {
+        auto parameters = moveParameters();
+        if (copy || std::abs(parameters["x"].toDouble()) + std::abs(parameters["y"].toDouble()) +
+                    std::abs(parameters["z"].toDouble()) + std::abs(parameters["angle"].toDouble()) > 1e-8) {
+            Model work = model;
+            selected = applyMovement(work, parameters).last();
+            model.commit(work.json());
+        }
+    }
     else
         selected = previousSelection;
     refresh();
