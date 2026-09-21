@@ -194,6 +194,13 @@ class UiTests : public QObject {
             v.view("iso");
             v.grab();
             QCOMPARE(v.planeRegions.size(), 6);
+            auto xy = v.planeRegions[0].second.boundingRect().center();
+            auto xz = v.planeRegions[1].second.boundingRect().center();
+            auto yz = v.planeRegions[2].second.boundingRect().center();
+            QVERIFY(xy.y() > xz.y());
+            QVERIFY(xy.y() > yz.y());
+            QVERIFY(yz.x() < xz.x());
+            v.grab().save(QDir::currentPath() + "/plane-layout-test.png");
             const auto face = v.planeRegions[i];
             auto position = face.second.boundingRect().center();
             for (int other = 0; other < 3; ++other)
@@ -366,7 +373,7 @@ class UiTests : public QObject {
         QTest::qWait(100);
         window.grab().save(QDir::currentPath() + "/plane-selection-test.png");
         QTest::mouseClick(v, Qt::LeftButton, Qt::NoModifier,
-                          v->project(Model::planePoint("XY", -10, 10)).toPoint());
+                          v->project(Model::planePoint("XY", 10, -10)).toPoint());
         QVERIFY(v->sketchMode);
         QCOMPARE(v->tool, QString("rectangle"));
         QTest::qWait(100);

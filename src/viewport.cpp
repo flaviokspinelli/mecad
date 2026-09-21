@@ -630,10 +630,11 @@ void Viewport::paintOverlay(QPainter &p) {
             QPolygonF polygon;
             // Three adjacent faces sharing the origin; all still lie on the
             // real zero-offset planes. No plane passes through another face.
-            const double u0 = QString(planeName) == "YZ" ? 0 : -40;
-            const double u1 = QString(planeName) == "YZ" ? 40 : 0;
-            const double v0 = QString(planeName) == "XY" ? 0 : -40;
-            const double v1 = QString(planeName) == "XY" ? 40 : 0;
+            // Open corner: XY is the floor, YZ the left wall, XZ the right.
+            const double u0 = QString(planeName) == "YZ" ? -40 : 0;
+            const double u1 = QString(planeName) == "YZ" ? 0 : 40;
+            const double v0 = QString(planeName) == "XY" ? -40 : 0;
+            const double v1 = QString(planeName) == "XY" ? 0 : 40;
             for (auto q : {QPointF(u0, v0), QPointF(u1, v0), QPointF(u1, v1), QPointF(u0, v1)})
                 polygon << project(Model::planePoint(planeName, q.x(), q.y()));
             QColor c = i == 0   ? QColor(102, 172, 214, 30)
