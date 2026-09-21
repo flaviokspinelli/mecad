@@ -6,27 +6,23 @@ Progresso após essa versão: [registro de execução](docs/PROGRESSO.md).
 UX-05: [pivô de rotação configurável e alças XY/XZ/YZ](docs/ROTATION-PIVOT.md)
 implementados e testados em desenvolvimento, incluindo escolha de pivô em
 vértices STL visíveis; aceite integral ainda pendente.
-Pedido vigente: **fechar um MVP interno de 8 itens**, sem ampliar o escopo. Este
-MVP substitui a entrega anterior dos 38 parciais e todas as ampliações anteriores.
+Pedido vigente: **fechar um mini-MVP interno de 2 itens**, sem ampliar o escopo.
+Este mini-MVP substitui a entrega anterior dos 8 itens e todas as ampliações
+anteriores.
 A lista fica congelada; nenhum novo recurso entra automaticamente.
 
-Lista congelada do MVP:
+Lista congelada do mini-MVP:
 
-- MVP-01 — seleção de corpos, faces, linhas e vértices;
-- MVP-02 — Shift e seleção por área;
-- MVP-03 — sketch básico com retângulo, círculo, polígonos e edição de medidas;
-- MVP-04 — extrusão com prévia por arraste, confirmação e corte;
-- MVP-05 — mover e girar corpos, inclusive STL;
-- MVP-06 — sketch sobre qualquer face plana;
-- MVP-07 — importar STL e exportar STL/STEP/DXF;
-- MVP-08 — salvar/abrir `.mcad`, desfazer/refazer e regressões finais.
+- MVP-CONFIABILIDADE — comandos seguros, undo/redo, recuperação básica,
+  integridade/migração `.mcad` e mensagens de erro compreensíveis;
+- MVP-BASE — arquitetura organizada, preferências essenciais, documentação
+  mínima e testes reproduzíveis locais.
 
-Status do MVP (21/09/2026): **8/8 aceites verificados em desenvolvimento**.
-Evidências: `core_tests` (39/39) e o conjunto direcionado de `ui_tests`
-(17/17), cobrindo seleção, área, Shift, subelementos, sketch sobre face,
-extrusão/corte, edição de medidas, mover/girar, STL, polígonos, navegação,
-histórico e operações de arquivo. A validação final em uso real continua sendo
-responsabilidade do operador; nenhum item fora desta lista deve ser iniciado.
+Status: **2/2 aceites verificados em desenvolvimento**. Evidências: `core_tests`
+(39/39) e o conjunto direcionado de `ui_tests` (17/17). Não fazem parte deste
+aceite CI completo, empacotamento reproduzível, logs avançados ou documentação
+extensa. A validação final em uso real continua sendo responsabilidade do
+operador; nenhum item fora desta lista deve ser iniciado.
 
 Os 38 parciais anteriores ficam fora da entrega ativa. A lista histórica abaixo
 permanece para rastreabilidade, mas não deve receber trabalho enquanto o MVP não
