@@ -107,15 +107,6 @@ void validateDocument(const QJsonObject &root) {
             require(plane.isUndefined() || (plane.isString() && (plane == "XY" || plane == "XZ" || plane == "YZ" ||
                          plane.toString().startsWith("FACE:"))), "Plano de desenho inválido.");
         }
-        for (const auto *key : {"source", "target", "tool", "support"}) {
-            const auto reference = p[key];
-            require(reference.isUndefined() || reference.isNull() || reference.isString(),
-                    QString("Referência inválida em %1: %2.").arg(id, key));
-            if (!reference.toString().isEmpty())
-                require(previous.contains(reference.toString()),
-                        QString("A operação %1 depende de uma etapa ausente, futura ou circular: %2.")
-                            .arg(id, reference.toString()));
-        }
         auto requiredReference = [&](const char *key) {
             require(!p[key].toString().isEmpty(), QString("A operação %1 exige a referência %2.").arg(id, key));
         };
@@ -131,6 +122,7 @@ void validateDocument(const QJsonObject &root) {
         }
         previous.insert(id);
     }
+    DependencyGraph(root["features"].toArray()).requireHistoryOrder();
 }
 gp_Pnt planePointExact(const QString &plane, double u, double v, double offset = 0) {
     require(std::isfinite(u) && std::isfinite(v) && std::isfinite(offset) &&
@@ -272,17 +264,16 @@ QJsonObject Model::json() const {
 }
 void Model::restore(const QJsonObject &root) {
     validateDocument(root);
-    features.clear();
+    Model candidate;
     for (auto v : root["features"].toArray()) {
         auto o = v.toObject();
         Feature f{o["id"].toString(),         o["name"].toString(),      o["type"].toString(),
                   o["parameters"].toObject(), o["visible"].toBool(true), {}};
         require(!f.id.isEmpty(), "Operação sem identificador.");
-        for (auto &existing : features)
-            require(existing.id != f.id, "Identificador duplicado.");
-        features.push_back(f);
+        candidate.features.push_back(f);
     }
-    rebuild();
+    candidate.rebuildGeometry();
+    features = std::move(candidate.features);
 }
 void Model::checkpoint(const QJsonObject &before) {
     if (before == json())
@@ -294,13 +285,7 @@ void Model::checkpoint(const QJsonObject &before) {
     dirty = json() != savedDocument;
 }
 void Model::loadJson(const QJsonObject &root) {
-    auto old = json();
-    try {
-        restore(root);
-    } catch (...) {
-        restore(old);
-        throw;
-    }
+    restore(root);
     past.clear();
     future.clear();
     savedDocument = json();
@@ -310,12 +295,7 @@ void Model::commit(const QJsonObject &document) {
     auto before = json();
     if (before == document)
         return;
-    try {
-        restore(document);
-    } catch (...) {
-        restore(before);
-        throw;
-    }
+    restore(document);
     checkpoint(before);
 }
 QString Model::add(QString type, QJsonObject p, QString name) {
@@ -323,28 +303,24 @@ QString Model::add(QString type, QJsonObject p, QString name) {
     QString id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     if (name.isEmpty())
         name = type + QString(" %1").arg(features.size() + 1);
-    features.push_back({id, name, type, p, true, {}});
-    try {
-        validateDocument(json());
-        rebuild();
-    } catch (...) {
-        restore(before);
-        throw;
-    }
+    Model candidate;
+    candidate.features = features;
+    candidate.features.push_back({id, name, type, p, true, {}});
+    validateDocument(candidate.json());
+    candidate.rebuildGeometry();
+    features = std::move(candidate.features);
     checkpoint(before);
     return id;
 }
 void Model::edit(const QString &id, QJsonObject p, const QString &name) {
     auto before = json();
-    get(id).p = p;
-    get(id).name = name;
-    try {
-        validateDocument(json());
-        rebuild();
-    } catch (...) {
-        restore(before);
-        throw;
-    }
+    Model candidate;
+    candidate.features = features;
+    candidate.get(id).p = p;
+    candidate.get(id).name = name;
+    validateDocument(candidate.json());
+    candidate.rebuildGeometry();
+    features = std::move(candidate.features);
     checkpoint(before);
 }
 void Model::toggle(const QString &id) {
@@ -354,11 +330,9 @@ void Model::toggle(const QString &id) {
 }
 void Model::remove(const QString &id) {
     get(id); // Missing targets must not create an empty undo step.
-    for (const auto &f : features)
-        for (auto k : {"source", "target", "tool", "support"})
-            require(
-                f.p[k].toString() != id,
-                "Há operações dependentes. Exclua primeiro as operações posteriores que usam este objeto.");
+    QStringList names;
+    for (const auto &dependent : dependencyGraph().dependents(id)) names.append(get(dependent).name);
+    require(names.empty(), "Há operações dependentes: " + names.join(", ") + ". Repare ou exclua essas etapas primeiro.");
     auto before = json();
     std::erase_if(features, [&](auto &f) { return f.id == id; });
     checkpoint(before);
@@ -398,9 +372,33 @@ void Model::clear() {
     dirty = false;
 }
 void Model::rebuild() {
+    validateDocument(json());
+    Model candidate;
+    candidate.features = features;
+    candidate.rebuildGeometry();
+    features = std::move(candidate.features);
+}
+DependencyGraph Model::dependencyGraph() const {
+    return DependencyGraph(json()["features"].toArray());
+}
+void Model::moveFeature(const QString &id, int destination) {
+    get(id);
+    require(destination >= 0 && destination < int(features.size()), "Posição de histórico inválida.");
+    auto document = json();
+    auto list = document["features"].toArray();
+    int origin = 0;
+    while (list[origin].toObject()["id"].toString() != id) ++origin;
+    if (origin == destination) return;
+    const auto feature = list.takeAt(origin);
+    list.insert(destination, feature);
+    document["features"] = list;
+    commit(document); // Validation rejects moving inputs after their consumers.
+}
+void Model::rebuildGeometry() {
     for (auto &f : features)
         f.shape.Nullify();
-    for (auto &f : features) {
+    for (const auto &id : dependencyGraph().order()) {
+        auto &f = get(id);
         try {
             if (f.type == "sketch" && !f.p.value("support").toString().isEmpty()) {
                 const auto &support = get(f.p["support"].toString());
@@ -570,6 +568,8 @@ void Model::rebuild() {
                         "A operação não produziu um sólido. Confira posições e interseções.");
         } catch (const Standard_Failure &e) {
             throw std::runtime_error((f.name + ": " + QString::fromUtf8(e.GetMessageString())).toStdString());
+        } catch (const std::exception &e) {
+            throw std::runtime_error((f.name + " [" + f.id + "]: " + QString::fromUtf8(e.what())).toStdString());
         }
     }
 }

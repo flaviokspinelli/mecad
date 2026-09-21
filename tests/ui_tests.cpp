@@ -14,6 +14,48 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void historyDependenciesAndReorder() {
+        QTemporaryDir directory; QVERIFY(directory.isValid());
+        Model source;
+        auto base = source.add("box",{{"w",10},{"h",10},{"d",10}},"Base");
+        auto sphere = source.add("sphere",{{"r",2}},"Independent sphere");
+        auto copy = source.add("copy",{{"source",base},{"x",20}},"Dependent copy");
+        source.save(directory.filePath("source.mcad"));
+        Window window(directory.filePath("recovery"),false);
+        window.openPath(source.filePath);
+        window.show(); QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto *timeline = window.findChild<QListWidget *>("timeline"); QVERIFY(timeline);
+        QTest::mouseClick(timeline->viewport(),Qt::LeftButton,Qt::NoModifier,
+            timeline->visualItemRect(timeline->item(1)).center());
+        window.findChild<QAction *>("historyEarlier")->trigger();
+        QCOMPARE(window.model.features.front().id,sphere);
+        const auto before = window.model.json();
+        QTest::mouseClick(timeline->viewport(),Qt::LeftButton,Qt::NoModifier,
+            timeline->visualItemRect(timeline->item(1)).center());
+        QString report;
+        QTimer::singleShot(100,[&] {
+            for (auto *dialog : window.findChildren<QMessageBox *>()) {
+                report = dialog->text(); dialog->accept();
+            }
+        });
+        window.findChild<QAction *>("dependencies")->trigger();
+        QVERIFY(report.contains("Dependent copy"));
+        QVERIFY(!report.contains("Independent sphere"));
+        QCOMPARE(window.model.json(),before);
+        QString failure;
+        QTimer::singleShot(100,[&] {
+            for (auto *dialog : window.findChildren<QMessageBox *>()) {
+                failure = dialog->text(); dialog->accept();
+            }
+        });
+        window.findChild<QAction *>("historyLater")->trigger();
+        QVERIFY(failure.contains("futura"));
+        QCOMPARE(window.model.json(),before);
+        window.findChild<QAction *>("undo")->trigger();
+        QCOMPARE(window.model.json(),source.json());
+        QVERIFY(!window.model.dirty);
+        QVERIFY(window.close());
+    }
     void isolatedRecoveryDialog() {
         QTemporaryDir directory; QVERIFY(directory.isValid());
         const auto root = directory.filePath("recoveries");

@@ -92,3 +92,36 @@ não é apagado nem migrado automaticamente; pode ser aberto manualmente.
 Executar apenas recuperação: sh scripts/check.sh recovery.
 Não houve suíte completa nem publicação de aplicativo nesta etapa.
 O restante do backlog continua pendente/parcial conforme BACKLOG.md.
+
+## 21/09/2026 — grafo explícito e reordenação transacional
+
+Responsável: Codex. Dependências: validação de documentos e histórico existentes.
+Risco principal: regressão de reconstrução, referências e undo/redo. Sem pacote
+intermediário; alterações internas sobre a base 0.2.25.
+
+- PAR-02/PROD-03: módulo de dependências independente da geometria/UI; entradas
+  source/target/tool/support, diagnóstico distinto para ausência, ciclo e ordem
+  futura; enumeração de dependentes diretos/indiretos e ordenação topológica.
+- REL-01/PAR-03: reconstrução em modelo candidato; falhar não limpa as formas do
+  documento vigente nem exige reconstruir o estado antigo para recuperá-lo.
+  Erros de parâmetros identificam nome e ID da etapa. Exclusão recusada lista
+  as operações dependentes.
+- PAR-05: mover uma etapa antes/depois no histórico, com validação de referências,
+  undo/redo único e persistência. Disponível em Edit e menus contextuais do Browser
+  e da timeline. Reordenação recusada durante desenho de sketch.
+- PAR-03: relatório de entradas e dependentes da etapa na interface, sem mutação.
+
+Evidências do núcleo: dependencyGraphValidation, failedRebuildPreservesGeometry
+e historyReorderingIsTransactional. Verificam grafo em diamante, referências
+duplicadas, ausentes, ciclos, ordem futura, preservação das próprias formas CAD
+em falhas, persistência e histórico. Suíte core passou após a mudança estrutural;
+reordenação e regressões afetadas passaram após inclusão do comando.
+Suíte recovery passou também.
+Interface: historyDependenciesAndReorder, isolatedRecoveryDialog,
+extrudeCutPreview e faceSelectionAndSketch passaram com eventos Qt e janelas
+temporárias, sem abrir documentos do usuário. Build de MecaCAD passou.
+
+Limites: PAR-02 e PAR-05 permanecem parciais. A reconstrução ainda recalcula todas
+as etapas; não há cache incremental, supressão/reativação ou arraste da timeline.
+O relatório não substitui editor de reparo de referências. As referências de
+faces/arestas ainda dependem da topologia descrita nas limitações anteriores.

@@ -5,6 +5,7 @@
 #include <QVector3D>
 #include <QPointF>
 #include <TopoDS_Shape.hxx>
+#include "dependencies.h"
 #include <vector>
 
 struct Feature {
@@ -35,6 +36,8 @@ class Model {
                             QVector3D delta, bool erase);
     void toggle(const QString &id);
     void rebuild();
+    DependencyGraph dependencyGraph() const;
+    void moveFeature(const QString &id, int destination);
     Feature &get(const QString &id);
     const Feature &get(const QString &id) const;
     bool consumed(const QString &id) const;
@@ -64,5 +67,6 @@ class Model {
     std::vector<QJsonObject> past, future;
     void checkpoint(const QJsonObject &before);
     void restore(const QJsonObject &root);
+    void rebuildGeometry();
     TopoDS_Shape exportShape(const QString &id) const;
 };

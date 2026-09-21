@@ -11,6 +11,85 @@
 class CoreTests : public QObject {
     Q_OBJECT
   private slots:
+    void historyReorderingIsTransactional() {
+        Model model;
+        auto base = model.add("box",{{"w",10},{"h",10},{"d",10}},"Base");
+        auto independent = model.add("sphere",{{"r",2}},"Sphere");
+        auto copy = model.add("copy",{{"source",base},{"x",20}},"Copy");
+        const auto before = model.json();
+        model.moveFeature(independent,0);
+        QCOMPARE(model.features.front().id,independent);
+        QCOMPARE(model.get(copy).p["source"].toString(),base);
+        QVERIFY(std::abs(Model::volume(model.get(copy).shape)-1000)<.001);
+        const auto reordered = model.json();
+        QVERIFY_THROWS_EXCEPTION(std::exception,model.moveFeature(base,2));
+        QCOMPARE(model.json(),reordered);
+        QVERIFY_THROWS_EXCEPTION(std::exception,model.moveFeature(base,-1));
+        QVERIFY_THROWS_EXCEPTION(std::exception,model.moveFeature("missing",0));
+        QVERIFY(model.undo()); QCOMPARE(model.json(),before);
+        model.moveFeature(base,0); // No-op must retain redo.
+        QVERIFY(model.redo()); QCOMPARE(model.json(),reordered);
+        QTemporaryDir directory; QVERIFY(directory.isValid());
+        model.save(directory.filePath("reordered.mcad"));
+        Model restored; restored.load(model.filePath);
+        QCOMPARE(restored.json(),reordered);
+        QCOMPARE(restored.dependencyGraph().dependencies(copy),QStringList({base}));
+    }
+    void dependencyGraphValidation() {
+        auto node = [](QString id, QJsonObject parameters = {}) {
+            return QJsonObject{{"id",id},{"parameters",parameters}};
+        };
+        DependencyGraph graph(QJsonArray{node("d",{{"source","b"},{"target","c"}}),
+            node("b",{{"source","a"},{"support","a"}}),node("c",{{"source","a"}}),node("a"),node("e")});
+        QCOMPARE(graph.order(),QStringList({"a","b","c","d","e"}));
+        QCOMPARE(graph.dependencies("b"),QStringList({"a"}));
+        QCOMPARE(graph.dependents("a"),QStringList({"b","c","d"}));
+        QCOMPARE(graph.dependents("a",false),QStringList({"b","c"}));
+        QVERIFY(graph.dependents("e").empty());
+        QVERIFY_THROWS_EXCEPTION(std::exception,graph.requireHistoryOrder());
+        QVERIFY_THROWS_EXCEPTION(std::exception,graph.dependencies("missing"));
+        QVERIFY_THROWS_EXCEPTION(std::exception,DependencyGraph(QJsonArray{node("a"),node("a")}));
+        QVERIFY_THROWS_EXCEPTION(std::exception,DependencyGraph(QJsonArray{node("a",{{"source","missing"}})}));
+        QVERIFY_THROWS_EXCEPTION(std::exception,DependencyGraph(QJsonArray{node("a",{{"source",12}})}));
+        try {
+            DependencyGraph cycle(QJsonArray{node("a",{{"source","b"}}),node("b",{{"source","a"}})});
+            QFAIL("Cycle accepted");
+        } catch (const std::exception &error) {
+            const QString message = QString::fromUtf8(error.what());
+            QVERIFY(message.contains("a → b → a"));
+        }
+        DependencyGraph ordered(QJsonArray{node("a"),node("b",{{"source","a"}})});
+        ordered.requireHistoryOrder();
+    }
+    void failedRebuildPreservesGeometry() {
+        Model model;
+        auto box = model.add("box",{{"w",10},{"h",10},{"d",10}},"Base");
+        auto copy = model.add("copy",{{"source",box},{"x",20}},"Copy");
+        const auto before = model.json();
+        const auto baseShape = model.get(box).shape;
+        const auto copyShape = model.get(copy).shape;
+        try {
+            model.edit(box,{{"w",-10}},"Base");
+            QFAIL("Invalid dimension accepted");
+        } catch (const std::exception &error) {
+            QVERIFY(QString::fromUtf8(error.what()).contains("Base [" + box + "]"));
+        }
+        QCOMPARE(model.json(),before);
+        QVERIFY(model.get(box).shape.IsSame(baseShape));
+        QVERIFY(model.get(copy).shape.IsSame(copyShape));
+        auto invalid = before;
+        auto features = invalid["features"].toArray();
+        auto feature = features[1].toObject();
+        feature["parameters"] = QJsonObject{{"source",box},{"angle",1e9}};
+        features[1] = feature; invalid["features"] = features;
+        QVERIFY_THROWS_EXCEPTION(std::exception,model.commit(invalid));
+        QVERIFY(model.get(box).shape.IsSame(baseShape));
+        QVERIFY(model.get(copy).shape.IsSame(copyShape));
+        QCOMPARE(model.json(),before);
+        QCOMPARE(model.dependencyGraph().dependents(box),QStringList({copy}));
+        QVERIFY(model.undo()); QCOMPARE(model.features.size(),size_t(1));
+        QVERIFY(model.redo()); QCOMPARE(model.json(),before);
+    }
     void savedStateTracksUndoRedo() {
         Model model;
         QVERIFY(!model.dirty);

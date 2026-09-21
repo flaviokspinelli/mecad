@@ -624,6 +624,36 @@ Window::Window(QString recoveryDirectory, bool promptRecovery) {
         selected = previous;
         refresh();
     }));
+    edit->addAction(command("dependencies", "Dependências da etapa…", "", [this] {
+        if (selected.isEmpty()) return;
+        const auto graph = model.dependencyGraph();
+        auto names = [&](const QStringList &ids) {
+            QStringList result;
+            for (const auto &id : ids) result.append(model.get(id).name + " [" + id.left(8) + "]");
+            return result.empty() ? QString("Nenhuma") : result.join("\n");
+        };
+        QMessageBox dialog(QMessageBox::Information, "Dependências da etapa", "", QMessageBox::Ok, this);
+        dialog.setObjectName("dependencyReport");
+        dialog.setTextFormat(Qt::PlainText);
+        dialog.setText(model.get(selected).name + "\n\nEntradas diretas:\n" + names(graph.dependencies(selected)) +
+            "\n\nEtapas dependentes (diretas e indiretas):\n" + names(graph.dependents(selected)));
+        dialog.exec();
+    }));
+    for (int delta : {-1, 1}) {
+        const QString key = delta < 0 ? "historyEarlier" : "historyLater";
+        edit->addAction(command(key, delta < 0 ? "Mover etapa para antes" : "Mover etapa para depois", "", [this, delta] {
+            if (canvas->sketchMode)
+                throw std::runtime_error("Finalize o sketch antes de reordenar o histórico.");
+            if (selected.isEmpty()) return;
+            const auto iterator = std::find_if(model.features.begin(), model.features.end(),
+                [this](const Feature &feature) { return feature.id == selected; });
+            if (iterator == model.features.end()) return;
+            const int destination = int(iterator - model.features.begin()) + delta;
+            if (destination < 0 || destination >= int(model.features.size())) return;
+            model.moveFeature(selected, destination);
+            refresh();
+        }));
+    }
     command("sketch", "Create Sketch", "", [this] { startSketch(); });
     command("finish", "Finish Sketch", "", [this] { finishSketch(); });
     command("rectangle", "2-Point Rectangle", "R", [this] { sketchTool("rectangle"); });
@@ -1074,7 +1104,23 @@ Window::Window(QString recoveryDirectory, bool promptRecovery) {
         menu.addSeparator();
         menu.addAction(commands["delete"]);
         menu.addAction(commands["rollback"]);
+        menu.addSeparator();
+        menu.addAction(commands["dependencies"]);
+        menu.addAction(commands["historyEarlier"]);
+        menu.addAction(commands["historyLater"]);
         menu.exec(tree->viewport()->mapToGlobal(pos));
+    });
+    timeline->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(timeline, &QWidget::customContextMenuRequested, this, [this](QPoint position) {
+        if (activeCommand || canvas->sketchMode) return;
+        auto *item = timeline->itemAt(position);
+        if (!item) return;
+        select(item->data(Qt::UserRole).toString());
+        QMenu menu;
+        menu.addAction(commands["dependencies"]);
+        menu.addAction(commands["historyEarlier"]);
+        menu.addAction(commands["historyLater"]);
+        menu.exec(timeline->viewport()->mapToGlobal(position));
     });
     connect(timeline, &QListWidget::itemClicked, this,
             [this](QListWidgetItem *item) { select(item->data(Qt::UserRole).toString()); });
