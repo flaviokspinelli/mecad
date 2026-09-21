@@ -1374,23 +1374,38 @@ void Window::exactSketch() {
     }
 }
 void Window::extrude(bool revolve) {
+    const QString operation = revolve ? "revolve" : "extrude";
+    const QString editing =
+        !selected.isEmpty() && model.get(selected).type == operation ? selected : QString();
+    const QJsonObject initial = editing.isEmpty() ? QJsonObject() : model.get(editing).p;
+    const QString originalName = editing.isEmpty() ? QString() : model.get(editing).name;
     QList<QPair<QString, QString>> sketches, bodies = {{"New Body", ""}};
     for (auto &feature : model.features)
         if (feature.type == "sketch")
             sketches.append({feature.name, feature.id});
     for (auto i : model.bodies())
-        bodies.append({model.features[i].name, model.features[i].id});
+        if (model.features[i].id != editing && !model.isMesh(model.features[i].id))
+            bodies.append({model.features[i].name, model.features[i].id});
     if (sketches.empty())
         throw std::runtime_error("Crie um perfil fechado antes de extrudar.");
-    Form panel(this, revolve ? "Revolve" : "Extrude");
-    panel.choice("source", "Profile", sketches, selected);
+    QString initialProfile = initial["source"].toString();
+    if (editing.isEmpty() && !selected.isEmpty() && model.get(selected).type == "sketch")
+        initialProfile = selected;
+    sketches.prepend({"Select a profile…", ""});
+    const auto originalTarget = initial["target"].toString();
+    if (!originalTarget.isEmpty() && !bodies.contains({model.get(originalTarget).name, originalTarget}))
+        bodies.append({model.get(originalTarget).name, originalTarget});
+    Form panel(this, editing.isEmpty() ? (revolve ? "Revolve" : "Extrude")
+                                       : (revolve ? "Edit Revolve" : "Edit Extrude"));
+    panel.choice("source", "Profile", sketches, initialProfile);
     if (revolve) {
-        panel.number("angle", "Angle", 360, .01, 360, " °");
-        panel.number("axis", "Axis position", 0);
+        panel.number("angle", "Angle", initial["angle"].toDouble(360), .01, 360, " °");
+        panel.number("axis", "Axis position", initial["axis"].toDouble());
     } else
-        panel.number("d", "Distance", 10);
-    panel.choice("target", "Target body", bodies);
-    panel.choice("mode", "Operation", {{"New Body / Join", "join"}, {"Cut", "cut"}});
+        panel.number("d", "Distance", initial["d"].toDouble(10));
+    panel.choice("target", "Target body", bodies, originalTarget);
+    panel.choice("mode", "Operation", {{"New Body / Join", "join"}, {"Cut", "cut"}},
+                 initial["mode"].toString("join"));
     panel.note(
         revolve
             ? "Selecione o perfil na área de desenho."
@@ -1411,10 +1426,21 @@ void Window::extrude(bool revolve) {
     auto updatePreview = [&] {
         try {
             auto parameters = panel.values();
+            if (parameters["source"].toString().isEmpty()) {
+                canvas->handleActive = false;
+                canvas->selected = previousSelection;
+                canvas->setModel(&model);
+                feedback->setText("Selecione um perfil para extrudar. Nenhum corpo novo foi criado.");
+                return;
+            }
             if (parameters["mode"] == "cut" && parameters["target"].toString().isEmpty())
                 throw std::runtime_error("Selecione o corpo a cortar.");
             preview = model;
-            QString id = preview.add(revolve ? "revolve" : "extrude", parameters, "Preview");
+            QString id = editing;
+            if (editing.isEmpty())
+                id = preview.add(operation, parameters, "Preview");
+            else
+                preview.edit(editing, parameters, originalName);
             const auto &sketch = model.get(parameters["source"].toString());
             Bnd_Box box;
             BRepBndLib::AddOptimal(sketch.shape, box);
@@ -1468,9 +1494,20 @@ void Window::extrude(bool revolve) {
     canvas->setModel(&model);
     if (accepted) {
         auto p = panel.values();
+        if (p["source"].toString().isEmpty()) {
+            selected = previousSelection;
+            refresh();
+            return;
+        }
         if (p["mode"] == "cut" && p["target"].toString().isEmpty())
             throw std::runtime_error("Escolha um corpo para o corte.");
-        selected = model.add(revolve ? "revolve" : "extrude", p, revolve ? "Revolve" : "Extrude");
+        if (editing.isEmpty())
+            selected = model.add(operation, p, revolve ? "Revolve" : "Extrude");
+        else {
+            selected = editing;
+            if (p != initial)
+                model.edit(editing, p, originalName);
+        }
     } else
         selected = previousSelection;
     refresh();

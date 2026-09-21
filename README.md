@@ -8,7 +8,7 @@ desenvolvida e testada em macOS 14, Apple Silicon.
 
 ## Abrir
 
-Abra `dist/MecaCAD-0.2.14.app`. O pacote local reúne o executável e suas bibliotecas.
+Abra `dist/MecaCAD-0.2.15.app`. O pacote local reúne o executável e suas bibliotecas.
 O código-fonte não depende da pasta `dist`, que é gerada e ignorada pelo Git.
 
 Para começar: **File → Open example — mounting bracket**. Também existem os
@@ -17,6 +17,12 @@ arquivos `examples/Mounting-bracket.mcad`, `.step`, `.stl` e `Base-profile.dxf`.
 Leia o [guia de uso](docs/GUIA.md) e o [estado da entrega](docs/ENTREGA-0.2.md).
 
 ## Novidades de interação
+
+Na 0.2.15, abrir Extrude com uma operação de extrusão selecionada edita essa
+operação, em vez de criar um corpo duplicado. O mesmo vale para Revolve.
+Sem um sketch ou operação correspondente selecionada, o comando aguarda a escolha
+de um perfil e não reutiliza automaticamente o primeiro sketch. Selecionar um
+sketch explicitamente continua permitindo criar uma nova operação.
 
 Na 0.2.14, Move / Copy permite arrastar o objeto selecionado ou o centro das
 hastes no plano da tela; as setas restringem a um eixo X, Y ou Z. A prévia acompanha

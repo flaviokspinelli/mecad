@@ -11,6 +11,54 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void repeatExtrudeEditsExistingBody() {
+        QTemporaryDir dir;
+        Window window;
+        auto sketch =
+            window.model.add("sketch", {{"profile", "rectangle"}, {"plane", "XY"}, {"w", 40}, {"h", 30}});
+        auto solid =
+            window.model.add("extrude", {{"source", sketch}, {"d", 10}, {"target", ""}, {"mode", "join"}});
+        window.model.save(dir.filePath("extrude.mcad"));
+        window.openPath(dir.filePath("extrude.mcad"));
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto *v = window.findChild<Viewport *>();
+        v->onSelect(solid);
+        auto original = window.model.json();
+        bool singlePreview = false;
+        QTimer::singleShot(180, [&] {
+            singlePreview = v->model->bodies().size() == 1 && v->model->features.size() == 2;
+            v->onHandleDistance(25);
+            QTest::qWait(90);
+            singlePreview = singlePreview && v->model->bodies().size() == 1;
+            QTest::keyClick(v, Qt::Key_Return);
+        });
+        window.findChild<QAction *>("extrude")->trigger();
+        QVERIFY(singlePreview);
+        QCOMPARE(window.model.features.size(), size_t(2));
+        QCOMPARE(window.model.bodies().size(), size_t(1));
+        QCOMPARE(window.model.get(solid).p["d"].toDouble(), 25.);
+        QVERIFY(std::abs(Model::volume(window.model.get(solid).shape) - 30000) < .01);
+        window.findChild<QAction *>("undo")->trigger();
+        QCOMPARE(window.model.json(), original);
+        v->onSelect(solid);
+        QTimer::singleShot(180, [&] {
+            v->onHandleDistance(50);
+            QTest::qWait(90);
+            QTest::keyClick(v, Qt::Key_Escape);
+        });
+        window.findChild<QAction *>("extrude")->trigger();
+        QCOMPARE(window.model.json(), original);
+        v->onSelect({});
+        bool noAutomaticPreview = false;
+        QTimer::singleShot(180, [&] {
+            noAutomaticPreview = !v->handleActive && v->model->json() == original;
+            QTest::keyClick(v, Qt::Key_Return);
+        });
+        window.findChild<QAction *>("extrude")->trigger();
+        QVERIFY(noAutomaticPreview);
+        QCOMPARE(window.model.json(), original);
+    }
     void freeMoveLivePreview() {
         QTemporaryDir dir;
         for (bool stl : {false, true}) {
@@ -588,6 +636,9 @@ class UiTests : public QObject {
         window.findChild<QAction *>("redo")->trigger();
         QCOMPARE(window.model.features.size(), size_t(2));
         auto beforeCancel = window.model.json();
+        // Undo/redo clears selection; choose the extrusion explicitly now that
+        // the command no longer silently falls back to the first sketch.
+        v->onSelect(window.model.features.back().id);
         QTimer::singleShot(180, [&] {
             QVERIFY(v->handleActive);
             QTest::keyClick(v, Qt::Key_Escape);
