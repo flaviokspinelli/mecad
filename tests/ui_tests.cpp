@@ -11,6 +11,69 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void inlineDimensions() {
+        Window window;
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto *v = window.findChild<Viewport *>();
+        auto id = window.model.add(
+            "sketch",
+            {{"profile", "rectangle"}, {"plane", "XY"}, {"x", -20}, {"y", -15}, {"w", 40}, {"h", 30}});
+        v->onEditSketch(id);
+        v->refresh();
+        v->fit();
+        auto openDimension = [&](QString key) -> QLineEdit * {
+            v->grab();
+            for (const auto &target : v->dimensions) {
+                if (target.key == key) {
+                    QTest::mouseClick(v, Qt::LeftButton, Qt::NoModifier, target.rect.center().toPoint());
+                    return v->dimensionEditor.data();
+                }
+            }
+            return nullptr;
+        };
+        v->setTool("rectangle");
+        auto *editor = openDimension("w");
+        QVERIFY(editor);
+        QVERIFY(editor->hasFocus());
+        QTest::keyClicks(editor, "55,5");
+        window.grab().save(QDir::currentPath() + "/inline-dimension-test.png");
+        QTest::keyClick(editor, Qt::Key_Return);
+        QCOMPARE(window.model.get(id).p["w"].toDouble(), 55.5);
+        QCOMPARE(window.model.features.size(), size_t(1));
+        QVERIFY(window.model.undo());
+        QCOMPARE(window.model.get(id).p["w"].toDouble(), 40.);
+        QVERIFY(window.model.redo());
+        QCOMPARE(window.model.get(id).p["w"].toDouble(), 55.5);
+        editor = openDimension("h");
+        QVERIFY(editor);
+        QTest::keyClicks(editor, "99");
+        QTest::keyClick(editor, Qt::Key_Escape);
+        QCOMPARE(window.model.get(id).p["h"].toDouble(), 30.);
+        editor = openDimension("w");
+        QVERIFY(editor);
+        QTest::keyClicks(editor, "-2");
+        QTest::keyClick(editor, Qt::Key_Return);
+        QVERIFY(v->dimensionEditor);
+        QCOMPARE(window.model.get(id).p["w"].toDouble(), 55.5);
+        QTest::keyClick(editor, Qt::Key_Escape);
+        auto solid = window.model.add("extrude", {{"source", id}, {"d", 10}});
+        editor = openDimension("h");
+        QVERIFY(editor);
+        QTest::keyClicks(editor, "20");
+        QTest::keyClick(editor, Qt::Key_Return);
+        QVERIFY(std::abs(Model::volume(window.model.get(solid).shape) - 55.5 * 20 * 10) < .01);
+        auto circle = window.model.add(
+            "sketch", {{"profile", "circle"}, {"plane", "XY"}, {"x", 0}, {"y", 0}, {"r", 10}});
+        v->onEditSketch(circle);
+        v->refresh();
+        editor = openDimension("r");
+        QVERIFY(editor);
+        QCOMPARE(editor->text(), QString("20"));
+        QTest::keyClicks(editor, "30");
+        QTest::keyClick(editor, Qt::Key_Return);
+        QCOMPARE(window.model.get(circle).p["r"].toDouble(), 15.);
+    }
     void smartSketchSnapping() {
         Model model;
         Viewport v(&model);

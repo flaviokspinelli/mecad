@@ -1,5 +1,6 @@
 #pragma once
 #include "model.h"
+#include <QLineEdit>
 #include <QLineF>
 #include <QMatrix4x4>
 #include <QOpenGLBuffer>
@@ -8,6 +9,7 @@
 #include <QOpenGLVertexArrayObject>
 #include <QOpenGLWidget>
 #include <QPointF>
+#include <QPointer>
 #include <QVariantAnimation>
 #include <functional>
 
@@ -37,6 +39,8 @@ class Viewport : public QOpenGLWidget, protected QOpenGLFunctions {
     void setModel(Model *m);
     double planeOffset = 0;
     std::function<void(QString)> onSelect;
+    std::function<void(QString)> onEditSketch;
+    std::function<QString(QString, QString, double)> onDimensionEdit;
     std::function<void(QJsonObject)> onProfile;
     std::function<void(QString)> onHint;
     void refresh();
@@ -58,6 +62,8 @@ class Viewport : public QOpenGLWidget, protected QOpenGLFunctions {
     void resizeEvent(QResizeEvent *) override;
     void paintGL() override;
     void mousePressEvent(QMouseEvent *) override;
+    void mouseDoubleClickEvent(QMouseEvent *) override;
+    bool eventFilter(QObject *, QEvent *) override;
     void mouseMoveEvent(QMouseEvent *) override;
     void mouseReleaseEvent(QMouseEvent *) override;
     void wheelEvent(QWheelEvent *) override;
@@ -93,6 +99,19 @@ class Viewport : public QOpenGLWidget, protected QOpenGLFunctions {
     bool sketchPressCandidate = false, sketchDragging = false;
     QPointF sketchPressPoint, magnetPoint;
     QString magnetLabel;
+    struct DimensionTarget {
+        QString key;
+        QRectF rect;
+        double multiplier;
+    };
+    QVector<DimensionTarget> dimensions;
+    DimensionTarget pendingDimension;
+    bool dimensionPressed = false;
+    QPointer<QLineEdit> dimensionEditor;
+    QString dimensionFeature, dimensionKey;
+    double dimensionMultiplier = 1;
+    void editDimension(const DimensionTarget &target);
+    void closeDimensionEditor();
     QVector<QLineF> magnetGuides;
     QPointF sketchPoint(QPointF pixel);
     QMatrix4x4 matrix() const;

@@ -147,7 +147,16 @@ fechar um documento alterado. A recuperação automática é gravada a cada 30 s
 na pasta de dados do MecaCAD e oferecida na próxima abertura após interrupção.
 Ela não substitui salvar regularmente; o intervalo mais recente pode não ter sido gravado.
 
-## Exportar
+## Editar medidas no desenho
+
+No sketch, selecione o perfil e clique no número dourado da cota. Digite a
+medida em milímetros (vírgula ou ponto decimal) e pressione Enter. Esc cancela;
+clicar fora também cancela. Retângulos permitem largura e altura; círculos,
+diâmetro. As operações dependentes são reconstruídas e a edição pode ser desfeita.
+Valores inválidos mantêm o campo aberto, sem alterar a peça. Duplo clique no
+perfil reabre seu sketch. Outros tipos ainda usam o painel de propriedades.
+
+## Exportação de arquivos
 
 - **STEP**: sólido selecionado; sem seleção de sólido, exporta os corpos finais visíveis.
 - **STL**: mesma regra de seleção. É uma malha de triângulos, sem histórico. As

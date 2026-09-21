@@ -2,6 +2,10 @@
 
 ## Estado após a entrega 0.2
 
+0.2.9: edição por clique nas cotas de retângulos e círculos, com Enter/Esc,
+validação, desfazer/refazer e reconstrução de operações dependentes.
+Comprimentos de segmentos e restrições dimensionais gerais continuam pendentes.
+
 Revisão de interface e interação: tema escuro compacto, Browser sobre o canvas,
 cubo clicável, histórico por ícones, plano por clique, extrusão e translação por
 arraste com prévia cancelável. Veja [ENTREGA-0.2.md](docs/ENTREGA-0.2.md).

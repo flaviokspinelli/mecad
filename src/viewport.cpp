@@ -422,6 +422,7 @@ void Viewport::paintOverlay(QPainter &p) {
                 p.drawPath(path);
             }
         }
+    dimensions.clear();
     if (sketchMode && !selected.isEmpty()) {
         const auto &f = model->get(selected);
         const auto &params = f.p;
@@ -430,7 +431,8 @@ void Viewport::paintOverlay(QPainter &p) {
                 return project(
                     Model::planePoint(params["plane"].toString("XY"), u, v, params["offset"].toDouble()));
             };
-            auto dimension = [&](QPointF a, QPointF b, QPointF offset, QString label) {
+            auto dimension = [&](QPointF a, QPointF b, QPointF offset, QString label, QString key,
+                                 double multiplier = 1) {
                 p.setPen(QPen(QColor("#e6bd7e"), 1));
                 p.drawLine(a, a + offset);
                 p.drawLine(b, b + offset);
@@ -439,18 +441,24 @@ void Viewport::paintOverlay(QPainter &p) {
                     p.drawLine(end + QPointF(-3, -3), end + QPointF(3, 3));
                 auto mid = (a + b) / 2 + offset;
                 QRectF text(mid.x() - 45, mid.y() - 12, 90, 24);
+                dimensions.append({key, text, multiplier});
                 p.fillRect(text, light ? QColor("#e8edf2") : QColor("#202936"));
+                if (text.contains(planeHover)) {
+                    p.setPen(QPen(QColor("#7dd3fc"), 1));
+                    p.drawRect(text);
+                }
                 p.drawText(text, Qt::AlignCenter, label);
             };
             double x = params["x"].toDouble(), y = params["y"].toDouble();
             QString kind = params["profile"].toString();
             if (kind == "rectangle") {
                 double w = params["w"].toDouble(), h = params["h"].toDouble();
-                dimension(point(x, y), point(x + w, y), {0, 26}, QString::number(w, 'f', 2));
-                dimension(point(x + w, y), point(x + w, y + h), {40, 0}, QString::number(h, 'f', 2));
+                dimension(point(x, y), point(x + w, y), {0, 26}, QString::number(w, 'f', 2), "w");
+                dimension(point(x + w, y), point(x + w, y + h), {40, 0}, QString::number(h, 'f', 2), "h");
             } else if (kind == "circle") {
                 double r = params["r"].toDouble();
-                dimension(point(x - r, y), point(x + r, y), {0, 0}, "Ø " + QString::number(r * 2, 'f', 2));
+                dimension(point(x - r, y), point(x + r, y), {0, 0}, "Ø " + QString::number(r * 2, 'f', 2),
+                          "r", 2);
             }
         }
     }
@@ -802,8 +810,102 @@ QVector3D Viewport::moveHandleTip(int axis) const {
     direction[axis] = moveHandleLength;
     return handleOrigin + moveDistances + direction;
 }
+void Viewport::closeDimensionEditor() {
+    auto *editor = dimensionEditor.data();
+    dimensionEditor.clear();
+    if (editor) {
+        editor->hide();
+        editor->deleteLater();
+    }
+    update();
+}
+void Viewport::editDimension(const DimensionTarget &target) {
+    if (selected.isEmpty() || !onDimensionEdit)
+        return;
+    closeDimensionEditor();
+    setTool({});
+    dimensionFeature = selected;
+    dimensionKey = target.key;
+    dimensionMultiplier = target.multiplier;
+    auto *editor = new QLineEdit(this);
+    dimensionEditor = editor;
+    editor->setObjectName("inlineDimension");
+    editor->setText(
+        QString::number(model->get(selected).p[target.key].toDouble() * target.multiplier, 'g', 12));
+    editor->setAlignment(Qt::AlignCenter);
+    editor->setToolTip("Medida em mm · Enter confirma · Esc cancela");
+    editor->setStyleSheet("QLineEdit { background:#263b4b; color:#f4ce89; border:1px solid #72cffa; "
+                          "border-radius:3px; padding:3px; }");
+    auto center = target.rect.center();
+    editor->setGeometry(std::clamp(int(center.x()) - 58, 0, std::max(0, width() - 116)),
+                        std::clamp(int(center.y()) - 16, 0, std::max(0, height() - 32)), 116, 32);
+    editor->installEventFilter(this);
+    editor->show();
+    editor->raise();
+    editor->setFocus();
+    editor->selectAll();
+}
+bool Viewport::eventFilter(QObject *object, QEvent *event) {
+    if (object == dimensionEditor) {
+        if (event->type() == QEvent::KeyPress) {
+            auto *key = static_cast<QKeyEvent *>(event);
+            if (key->key() == Qt::Key_Escape) {
+                closeDimensionEditor();
+                setFocus();
+                return true;
+            }
+            if (key->key() == Qt::Key_Return || key->key() == Qt::Key_Enter) {
+                bool ok = false;
+                double value =
+                    dimensionEditor->text().trimmed().replace(',', '.').toDouble(&ok) / dimensionMultiplier;
+                QString error;
+                if (!ok || !std::isfinite(value) || value <= 1e-5 || value > 1e6)
+                    error = "Digite uma medida positiva válida em mm.";
+                else if (onDimensionEdit)
+                    error = onDimensionEdit(dimensionFeature, dimensionKey, value);
+                if (error.isEmpty()) {
+                    closeDimensionEditor();
+                    setFocus();
+                } else if (dimensionEditor) {
+                    dimensionEditor->setToolTip(error);
+                    dimensionEditor->setStyleSheet("QLineEdit { background:#442c32; color:#ffe0bd; "
+                                                   "border:1px solid #ee8c82; padding:3px; }");
+                    dimensionEditor->selectAll();
+                }
+                return true;
+            }
+        }
+        if (event->type() == QEvent::FocusOut) {
+            closeDimensionEditor();
+            return false;
+        }
+    }
+    return QOpenGLWidget::eventFilter(object, event);
+}
+void Viewport::mouseDoubleClickEvent(QMouseEvent *e) {
+    if (e->button() == Qt::LeftButton && onEditSketch) {
+        auto id = pick(e->position());
+        if (!id.isEmpty() && model->get(id).type == "sketch") {
+            setTool({});
+            onEditSketch(id);
+            return;
+        }
+    }
+    QOpenGLWidget::mouseDoubleClickEvent(e);
+}
 void Viewport::mousePressEvent(QMouseEvent *e) {
     setFocus();
+    dimensionPressed = false;
+    if (e->button() == Qt::LeftButton && onDimensionEdit) {
+        for (const auto &target : dimensions)
+            if (target.rect.contains(e->position())) {
+                pendingDimension = target;
+                dimensionPressed = true;
+                last = pressed = e->position();
+                sketchPressCandidate = sketchDragging = cubePressed = cubeDragging = draggingHandle = false;
+                return;
+            }
+    }
     cubePressed = e->button() == Qt::LeftButton && !cubeDirectionAt(e->position()).isNull();
     cubeDragging = false;
     if (cubePressed) {
@@ -849,6 +951,18 @@ void Viewport::mousePressEvent(QMouseEvent *e) {
 }
 void Viewport::mouseMoveEvent(QMouseEvent *e) {
     planeHover = e->position();
+    if (dimensionPressed) {
+        update();
+        return;
+    }
+    for (const auto &target : dimensions) {
+        if (target.rect.contains(planeHover) && e->buttons() == Qt::NoButton) {
+            setCursor(Qt::IBeamCursor);
+            setToolTip("Clique para editar a medida em mm");
+            update();
+            return;
+        }
+    }
     if (cubePressed) {
         auto movement = e->position() - pressed;
         if (cubeDragging || QLineF(pressed, e->position()).length() > 4) {
@@ -934,6 +1048,12 @@ void Viewport::mouseMoveEvent(QMouseEvent *e) {
     update();
 }
 void Viewport::mouseReleaseEvent(QMouseEvent *e) {
+    if (dimensionPressed) {
+        dimensionPressed = false;
+        if (QLineF(pressed, e->position()).length() <= 4)
+            editDimension(pendingDimension);
+        return;
+    }
     if (cubePressed || cubeDragging) {
         bool wasDragged = cubeDragging;
         cubePressed = cubeDragging = false;

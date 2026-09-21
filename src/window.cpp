@@ -529,8 +529,9 @@ Window::Window() {
     command("polyline", "Line", "L", [this] { sketchTool("polyline"); });
     command("arc", "3-Point Arc", "", [this] { sketchTool("arc"); });
     command("dimension", "Sketch Dimension", "D", [this] {
+        canvas->setTool({});
         if (selected.isEmpty())
-            exactSketch();
+            status->setText("Selecione um perfil e clique na cota para editar.");
         else {
             buildProperties();
             properties->show();
@@ -822,6 +823,36 @@ Window::Window() {
             return;
         }
         select(id);
+    };
+    canvas->onDimensionEdit = [this](QString id, QString key, double value) -> QString {
+        if (activeCommand)
+            return "Conclua ou cancele a operação atual.";
+        try {
+            const auto &feature = model.get(id);
+            auto parameters = feature.p;
+            auto name = feature.name;
+            parameters[key] = value;
+            model.edit(id, parameters, name);
+            selected = id;
+            refresh();
+            return {};
+        } catch (const Standard_Failure &error) {
+            return QString::fromUtf8(error.GetMessageString());
+        } catch (const std::exception &error) {
+            return QString::fromUtf8(error.what());
+        }
+    };
+    canvas->onEditSketch = [this](QString id) {
+        if (activeCommand)
+            return;
+        const auto &p = model.get(id).p;
+        canvas->plane = p["plane"].toString("XY");
+        canvas->planeOffset = p["offset"].toDouble();
+        canvas->sketchMode = true;
+        canvas->setTool({});
+        canvas->view("top");
+        select(id);
+        buildRibbon();
     };
     canvas->onPlaneChosen = [this](QString name, double offset) {
         canvas->plane = name;

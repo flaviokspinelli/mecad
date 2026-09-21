@@ -8,7 +8,7 @@ desenvolvida e testada em macOS 14, Apple Silicon.
 
 ## Abrir
 
-Abra `dist/MecaCAD-0.2.8.app`. O pacote local reúne o executável e suas bibliotecas.
+Abra `dist/MecaCAD-0.2.9.app`. O pacote local reúne o executável e suas bibliotecas.
 O código-fonte não depende da pasta `dist`, que é gerada e ignorada pelo Git.
 
 Para começar: **File → Open example — mounting bracket**. Também existem os
@@ -17,6 +17,11 @@ arquivos `examples/Mounting-bracket.mcad`, `.step`, `.stl` e `Base-profile.dxf`.
 Leia o [guia de uso](docs/GUIA.md) e o [estado da entrega](docs/ENTREGA-0.2.md).
 
 ## Novidades de interação
+
+Na 0.2.9, clique nas cotas do sketch para editar largura/altura de retângulos e
+diâmetro de círculos diretamente no desenho. Enter confirma, Esc cancela;
+aceita vírgula ou ponto decimal. A alteração atualiza as operações dependentes e
+pode ser desfeita. Duplo clique no perfil reabre seu sketch.
 
 Na 0.2.8, o sketch tem encaixe inteligente em origem, extremidades, pontos médios,
 centros de círculos/arcos e interseções de segmentos. Guias verdes ajudam no

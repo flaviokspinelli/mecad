@@ -17,7 +17,7 @@ int main(int argc, char **argv) {
     QApplication app(argc, argv);
     app.setOrganizationName("MecaCAD");
     app.setApplicationName("MecaCAD");
-    app.setApplicationVersion("0.2.8");
+    app.setApplicationVersion("0.2.9");
     Window window;
     window.show();
     auto args = app.arguments();
