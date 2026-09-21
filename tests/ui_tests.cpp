@@ -152,6 +152,28 @@ class UiTests : public QObject {
         window.model.save(dir.filePath("result.mcad"));Model loaded;loaded.load(window.model.filePath);
         QCOMPARE(loaded.json(),window.model.json());QVERIFY(window.close());
     }
+    void parameterValuesAndErrorsBeforeApply() {
+        QTemporaryDir dir;Window window(dir.filePath("recovery"),false);
+        window.model.setParameters({{"length","2 cm"},{"area","length * length"}});
+        const auto before=window.model.json();window.show();QVERIFY(QTest::qWaitForWindowExposed(&window));
+        bool initialValues=false,invalidBlocked=false,recovered=false,readOnly=false;
+        QTimer::singleShot(100,[&]{
+            auto *dialog=window.findChild<QDialog *>("parameterEditor");if(!dialog)return;
+            auto *table=dialog->findChild<QTableWidget *>("parameterTable");
+            auto *ok=dialog->findChild<QDialogButtonBox *>()->button(QDialogButtonBox::Ok);
+            auto *error=dialog->findChild<QLabel *>("parameterError");
+            initialValues=table->item(0,2)->text()=="400 mm^2" && table->item(1,2)->text()=="20 mm";
+            readOnly=!(table->item(0,2)->flags() & Qt::ItemIsEditable);
+            table->item(1,1)->setText("area");
+            invalidBlocked=!ok->isEnabled() && !error->text().isEmpty() && table->item(0,2)->text().isEmpty();
+            table->item(1,1)->setText("3 cm");
+            recovered=ok->isEnabled() && error->text().isEmpty() && table->item(0,2)->text()=="900 mm^2";
+            dialog->reject();
+        });
+        window.findChild<QAction *>("parameters")->trigger();
+        QVERIFY(initialValues);QVERIFY(readOnly);QVERIFY(invalidBlocked);QVERIFY(recovered);
+        QCOMPARE(window.model.json(),before);window.model.save(dir.filePath("clean.mcad"));QVERIFY(window.close());
+    }
     void sketchConstraintsSelectionAndPersistence() {
         QTemporaryDir dir; QVERIFY(dir.isValid());
         Model source;

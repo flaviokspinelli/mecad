@@ -56,8 +56,9 @@ Ainda não cobre cotas/restrições de sketches, referências entre medidas de
 recursos, renomeação com atualização automática de fórmulas,
 funções matemáticas, autocomplete ou gráfico visual de dependências. O editor de
 extrusão não aceita sobrescrever numericamente uma distância vinculada: edite ou
-remova a fórmula no comando próprio. A tabela ainda não mostra coluna de valores
-resolvidos. Portanto PAR-04 não está concluído.
+remova a fórmula no comando próprio. A tabela mostra valores calculados em unidades
+canônicas e bloqueia fórmulas inválidas antes de aplicar, sem alterar o projeto.
+Portanto PAR-04 ainda não está concluído.
 
 Testes: `sh scripts/check.sh parameters`, core `namedParametersDriveGeometry`,
 `expressionsDriveSketchAndAngles`, UI `namedParametersEditing` e

@@ -21,6 +21,11 @@ Escopo congelado nos 38 parciais. Nenhum pacote gerado ou distribuição alterad
 Ainda não há vínculo de fórmulas com cotas do solver nem fechamento dos 38.
 Os testes acima são evidência destas mudanças, não equivalência com Fusion.
 
+Complemento PAR-04: tabela mostra resultados somente leitura e erros de fórmula
+enquanto se edita; ciclos desabilitam OK, corrigir reabilita, cancelar preserva
+o documento. UI parameterValuesAndErrorsBeforeApply e namedParametersEditing
+passaram. Nenhuma nova distribuição foi criada.
+
 ## Política de disco — 21/09/2026
 
 Por solicitação do usuário, não gerar novos pacotes ou arquivos versionados do

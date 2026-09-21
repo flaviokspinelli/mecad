@@ -753,8 +753,8 @@ Window::Window(QString recoveryDirectory, bool promptRecovery) {
         QDialog dialog(this); dialog.setObjectName("parameterEditor");dialog.setWindowTitle("Parâmetros do projeto");dialog.resize(650,420);
         auto *layout=new QVBoxLayout(&dialog);
         layout->addWidget(new QLabel("Use unidades nas medidas: 20 mm, 2 cm, largura / 2. Nomes sem espaços.",&dialog));
-        auto *table=new QTableWidget(0,2,&dialog);table->setObjectName("parameterTable");
-        table->setHorizontalHeaderLabels({"Nome","Expressão"});table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+        auto *table=new QTableWidget(0,3,&dialog);table->setObjectName("parameterTable");
+        table->setHorizontalHeaderLabels({"Nome","Expressão","Valor calculado"});table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
         const auto definitions=model.parameters();
         for(auto it=definitions.begin();it!=definitions.end();++it) {
             int row=table->rowCount();table->insertRow(row);
@@ -767,18 +767,47 @@ Window::Window(QString recoveryDirectory, bool promptRecovery) {
         connect(add,&QPushButton::clicked,&dialog,[table]{table->insertRow(table->rowCount());});
         connect(remove,&QPushButton::clicked,&dialog,[table]{if(table->currentRow()>=0)table->removeRow(table->currentRow());});
         auto *buttons=new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel,&dialog);layout->addWidget(buttons);
+        auto *error=new QLabel(&dialog);error->setObjectName("parameterError");error->setWordWrap(true);
+        error->setStyleSheet("color:#edc17e");layout->addWidget(error);
+        auto readDefinitions=[&]{
+            QMap<QString,QString> values;
+            for(int i=0;i<table->rowCount();++i) {
+                auto name=table->item(i,0)?table->item(i,0)->text().trimmed():QString();
+                auto expression=table->item(i,1)?table->item(i,1)->text().trimmed():QString();
+                if(name.isEmpty() && expression.isEmpty())continue;
+                if(values.contains(name))throw std::runtime_error("Nome de parâmetro duplicado.");
+                values[name]=expression;
+            }
+            return values;
+        };
+        auto updateValues=[&]{
+            QSignalBlocker blocker(table);
+            for(int i=0;i<table->rowCount();++i) {
+                auto *item=new QTableWidgetItem;
+                item->setFlags(item->flags() & ~Qt::ItemIsEditable);table->setItem(i,2,item);
+            }
+            try {
+                const auto resolved=parameters::resolve(readDefinitions());
+                for(int i=0;i<table->rowCount();++i) {
+                    const auto name=table->item(i,0)?table->item(i,0)->text().trimmed():QString();
+                    if(!resolved.contains(name))continue;
+                    const auto quantity=resolved[name];QStringList units;
+                    if(quantity.length)units<< (quantity.length==1?QString("mm"):QString("mm^%1").arg(quantity.length));
+                    if(quantity.angle)units<< (quantity.angle==1?QString("rad"):QString("rad^%1").arg(quantity.angle));
+                    table->item(i,2)->setText(QString::number(quantity.value,'g',12)+(units.empty()?QString():" "+units.join(" · ")));
+                }
+                error->clear();buttons->button(QDialogButtonBox::Ok)->setEnabled(true);
+            } catch(const std::exception &e) {
+                error->setText(QString::fromUtf8(e.what()));buttons->button(QDialogButtonBox::Ok)->setEnabled(false);
+            }
+        };
+        connect(table,&QTableWidget::cellChanged,&dialog,[&](int,int column){if(column<2)updateValues();});
+        connect(table->model(),&QAbstractItemModel::rowsRemoved,&dialog,updateValues);
+        updateValues();
         connect(buttons,&QDialogButtonBox::rejected,&dialog,&QDialog::reject);
         connect(buttons,&QDialogButtonBox::accepted,&dialog,[&]{
             try {
-                QMap<QString,QString> values;
-                for(int i=0;i<table->rowCount();++i) {
-                    auto name=table->item(i,0)?table->item(i,0)->text().trimmed():QString();
-                    auto expression=table->item(i,1)?table->item(i,1)->text().trimmed():QString();
-                    if(name.isEmpty() && expression.isEmpty())continue;
-                    if(values.contains(name))throw std::runtime_error("Nome de parâmetro duplicado.");
-                    values[name]=expression;
-                }
-                model.setParameters(values);dialog.accept();
+                model.setParameters(readDefinitions());dialog.accept();
             } catch(const std::exception &e) {QMessageBox::warning(&dialog,"Parâmetros não aplicados",e.what());}
         });
         if(dialog.exec()==QDialog::Accepted)refresh();
