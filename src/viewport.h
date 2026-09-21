@@ -7,6 +7,7 @@
 #include <QOpenGLVertexArrayObject>
 #include <QOpenGLWidget>
 #include <QPointF>
+#include <QVariantAnimation>
 #include <functional>
 
 class Viewport : public QOpenGLWidget, protected QOpenGLFunctions {
@@ -38,7 +39,11 @@ class Viewport : public QOpenGLWidget, protected QOpenGLFunctions {
     std::function<void(QString)> onHint;
     void refresh();
     void fit();
-    void view(QString name);
+    void view(QString name, bool animated = false);
+    void viewDirection(QVector3D direction, bool animated = true);
+    QVector3D cameraDirection() const;
+    QVector3D cubeDirectionAt(QPointF position) const;
+    bool isViewAnimating() const;
     void setTool(QString name);
     QPointF project(QVector3D p) const;
     QPointF planeAt(QPointF pixel) const;
@@ -71,6 +76,12 @@ class Viewport : public QOpenGLWidget, protected QOpenGLFunctions {
     QPointF last, pressed, cursor;
     QVector<QPointF> draft;
     QVector<QPair<QString, QPolygonF>> cubeFaces;
+    struct CubeTarget {
+        QVector3D direction;
+        QPolygonF region;
+    };
+    QVector<CubeTarget> cubeTargets;
+    QVariantAnimation cameraAnimation;
     QVector<QPair<QString, QPolygonF>> planeRegions;
     QPointF planeHover{-1, -1};
     bool draggingHandle = false;

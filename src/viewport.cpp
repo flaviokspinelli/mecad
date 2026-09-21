@@ -9,6 +9,7 @@
 #include <QPainterPath>
 #include <QSurfaceFormat>
 #include <QWheelEvent>
+#include <QtMath>
 #include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
 #include <cmath>
@@ -51,7 +52,7 @@ QMatrix4x4 Viewport::matrix() const {
     QVector3D direction(std::cos(b) * std::cos(a), std::cos(b) * std::sin(a), std::sin(b));
     QMatrix4x4 view;
     view.lookAt(center + direction * span * 4, center,
-                std::abs(pitch) > 89 ? QVector3D(0, 1, 0) : QVector3D(0, 0, 1));
+                QVector3D(-std::sin(b) * std::cos(a), -std::sin(b) * std::sin(a), std::cos(b)));
     float aspect = float(width()) / std::max(1, height());
     QMatrix4x4 projection;
     projection.ortho(-span * aspect / 2, span * aspect / 2, -span / 2, span / 2, span * .01f, span * 20);
@@ -148,32 +149,72 @@ void Viewport::fit() {
     }
     update();
 }
-void Viewport::view(QString name) {
+QVector3D Viewport::cameraDirection() const {
+    float a = qDegreesToRadians(yaw), b = qDegreesToRadians(pitch);
+    return {std::cos(b) * std::cos(a), std::cos(b) * std::sin(a), std::sin(b)};
+}
+bool Viewport::isViewAnimating() const {
+    return cameraAnimation.state() == QAbstractAnimation::Running;
+}
+QVector3D Viewport::cubeDirectionAt(QPointF position) const {
+    for (auto it = cubeTargets.crbegin(); it != cubeTargets.crend(); ++it)
+        if (it->region.containsPoint(position, Qt::OddEvenFill))
+            return it->direction;
+    return {};
+}
+void Viewport::view(QString name, bool animated) {
     if (sketchMode)
         name = plane == "XY" ? "top" : plane == "XZ" ? "front" : "right";
-    if (name == "top") {
-        yaw = 0;
-        pitch = 90;
-    } else if (name == "front") {
-        yaw = -90;
-        pitch = 0;
-    } else if (name == "right") {
-        yaw = 0;
-        pitch = 0;
-    } else if (name == "left") {
-        yaw = 180;
-        pitch = 0;
-    } else if (name == "back") {
-        yaw = 90;
-        pitch = 0;
-    } else if (name == "bottom") {
-        yaw = 0;
-        pitch = -90;
-    } else {
-        yaw = -55;
-        pitch = 32;
+    QVector3D direction;
+    if (name == "top")
+        direction = {0, 0, 1};
+    else if (name == "bottom")
+        direction = {0, 0, -1};
+    else if (name == "front")
+        direction = {0, -1, 0};
+    else if (name == "back")
+        direction = {0, 1, 0};
+    else if (name == "right")
+        direction = {1, 0, 0};
+    else if (name == "left")
+        direction = {-1, 0, 0};
+    else
+        direction = {std::cos(qDegreesToRadians(32.f)) * std::cos(qDegreesToRadians(-55.f)),
+                     std::cos(qDegreesToRadians(32.f)) * std::sin(qDegreesToRadians(-55.f)),
+                     std::sin(qDegreesToRadians(32.f))};
+    viewDirection(direction, animated);
+}
+void Viewport::viewDirection(QVector3D direction, bool animated) {
+    cameraAnimation.stop();
+    if (sketchMode)
+        direction = Model::planeNormal(plane);
+    if (direction.isNull())
+        return;
+    direction.normalize();
+    float targetPitch = qRadiansToDegrees(std::asin(std::clamp(direction.z(), -1.f, 1.f)));
+    float targetYaw = std::abs(direction.z()) > .9999
+                          ? (direction.z() > 0 ? -90.f : 90.f)
+                          : qRadiansToDegrees(std::atan2(direction.y(), direction.x()));
+    float startYaw = yaw, startPitch = pitch;
+    targetYaw = startYaw + std::remainder(targetYaw - startYaw, 360.f);
+    cameraAnimation.disconnect(this);
+    if (!animated) {
+        yaw = targetYaw;
+        pitch = targetPitch;
+        update();
+        return;
     }
-    update();
+    cameraAnimation.setDuration(300);
+    cameraAnimation.setEasingCurve(QEasingCurve::InOutCubic);
+    cameraAnimation.setStartValue(0.);
+    cameraAnimation.setEndValue(1.);
+    connect(&cameraAnimation, &QVariantAnimation::valueChanged, this, [=, this](const QVariant &value) {
+        float t = value.toFloat();
+        yaw = startYaw + (targetYaw - startYaw) * t;
+        pitch = startPitch + (targetPitch - startPitch) * t;
+        update();
+    });
+    cameraAnimation.start();
 }
 void Viewport::setTool(QString name) {
     tool = name;
@@ -345,11 +386,13 @@ void Viewport::paintOverlay(QPainter &p) {
         p.drawText(QRect(290, 18, width() - 420, 28), Qt::AlignCenter, "Create Sketch para começar");
     }
     cubeFaces.clear();
+    cubeTargets.clear();
     // The cube follows the camera. Each visible face is a real view target.
     float ca = yaw * M_PI / 180, cb = pitch * M_PI / 180;
     QVector3D eye(std::cos(cb) * std::cos(ca), std::cos(cb) * std::sin(ca), std::sin(cb));
     QMatrix4x4 cubeView;
-    cubeView.lookAt(eye * 4, QVector3D(), std::abs(pitch) > 89 ? QVector3D(0, 1, 0) : QVector3D(0, 0, 1));
+    cubeView.lookAt(eye * 4, QVector3D(),
+                    QVector3D(-std::sin(cb) * std::cos(ca), -std::sin(cb) * std::sin(ca), std::cos(cb)));
     QPointF anchor(width() - 60, 58);
     auto cubePoint = [&](QVector3D v) {
         auto q = cubeView.map(v);
@@ -375,12 +418,40 @@ void Viewport::paintOverlay(QPainter &p) {
             for (auto v : face.corners)
                 polygon << cubePoint(v);
             cubeFaces.append({face.name, polygon});
+            cubeTargets.append({face.n, polygon});
             p.setPen(QPen(QColor("#687c90"), 1));
             p.setBrush(face.color);
             p.drawPolygon(polygon);
             auto mid = polygon.boundingRect().center();
             p.setPen(QColor("#405265"));
             p.drawText(QRectF(mid.x() - 25, mid.y() - 8, 50, 16), Qt::AlignCenter, face.name.toUpper());
+        }
+    // Faces are lowest priority, edges next, corners last (larger click targets).
+    QVector<QVector3D> corners;
+    for (const auto &face : faces)
+        if (QVector3D::dotProduct(eye, face.n) > .01) {
+            for (int i = 0; i < 4; ++i) {
+                auto a = face.corners[i], b = face.corners[(i + 1) % 4];
+                if (!corners.contains(a))
+                    corners.append(a);
+                auto start = cubePoint(a), end = cubePoint(b), d = end - start;
+                double length = std::hypot(d.x(), d.y());
+                if (length < 1)
+                    continue;
+                QPointF n(-d.y() / length * 5, d.x() / length * 5);
+                cubeTargets.append({(a + b).normalized(), QPolygonF{start + n, end + n, end - n, start - n}});
+            }
+        }
+    for (auto corner : corners) {
+        auto point = cubePoint(corner);
+        cubeTargets.append({corner.normalized(), QPolygonF(QRectF(point - QPointF(7, 7), QSizeF(14, 14)))});
+    }
+    for (auto it = cubeTargets.crbegin(); it != cubeTargets.crend(); ++it)
+        if (it->region.containsPoint(planeHover, Qt::OddEvenFill)) {
+            p.setPen(QPen(QColor("#c3eaff"), 1));
+            p.setBrush(QColor(70, 166, 224, 130));
+            p.drawPolygon(it->region);
+            break;
         }
     p.setPen(QColor("#96abbe"));
     p.drawText(QRect(width() - 84, 102, 50, 16), Qt::AlignCenter, "HOME");
@@ -599,6 +670,9 @@ void Viewport::mousePressEvent(QMouseEvent *e) {
 }
 void Viewport::mouseMoveEvent(QMouseEvent *e) {
     planeHover = e->position();
+    bool overCube = !cubeDirectionAt(planeHover).isNull() ||
+                    QRect(width() - 84, 100, 50, 20).contains(planeHover.toPoint());
+    setCursor(overCube ? Qt::PointingHandCursor : tool.isEmpty() ? Qt::ArrowCursor : Qt::CrossCursor);
     auto delta = e->position() - last;
     last = e->position();
     cursor = planeAt(e->position());
@@ -625,6 +699,7 @@ void Viewport::mouseMoveEvent(QMouseEvent *e) {
         e->buttons().testFlag(Qt::LeftButton) && e->modifiers().testFlag(Qt::AltModifier);
     const bool toolbarNavigation = e->buttons().testFlag(Qt::LeftButton) && !navigationMode.isEmpty();
     if (middle || alternative || toolbarNavigation) {
+        cameraAnimation.stop();
         const bool orbit = !sketchMode && (toolbarNavigation ? navigationMode == "orbit"
                                            : middle          ? e->modifiers().testFlag(Qt::ShiftModifier)
                                                              : !e->modifiers().testFlag(Qt::ShiftModifier));
@@ -648,13 +723,13 @@ void Viewport::mouseReleaseEvent(QMouseEvent *e) {
     if (QLineF(pressed, e->position()).length() > 4 || e->button() != Qt::LeftButton)
         return;
     auto s = e->position();
-    for (auto &face : cubeFaces)
-        if (face.second.containsPoint(s, Qt::OddEvenFill)) {
-            view(face.first);
-            return;
-        }
+    auto direction = cubeDirectionAt(s);
+    if (!direction.isNull()) {
+        viewDirection(direction);
+        return;
+    }
     if (QRect(width() - 84, 100, 50, 20).contains(s.toPoint())) {
-        view("iso");
+        view("iso", true);
         return;
     }
     if (choosingPlane) {
@@ -743,6 +818,7 @@ void Viewport::mouseReleaseEvent(QMouseEvent *e) {
     update();
 }
 void Viewport::wheelEvent(QWheelEvent *e) {
+    cameraAnimation.stop();
     if (!e->pixelDelta().isNull()) {
         auto delta = e->pixelDelta();
         if (e->modifiers().testFlag(Qt::ShiftModifier) && !sketchMode) {
@@ -761,6 +837,7 @@ bool Viewport::event(QEvent *event) {
     if (event->type() == QEvent::NativeGesture) {
         auto *gesture = static_cast<QNativeGestureEvent *>(event);
         if (gesture->gestureType() == Qt::ZoomNativeGesture) {
+            cameraAnimation.stop();
             span = std::clamp(span * float(std::exp(-gesture->value())), 1.f, 1e6f);
             update();
             event->accept();
@@ -771,6 +848,7 @@ bool Viewport::event(QEvent *event) {
 }
 void Viewport::keyPressEvent(QKeyEvent *e) {
     if (e->key() == Qt::Key_Escape) {
+        cameraAnimation.stop();
         draft.clear();
         choosingPlane = false;
         if (onCancelCommand)

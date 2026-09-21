@@ -2,6 +2,7 @@
 #include <QApplication>
 #include <QDialog>
 #include <QFile>
+#include <QMouseEvent>
 #include <QPushButton>
 #include <QSurfaceFormat>
 #include <QTemporaryDir>
@@ -10,6 +11,65 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void viewCubeNavigation() {
+        Model model;
+        model.add("box", {{"x", 0}, {"y", 0}, {"z", 0}, {"w", 50}, {"h", 30}, {"d", 20}}, "Cube test");
+        Viewport viewport(&model);
+        viewport.resize(900, 600);
+        viewport.refresh();
+        viewport.fit();
+        viewport.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&viewport));
+        auto *v = &viewport;
+        const auto original = model.json();
+        auto targetPixel = [&](QVector3D desired) {
+            desired.normalize();
+            for (int y = 0; y < 115; ++y)
+                for (int x = v->width() - 115; x < v->width(); ++x)
+                    if ((v->cubeDirectionAt(QPointF(x, y)) - desired).length() < .01)
+                        return QPoint(x, y);
+            return QPoint(-1, -1);
+        };
+        for (auto target : {QVector3D(1, -1, 1), QVector3D(1, -1, 0), QVector3D(0, 0, 1)}) {
+            v->view("iso");
+            QTest::qWait(80);
+            v->grab();
+            auto pixel = targetPixel(target);
+            QVERIFY(pixel.x() >= 0);
+            const auto before = v->cameraDirection();
+            QTest::mouseMove(v, pixel);
+            QTest::qWait(30);
+            viewport.grab().save(QDir::currentPath() + "/cube-hover-test.png");
+            QTest::mouseClick(v, Qt::LeftButton, Qt::NoModifier, pixel);
+            QVERIFY(v->isViewAnimating());
+            QVERIFY((v->cameraDirection() - before).length() < .05);
+            QTRY_VERIFY_WITH_TIMEOUT((v->cameraDirection() - before).length() > .005, 1000);
+            QTRY_VERIFY(!v->isViewAnimating());
+            QVERIFY((v->cameraDirection() - target.normalized()).length() < .001);
+            QCOMPARE(model.json(), original);
+        }
+        v->view("front", true);
+        QTest::qWait(60);
+        v->view("right", true);
+        QTRY_VERIFY(!v->isViewAnimating());
+        QVERIFY((v->cameraDirection() - QVector3D(1, 0, 0)).length() < .001);
+        v->view("front", true);
+        QTest::qWait(40);
+        auto position = QPointF(v->rect().center());
+        QTest::mousePress(v, Qt::MiddleButton, Qt::ShiftModifier, position.toPoint());
+        QMouseEvent drag(QEvent::MouseMove, position + QPointF(10, 5),
+                         v->mapToGlobal(position.toPoint()) + QPoint(10, 5), Qt::NoButton, Qt::MiddleButton,
+                         Qt::ShiftModifier);
+        QApplication::sendEvent(v, &drag);
+        QTest::mouseRelease(v, Qt::MiddleButton, Qt::ShiftModifier, (position + QPointF(10, 5)).toPoint());
+        QVERIFY(!v->isViewAnimating());
+        v->sketchMode = true;
+        v->plane = "XY";
+        v->viewDirection({1, 1, 1});
+        QTRY_VERIFY(!v->isViewAnimating());
+        QVERIFY((v->cameraDirection() - QVector3D(0, 0, 1)).length() < .001);
+        viewport.close();
+    }
     void sketchToSolid() {
         Window window;
         window.show();

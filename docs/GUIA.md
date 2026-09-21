@@ -43,7 +43,7 @@ estão desabilitadas. O nome **MecaCAD** identifica um aplicativo independente.
 | Extrudar com prévia | E, arrastar a seta azul, Enter |
 | Mover com prévia | M, arrastar uma seta X/Y/Z, Enter |
 | Cancelar prévia sem gravar uma operação | Esc |
-| Trocar vista | Clique em uma face do cubo no canto superior direito |
+| Trocar vista com animação | Clique em uma face, aresta ou canto do cubo |
 | Pan | Arrastar com botão central |
 | Órbita | Shift + arrastar com botão central |
 | Zoom | Roda do mouse |
