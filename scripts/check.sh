@@ -16,6 +16,11 @@ case "$mode" in
         cd build
         exec ./core_tests "$@"
         ;;
+    recovery)
+        cmake --build build --target recovery_tests -j "${MECACAD_BUILD_JOBS:-6}"
+        cd build
+        exec ./recovery_tests "$@"
+        ;;
     ui)
         if test "$#" -eq 0; then
             echo 'Informe os testes de interface a executar. Para a suíte completa, use release.' >&2
@@ -33,7 +38,7 @@ case "$mode" in
         exec ctest --test-dir build --output-on-failure --timeout 120
         ;;
     *)
-        echo 'Uso: sh scripts/check.sh [core [teste... ] | ui teste... | release]' >&2
+        echo 'Uso: sh scripts/check.sh [core [teste... ] | recovery [teste... ] | ui teste... | release]' >&2
         exit 2
         ;;
 esac

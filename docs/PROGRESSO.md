@@ -53,6 +53,42 @@ históricas e testar gravações interrompidas por falha de processo/disco.
 REL-06 passou de pendente para parcial, não concluído. A suíte completa e a UI
 não foram executadas nesta etapa, por escolha de testes proporcionais à mudança.
 
-Próxima frente: REL-03, isolamento das recuperações por documento/sessão e teste
-de falha forçada, sem sobrescrever projeto ou recuperação de outra janela.
-Depois, prosseguir para o modelo de sketch e grafo de dependências do backlog.
+## 21/09/2026 — recuperação isolada e estado salvo
+
+Alterações internas, sem novo pacote de entrega.
+
+- REL-03: diário atômico por sessão, com trava de proprietário; sessões ativas
+  não aparecem como recuperáveis e uma janela não limpa a recuperação de outra.
+- Recuperação abre uma cópia não salva, exige novo caminho ao salvar e preserva
+  o arquivo original. A cópia antiga só é retirada após gravar a nova recuperação.
+- Menu File → Recover unsaved project permite escolher uma sessão interrompida;
+  cancelar não altera o documento ou o diário. Falhas de leitura são preservadas.
+- REL-02: undo/redo compara o documento com o último estado salvo. Voltar a esse
+  estado remove o indicador de alteração e a recuperação obsoleta. Uma cópia
+  recuperada continua não salva mesmo após editar e desfazer.
+- Descartar alterações e depois cancelar a escolha de outro arquivo não apaga
+  antecipadamente a recuperação do documento ainda aberto.
+
+### Evidências direcionadas
+
+- Core: savedStateTracksUndoRedo, noOpCommandsPreserveHistory,
+  rejectedDocumentsPreserveSession, failedSaveAndParsePreserveSession passaram.
+- Recovery: failedWriteKeepsPreviousCopy, dirtyDestinationIsNotReplaced,
+  sessionsStayIsolated, corruptRecoveryIsPreserved,
+  forcedTerminationRestoresWithoutOverwritingOriginal passaram sem janelas.
+- O encerramento forçado é real, em processo de teste próprio; verifica também
+  que os bytes do arquivo original não mudam.
+- UI: isolatedRecoveryDialog passou no fluxo cancelar → recuperar → persistir
+  em novo caminho → fechar. Não automatiza o diálogo nativo Save As.
+
+### Limites restantes
+
+REL-03 permanece parcial. O intervalo é de 30 segundos: alterações posteriores
+ao último diário podem ser perdidas. Falta testar queda durante a gravação,
+disco cheio e recuperação de projetos grandes. Registros com envelope ilegível
+ficam preservados em disco, mas não aparecem na lista. O recovery.mcad legado
+não é apagado nem migrado automaticamente; pode ser aberto manualmente.
+
+Executar apenas recuperação: sh scripts/check.sh recovery.
+Não houve suíte completa nem publicação de aplicativo nesta etapa.
+O restante do backlog continua pendente/parcial conforme BACKLOG.md.

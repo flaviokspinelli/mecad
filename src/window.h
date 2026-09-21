@@ -1,6 +1,7 @@
 #pragma once
 #include "model.h"
 #include "viewport.h"
+#include "recovery.h"
 #include <QDialog>
 #include <QDockWidget>
 #include <QDoubleSpinBox>
@@ -18,7 +19,7 @@
 class Window : public QMainWindow {
     Q_OBJECT
   public:
-    explicit Window();
+    explicit Window(QString recoveryDirectory = {}, bool promptRecovery = true);
     void openPath(const QString &path);
     void demo();
     Model model;
@@ -40,7 +41,8 @@ class Window : public QMainWindow {
     QTabBar *tabs;
     QWidget *ribbon;
     QLabel *documentTitle, *status;
-    QString selected, recoveryPath;
+    QString selected;
+    std::unique_ptr<RecoveryStore> recovery;
     QMap<QString, QDoubleSpinBox *> fields;
     QMap<QString, QAction *> commands;
     bool refreshing = false;
@@ -70,6 +72,8 @@ class Window : public QMainWindow {
     void open();
     bool canLeave();
     void autosave();
+    void clearRecovery();
+    void recoverProject();
     void search();
     QAction *command(QString key, QString label, QString shortcut, std::function<void()> fn);
 };

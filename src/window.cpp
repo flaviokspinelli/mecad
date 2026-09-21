@@ -468,7 +468,7 @@ QAction *Window::command(QString key, QString label, QString shortcut, std::func
     commands[key] = a;
     return a;
 }
-Window::Window() {
+Window::Window(QString recoveryDirectory, bool promptRecovery) {
     setObjectName("MecaCAD");
     resize(1440, 920);
     setMinimumSize(1100, 720);
@@ -523,6 +523,7 @@ Window::Window() {
     auto *help = menuBar()->addMenu("Help");
     file->addAction(command("new", "New Design", "Ctrl+N", [this] {
         if (canLeave()) {
+            clearRecovery();
             model.clear();
             selected.clear();
             finishSketch();
@@ -532,6 +533,7 @@ Window::Window() {
     file->addAction(command("open", "Open…", "Ctrl+O", [this] { open(); }));
     file->addAction(command("save", "Save", "Ctrl+S", [this] { save(); }));
     file->addAction(command("saveas", "Save As…", "Ctrl+Shift+S", [this] { save(true); }));
+    file->addAction(command("recover", "Recover unsaved project…", "", [this] { recoverProject(); }));
     file->addSeparator();
     file->addAction(command("import", "Import STEP / STL…", "", [this] {
         auto path = QFileDialog::getOpenFileName(
@@ -1080,25 +1082,26 @@ Window::Window() {
         if (!activeCommand)
             properties->show();
     });
-    recoveryPath = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/recovery.mcad";
-    QDir().mkpath(QFileInfo(recoveryPath).absolutePath());
+    try {
+        recovery = std::make_unique<RecoveryStore>(
+            recoveryDirectory.isEmpty() ? QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/recoveries"
+                                        : recoveryDirectory);
+    } catch (const std::exception &error) {
+        status->setText("Recuperação automática indisponível: " + QString::fromUtf8(error.what()));
+    }
     auto *timer = new QTimer(this);
     connect(timer, &QTimer::timeout, this, &Window::autosave);
     timer->start(30000);
     buildRibbon();
     refresh();
-    QTimer::singleShot(150, this, [this] {
-        if (QFile::exists(recoveryPath) && model.features.empty()) {
+    QTimer::singleShot(150, this, [this, promptRecovery] {
+        if (!promptRecovery) return;
+        if (recovery && model.features.empty() && !recovery->available().empty()) {
             if (QMessageBox::question(
                     this, "Recover project",
                     "Foi encontrado um projeto de uma sessão interrompida. Deseja recuperá-lo?") ==
                 QMessageBox::Yes)
-                run([this] {
-                    model.load(recoveryPath);
-                    model.filePath.clear();
-                    model.dirty = true;
-                    refresh(true);
-                });
+                run([this] { recoverProject(); });
         }
     });
 }
@@ -1233,6 +1236,7 @@ void Window::buildRibbon() {
     }
 }
 void Window::refresh(bool fit) {
+    if (!model.dirty) clearRecovery();
     refreshing = true;
     tree->clear();
     timeline->clear();
@@ -2101,7 +2105,7 @@ void Window::save(bool as) {
     if (path.isEmpty())
         return;
     model.save(withExtension(path, "mcad"));
-    QFile::remove(recoveryPath);
+    clearRecovery();
     refresh();
 }
 bool Window::canLeave() {
@@ -2124,7 +2128,6 @@ bool Window::canLeave() {
         save();
         return !model.dirty;
     }
-    QFile::remove(recoveryPath);
     return true;
 }
 void Window::open() {
@@ -2140,27 +2143,63 @@ void Window::openPath(const QString &path) {
         Model imported;
         auto id = imported.importStl(path);
         model = std::move(imported);
+        clearRecovery();
         selected = id;
         finishSketch();
         refresh(true);
         return;
     }
     model.load(path);
+    clearRecovery();
     selected.clear();
     finishSketch();
     refresh(true);
 }
 void Window::autosave() {
-    if (!model.dirty)
+    if (!recovery)
         return;
-    QSaveFile file(recoveryPath);
-    if (!file.open(QIODevice::WriteOnly)) {
-        status->setText("Não foi possível salvar a recuperação automática.");
+    if (!model.dirty) { clearRecovery(); return; }
+    try {
+        recovery->write(model);
+    } catch (const std::exception &error) {
+        status->setText("Falha na recuperação automática: " + QString::fromUtf8(error.what()));
+    }
+}
+void Window::clearRecovery() {
+    if (!recovery) return;
+    try {
+        recovery->clear();
+    } catch (const std::exception &error) {
+        status->setText("A recuperação antiga foi preservada: " + QString::fromUtf8(error.what()));
+    }
+}
+void Window::recoverProject() {
+    if (!recovery) throw std::runtime_error("A recuperação automática não está disponível nesta sessão.");
+    const auto entries = recovery->available();
+    if (entries.empty()) {
+        const auto legacy = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/recovery.mcad";
+        QMessageBox::information(this, "Recover project", QFile::exists(legacy)
+            ? "Há uma recuperação de versão antiga, preservada sem alteração. Use File → Open para abrir:\n" + legacy
+            : "Não há recuperações disponíveis de sessões encerradas.");
         return;
     }
-    auto data = QJsonDocument(model.json()).toJson();
-    if (file.write(data) != data.size() || !file.commit())
-        status->setText("Falha na recuperação automática: " + file.errorString());
+    QStringList labels;
+    for (const auto &entry : entries)
+        labels << QString("%1 — %2 — %3").arg(entry.originalPath.isEmpty() ? "Untitled" : entry.originalPath,
+            entry.savedAt.toLocalTime().toString("dd/MM/yyyy HH:mm:ss"), entry.id.left(8));
+    bool chosen = false;
+    const auto label = QInputDialog::getItem(this, "Recover project",
+        "Escolha a cópia. O original não será sobrescrito; a recuperação será um documento não salvo.",
+        labels, 0, false, &chosen);
+    if (!chosen || !canLeave()) return;
+    Model restored;
+    const auto original = recovery->recover(entries[labels.indexOf(label)].id, restored);
+    model = std::move(restored);
+    selected.clear();
+    finishSketch();
+    refresh(true);
+    status->setText(original.isEmpty() ? "Projeto não salvo recuperado. Use Save As para salvar."
+                                     : "Cópia recuperada de " + original + ". Use Save As; o original foi preservado.");
 }
 void Window::closeEvent(QCloseEvent *e) {
     if (activeCommand) {
@@ -2177,7 +2216,7 @@ void Window::closeEvent(QCloseEvent *e) {
     bool ok = false;
     run([&] { ok = canLeave(); });
     if (ok) {
-        QFile::remove(recoveryPath);
+        clearRecovery();
         e->accept();
     } else
         e->ignore();
@@ -2199,6 +2238,7 @@ void Window::search() {
         actions[text]->trigger();
 }
 void Window::demo() {
+    clearRecovery();
     model.clear();
     QString s = model.add(
         "sketch", {{"profile", "rectangle"}, {"plane", "XY"}, {"x", 0}, {"y", 0}, {"w", 80}, {"h", 50}},

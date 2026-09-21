@@ -11,6 +11,25 @@
 class CoreTests : public QObject {
     Q_OBJECT
   private slots:
+    void savedStateTracksUndoRedo() {
+        Model model;
+        QVERIFY(!model.dirty);
+        const auto id = model.add("box", {{"w",10}}, "Box");
+        QVERIFY(model.dirty);
+        QVERIFY(model.undo()); QVERIFY(!model.dirty);
+        QVERIFY(model.redo()); QVERIFY(model.dirty);
+        QTemporaryDir directory; QVERIFY(directory.isValid());
+        model.save(directory.filePath("saved.mcad"));
+        const auto saved = model.json();
+        QVERIFY(!model.dirty);
+        model.edit(id, {{"w",20}}, "Box"); QVERIFY(model.dirty);
+        QVERIFY(model.undo()); QCOMPARE(model.json(),saved); QVERIFY(!model.dirty);
+        QVERIFY(model.redo()); QVERIFY(model.dirty);
+        model.save(directory.filePath("updated.mcad")); QVERIFY(!model.dirty);
+        QVERIFY(model.undo()); QVERIFY(model.dirty);
+        QVERIFY(model.redo()); QVERIFY(!model.dirty);
+        model.clear(); QVERIFY(!model.dirty);
+    }
     void legacyV1FixtureRoundTrip() {
         const auto path = QFINDTESTDATA("fixtures/v1-basic.mcad");
         QVERIFY(!path.isEmpty());

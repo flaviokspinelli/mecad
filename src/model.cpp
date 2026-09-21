@@ -203,6 +203,11 @@ TopoDS_Shape profile(const QJsonObject &p) {
 QJsonObject Feature::json() const {
     return {{"id", id}, {"name", name}, {"type", type}, {"parameters", p}, {"visible", visible}};
 }
+Model::Model() : savedDocument(json()) {}
+void Model::markUnsaved() {
+    savedDocument = {};
+    dirty = true;
+}
 QVector3D Model::planePoint(const QString &plane, double u, double v, double offset) {
     if (plane.startsWith("FACE:")) {
         auto point = planePointExact(plane, u, v, offset);
@@ -286,7 +291,7 @@ void Model::checkpoint(const QJsonObject &before) {
     if (past.size() > 100)
         past.erase(past.begin());
     future.clear();
-    dirty = true;
+    dirty = json() != savedDocument;
 }
 void Model::loadJson(const QJsonObject &root) {
     auto old = json();
@@ -298,6 +303,7 @@ void Model::loadJson(const QJsonObject &root) {
     }
     past.clear();
     future.clear();
+    savedDocument = json();
     dirty = false;
 }
 void Model::commit(const QJsonObject &document) {
@@ -364,7 +370,7 @@ bool Model::undo() {
     restore(past.back());
     past.pop_back();
     future.push_back(current);
-    dirty = true;
+    dirty = json() != savedDocument;
     return true;
 }
 void Model::deleteBody(const QString &id) {
@@ -380,7 +386,7 @@ bool Model::redo() {
     restore(future.back());
     future.pop_back();
     past.push_back(current);
-    dirty = true;
+    dirty = json() != savedDocument;
     return true;
 }
 void Model::clear() {
@@ -388,6 +394,7 @@ void Model::clear() {
     past.clear();
     future.clear();
     filePath.clear();
+    savedDocument = json();
     dirty = false;
 }
 void Model::rebuild() {
@@ -637,6 +644,7 @@ void Model::save(const QString &path) {
     require(f.write(bytes) == bytes.size(), f.errorString());
     require(f.commit(), f.errorString());
     filePath = path;
+    savedDocument = json();
     dirty = false;
 }
 void Model::load(const QString &path) {

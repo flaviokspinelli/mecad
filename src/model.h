@@ -21,9 +21,11 @@ struct Triangle {
 };
 class Model {
   public:
+    Model();
     std::vector<Feature> features;
     QString filePath;
     bool dirty = false;
+    void markUnsaved();
     QString add(QString type, QJsonObject p, QString name = {});
     void edit(const QString &id, QJsonObject p, const QString &name);
     void remove(const QString &id);
@@ -58,6 +60,7 @@ class Model {
     static QString facePlane(const TopoDS_Shape &shape, int index);
 
   private:
+    QJsonObject savedDocument;
     std::vector<QJsonObject> past, future;
     void checkpoint(const QJsonObject &before);
     void restore(const QJsonObject &root);

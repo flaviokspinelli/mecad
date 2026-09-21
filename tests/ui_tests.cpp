@@ -5,6 +5,7 @@
 #include <QFile>
 #include <QMouseEvent>
 #include <QMessageBox>
+#include <QInputDialog>
 #include <QPushButton>
 #include <QSurfaceFormat>
 #include <QTemporaryDir>
@@ -13,6 +14,42 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void isolatedRecoveryDialog() {
+        QTemporaryDir directory; QVERIFY(directory.isValid());
+        const auto root = directory.filePath("recoveries");
+        const auto originalPath = directory.filePath("original.mcad");
+        QJsonObject expected;
+        {
+            RecoveryStore writer(root);
+            Model source;
+            auto id = source.add("box", {{"w",10},{"h",10},{"d",10}});
+            source.save(originalPath);
+            source.edit(id, {{"w",20},{"h",10},{"d",10}}, "Changed");
+            expected = source.json(); writer.write(source);
+        }
+        Window window(root, false);
+        window.show(); QVERIFY(QTest::qWaitForWindowExposed(&window));
+        const auto empty = window.model.json();
+        QTimer::singleShot(100, [&] {
+            for (auto *dialog : window.findChildren<QInputDialog *>()) dialog->reject();
+        });
+        window.findChild<QAction *>("recover")->trigger();
+        QCOMPARE(window.model.json(), empty);
+        QCOMPARE(QDir(root).entryList({"*.json"},QDir::Files).size(),1);
+        QTimer::singleShot(100, [&] {
+            for (auto *dialog : window.findChildren<QInputDialog *>()) dialog->accept();
+        });
+        window.findChild<QAction *>("recover")->trigger();
+        QCOMPARE(window.model.json(),expected);
+        QVERIFY(window.model.dirty); QVERIFY(window.model.filePath.isEmpty());
+        Model original; original.load(originalPath);
+        QVERIFY(std::abs(Model::volume(original.features.front().shape)-1000)<.001);
+        QCOMPARE(QDir(root).entryList({"*.json"},QDir::Files).size(),1);
+        // Simulate the persistence step, then exercise the normal clean-close path.
+        window.model.save(directory.filePath("recovered.mcad"));
+        QVERIFY(window.close());
+        QVERIFY(QDir(root).entryList({"*.json"},QDir::Files).empty());
+    }
     void selectedEdgeFilletAndMeasurement() {
         Window window;
         auto body = window.model.add("box", {{"w",30},{"h",30},{"d",10}});
