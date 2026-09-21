@@ -16,6 +16,22 @@ class Viewport : public QOpenGLWidget, protected QOpenGLFunctions {
     ~Viewport();
     QString selected, plane = "XY", tool;
     bool sketchMode = false, snap = true, light = false;
+    bool showEdges = true;
+    QString navigationMode;
+    bool choosingPlane = false, handleActive = false;
+    QVector3D handleOrigin, handleAxis;
+    double handleDistance = 10;
+    bool moveHandleActive = false;
+    int moveAxis = 0;
+    double moveHandleLength = 25;
+    QVector3D moveDistances;
+    std::function<void(int, double)> onMoveDistance;
+    QVector3D moveHandleTip(int axis) const;
+    std::function<void(QString, double)> onPlaneChosen;
+    std::function<void(double)> onHandleDistance;
+    std::function<void()> onCancelCommand;
+    std::function<void()> onAcceptCommand;
+    void setModel(Model *m);
     double planeOffset = 0;
     std::function<void(QString)> onSelect;
     std::function<void(QJsonObject)> onProfile;
@@ -28,6 +44,7 @@ class Viewport : public QOpenGLWidget, protected QOpenGLFunctions {
     QPointF planeAt(QPointF pixel) const;
     void finishPolyline(bool close);
     void paintOverlay(QPainter &p);
+    void zoomBy(float factor);
 
   protected:
     void initializeGL() override;
@@ -53,6 +70,9 @@ class Viewport : public QOpenGLWidget, protected QOpenGLFunctions {
     float yaw = 45, pitch = 35, span = 150;
     QPointF last, pressed, cursor;
     QVector<QPointF> draft;
+    QVector<QPair<QString, QPolygonF>> cubeFaces;
+    QVector<QPair<QString, QPolygonF>> planeRegions;
+    bool draggingHandle = false;
     QMatrix4x4 matrix() const;
     void ray(QPointF p, QVector3D &origin, QVector3D &direction) const;
     QString pick(QPointF p) const;

@@ -1,6 +1,7 @@
 #pragma once
 #include "model.h"
 #include "viewport.h"
+#include <QDialog>
 #include <QDockWidget>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
@@ -8,6 +9,7 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <QMainWindow>
+#include <QPointer>
 #include <QTabBar>
 #include <QTimer>
 #include <QTreeWidget>
@@ -23,12 +25,15 @@ class Window : public QMainWindow {
 
   protected:
     void closeEvent(QCloseEvent *) override;
+    bool eventFilter(QObject *, QEvent *) override;
 
   private:
     Viewport *canvas;
     QTreeWidget *tree;
     QListWidget *timeline;
     QDockWidget *properties;
+    QDockWidget *browser;
+    QWidget *navigation;
     QWidget *propertyBody;
     QFormLayout *propertyForm;
     QLineEdit *featureName;
@@ -39,10 +44,14 @@ class Window : public QMainWindow {
     QMap<QString, QDoubleSpinBox *> fields;
     QMap<QString, QAction *> commands;
     bool refreshing = false;
+    QPointer<QDialog> activeCommand;
+    std::function<void(QString)> commandSelection;
+    QString pendingSketchTool = "rectangle";
     void run(const std::function<void()> &fn);
     void refresh(bool fit = false);
     void select(const QString &id);
     void buildRibbon();
+    void positionPanels();
     void buildProperties();
     void applyProperties();
     void primitive(const QString &type);

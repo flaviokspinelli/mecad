@@ -1,13 +1,17 @@
-# Guia rápido — MecaCAD 0.1
+# Guia rápido — MecaCAD 0.2
 
 ## Primeira peça
 
 1. Clique em **Create Sketch**, no canto esquerdo da barra de criação.
-2. Escolha **XY — Top**, offset zero, e confirme.
+2. Clique no plano **XY**, **XZ** ou **YZ** exibido na área 3D. Também é possível
+   clicar em uma face plana alinhada a esses planos; seu offset será usado.
 3. A ferramenta de retângulo começa ativa. Clique em dois cantos na área de desenho.
-4. No painel da direita, altere **Width**, **Height**, **X** e **Y**, e clique em **Apply**.
+4. Se precisar de medidas exatas, selecione o perfil e pressione **D**. Ajuste as
+   dimensões e clique em **Apply**. Isso é opcional; selecionar não abre o painel.
 5. Clique em **Finish Sketch** no lado direito da barra.
-6. Clique em **Extrude** ou pressione **E**. Escolha o sketch, a distância e **New Body**.
+6. Selecione o interior do perfil, pressione **E** e arraste a seta azul para dar
+   altura. A peça aparece em prévia. **Enter** confirma; **Esc** cancela. A distância
+   exata também pode ser digitada no pequeno painel da operação.
 7. Salve com **File → Save**. No Mac, use **⌘S**.
 
 Para criar por números sem desenhar primeiro, use **Create → Create by dimensions…**
@@ -35,7 +39,11 @@ estão desabilitadas. O nome **MecaCAD** identifica um aplicativo independente.
 
 | Ação | Controle |
 | --- | --- |
-| Selecionar corpo ou contorno de sketch | Clique esquerdo |
+| Selecionar corpo, interior ou contorno de sketch | Clique esquerdo |
+| Extrudar com prévia | E, arrastar a seta azul, Enter |
+| Mover com prévia | M, arrastar uma seta X/Y/Z, Enter |
+| Cancelar prévia sem gravar uma operação | Esc |
+| Trocar vista | Clique em uma face do cubo no canto superior direito |
 | Pan | Arrastar com botão central |
 | Órbita | Shift + arrastar com botão central |
 | Zoom | Roda do mouse |
@@ -67,6 +75,8 @@ podem ser exportados em DXF, mas não extrudados como sólidos.
 O snap arredonda as coordenadas ao milímetro; desative **Snap 1 mm** para desenho
 livre. Para precisão final, digite os valores no painel. A grade visual adapta o
 espaçamento ao zoom e não altera a unidade dos parâmetros.
+O controle de snap está no menu de grade da barra de navegação inferior.
+Os manipuladores de extrusão e movimento arredondam a 0,1 mm quando o snap está ativo.
 
 | Plano | U | V | Normal positiva / offset |
 | --- | --- | --- | --- |
@@ -91,11 +101,15 @@ arestas; diminua o raio se a geometria não comportar o valor escolhido.
 
 Mover/copy usa rotação em torno da origem global, seguida da translação. A opção
 **Create Copy** preserva o corpo original. A visibilidade é controlada no Browser.
+Pressione **M** e arraste as setas coloridas para transladar. O botão **Precise
+values / rotation** expande as medidas e os controles numéricos de rotação.
+Durante a prévia você pode continuar orbitando, aproximando e deslocando a vista.
+A operação só entra no histórico ao confirmar; Escape descarta a prévia.
 
 ## Editar, salvar e recuperar
 
-Escolha o sketch ou operação no Browser/History, mude seus parâmetros e clique
-em Apply. As operações seguintes são recalculadas. Uma edição inválida preserva
+Dê duplo clique na operação no histórico, ou use **Edit Feature** no menu do
+Browser, mude seus parâmetros e clique em Apply. As operações seguintes são recalculadas. Uma edição inválida preserva
 o documento anterior. Não é possível excluir uma operação ainda referenciada:
 remova primeiro suas dependentes.
 

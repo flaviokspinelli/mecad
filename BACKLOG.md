@@ -1,6 +1,12 @@
 # Backlog do MecaCAD
 
-## Estado após a entrega 0.1
+## Estado após a entrega 0.2
+
+Revisão de interface e interação: tema escuro compacto, Browser sobre o canvas,
+cubo clicável, histórico por ícones, plano por clique, extrusão e translação por
+arraste com prévia cancelável. Veja [ENTREGA-0.2.md](docs/ENTREGA-0.2.md).
+Próximas prioridades de mouse: arrastar vértices e cotas, anéis de rotação,
+seleção individual de faces/arestas, furo por clique e menu radial.
 
 A primeira implementação está em C++20, Qt Widgets e Open CASCADE, compilada e
 testada no macOS Apple Silicon. O plano Windows inicial não havia sido confirmado;
@@ -57,7 +63,7 @@ testes básicos automaticamente.
 - [x] **P0** Criar histórico paramétrico na parte inferior.
 - [x] **P0** Implementar órbita, pan e zoom.
 - [x] **P0** Implementar seleção e realce visual (corpos e contornos de sketches).
-- [ ] **P0** Criar cubo de orientação e vistas padrão.
+- [x] **P0** Criar cubo de orientação e vistas padrão.
 - [ ] **P1** Implementar temas escuro e claro.
 - [ ] **P1** Criar atalhos configuráveis.
 - [x] **P1** Criar menus contextuais próximos ao cursor (menu radial pendente).

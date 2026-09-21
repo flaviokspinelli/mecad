@@ -8,9 +8,11 @@
 #include <QDesktopServices>
 #include <QDialogButtonBox>
 #include <QDir>
+#include <QEventLoop>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QHBoxLayout>
+#include <QHeaderView>
 #include <QInputDialog>
 #include <QJsonDocument>
 #include <QMenu>
@@ -48,91 +50,269 @@ QString symbol(const QString &s) {
     return m.value(s, "◇");
 }
 QIcon icon(const QString &kind) {
-    if (kind == "new")
-        return qApp->style()->standardIcon(QStyle::SP_FileIcon);
-    if (kind == "open")
-        return qApp->style()->standardIcon(QStyle::SP_DirOpenIcon);
-    if (kind == "save" || kind == "saveas")
-        return qApp->style()->standardIcon(QStyle::SP_DialogSaveButton);
-    if (kind == "undo")
-        return qApp->style()->standardIcon(QStyle::SP_ArrowBack);
-    if (kind == "redo")
-        return qApp->style()->standardIcon(QStyle::SP_ArrowForward);
     QPixmap pix(64, 64);
     pix.fill(Qt::transparent);
     QPainter p(&pix);
     p.setRenderHint(QPainter::Antialiasing);
-    p.setPen(QPen(QColor("#38576c"), 2.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-    p.setBrush(QColor("#d4e6ed"));
-    if (kind == "sketch" || kind == "rectangle" || kind == "polyline" || kind == "arc") {
-        p.drawPolygon(QPolygonF{{10, 40}, {33, 49}, {54, 25}, {30, 17}});
-        p.setPen(QPen(QColor("#dc873a"), 5, Qt::SolidLine, Qt::RoundCap));
-        p.drawLine(25, 33, 46, 10);
-        p.setPen(QPen(QColor("#38576c"), 2));
-        p.drawLine(24, 33, 22, 40);
-    } else if (kind == "circle" || kind == "hole" || kind == "sphere") {
-        p.drawEllipse(QRectF(12, 12, 40, 40));
+    const QColor ink("#d2dce6"), blue("#72d1fa"), side("#3e9ccc"), top("#edf2f6"), muted("#9babbd");
+    p.setPen(QPen(ink, 2, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    auto line = [&](QPointF a, QPointF b) { p.drawLine(a, b); };
+    auto cube = [&](double x, double y, double w, double h) {
+        QPolygonF topFace{{x, y + 9}, {x + 9, y}, {x + w, y}, {x + w - 9, y + 9}};
+        QPolygonF front{{x, y + 9}, {x + w - 9, y + 9}, {x + w - 9, y + h}, {x, y + h}};
+        QPolygonF right{{x + w - 9, y + 9}, {x + w, y}, {x + w, y + h - 9}, {x + w - 9, y + h}};
+        p.setPen(Qt::NoPen);
+        p.setBrush(top);
+        p.drawPolygon(topFace);
+        p.setBrush(blue);
+        p.drawPolygon(front);
+        p.setBrush(side);
+        p.drawPolygon(right);
+        p.setPen(QPen(ink, 1));
+    };
+    if (kind == "eye" || kind == "hidden") {
+        p.setBrush(ink);
+        QPainterPath path;
+        path.moveTo(6, 32);
+        path.quadTo(32, 7, 58, 32);
+        path.quadTo(32, 57, 6, 32);
+        p.drawPath(path);
+        p.setBrush(QColor("#394957"));
+        p.drawEllipse(QPointF(32, 32), 9, 9);
+        if (kind == "hidden") {
+            p.setPen(QPen(QColor("#364353"), 9));
+            line({8, 8}, {56, 56});
+            p.setPen(QPen(muted, 4));
+            line({8, 8}, {56, 56});
+        }
+    } else if (kind == "folder" || kind == "open") {
+        p.setBrush(muted);
+        p.drawPolygon(QPolygonF{{6, 18}, {26, 18}, {31, 24}, {57, 24}, {57, 52}, {6, 52}});
+    } else if (kind == "new") {
+        p.setBrush(muted);
+        p.drawPolygon(QPolygonF{{16, 7}, {39, 7}, {50, 19}, {50, 57}, {16, 57}});
+        p.setBrush(top);
+        p.drawPolygon(QPolygonF{{39, 7}, {39, 19}, {50, 19}});
+    } else if (kind == "save" || kind == "saveas") {
+        p.setBrush(muted);
+        p.drawRect(11, 8, 43, 47);
+        p.setBrush(QColor("#364353"));
+        p.drawRect(19, 8, 25, 18);
+        p.drawRect(19, 36, 27, 19);
+        p.setPen(QPen(ink, 3));
+        line({38, 11}, {38, 22});
+    } else if (kind == "undo" || kind == "redo") {
+        if (kind == "redo") {
+            p.translate(64, 0);
+            p.scale(-1, 1);
+        }
+        p.setPen(QPen(muted, 5));
         p.setBrush(Qt::NoBrush);
-        p.drawEllipse(QRectF(kind == "hole" ? 22 : 25, kind == "hole" ? 22 : 12, kind == "hole" ? 20 : 14,
-                             kind == "hole" ? 20 : 40));
+        QPainterPath path;
+        path.moveTo(51, 46);
+        path.cubicTo(54, 17, 27, 17, 13, 24);
+        p.drawPath(path);
+        line({13, 24}, {23, 11});
+        line({13, 24}, {28, 29});
+    } else if (kind == "home") {
+        p.setBrush(muted);
+        p.drawPolygon(QPolygonF{{6, 31},
+                                {32, 8},
+                                {58, 31},
+                                {50, 31},
+                                {50, 55},
+                                {37, 55},
+                                {37, 40},
+                                {27, 40},
+                                {27, 55},
+                                {14, 55},
+                                {14, 31}});
+    } else if (kind == "grid" || kind == "configure") {
+        p.setBrush(muted);
+        for (int i = 0; i < 3; ++i)
+            for (int j = 0; j < 3; ++j)
+                p.drawRect(9 + i * 16, 9 + j * 16, 11, 11);
+    } else if (kind == "gear") {
+        p.setPen(QPen(muted, 8));
+        p.setBrush(Qt::NoBrush);
+        p.drawEllipse(QPointF(32, 32), 16, 16);
+        for (int i = 0; i < 8; ++i) {
+            p.save();
+            p.translate(32, 32);
+            p.rotate(i * 45);
+            line({0, 18}, {0, 25});
+            p.restore();
+        }
+    } else if (kind == "sketch" || kind == "exact") {
+        p.setBrush(Qt::NoBrush);
+        p.setPen(QPen(muted, 2, Qt::DashLine));
+        p.drawRect(7, 8, 40, 43);
+        p.setPen(QPen(top, 2));
+        line({15, 42}, {38, 42});
+        line({38, 42}, {38, 17});
+        p.setPen(QPen(QColor("#58c89a"), 6));
+        line({47, 36}, {47, 60});
+        line({35, 48}, {59, 48});
+    } else if (kind == "rectangle") {
+        p.setBrush(Qt::NoBrush);
+        p.setPen(QPen(blue, 3));
+        p.drawRect(9, 16, 45, 32);
+        for (auto q : {QPointF(9, 16), QPointF(54, 48)}) {
+            p.setBrush(top);
+            p.drawRect(QRectF(q - QPointF(3, 3), QSizeF(6, 6)));
+        }
+    } else if (kind == "polyline" || kind == "trim") {
+        p.setPen(QPen(blue, 3));
+        line({9, 49}, {25, 15});
+        line({25, 15}, {55, 35});
+        p.setBrush(top);
+        for (auto q : {QPointF(9, 49), QPointF(25, 15), QPointF(55, 35)})
+            p.drawRect(QRectF(q - QPointF(3, 3), QSizeF(6, 6)));
+    } else if (kind == "circle" || kind == "sphere") {
+        p.setBrush(kind == "sphere" ? blue : QColor(Qt::transparent));
+        p.setPen(QPen(ink, 3));
+        p.drawEllipse(9, 9, 46, 46);
+        p.setPen(QPen(side, 2));
+        p.drawEllipse(23, 9, 18, 46);
+    } else if (kind == "arc") {
+        p.setPen(QPen(blue, 3));
+        p.setBrush(Qt::NoBrush);
+        p.drawArc(8, 9, 47, 46, 15 * 16, 150 * 16);
     } else if (kind == "measure" || kind == "dimension") {
-        p.save();
-        p.translate(32, 32);
-        p.rotate(-35);
-        p.drawRoundedRect(QRectF(-25, -9, 50, 18), 2, 2);
-        for (int x = -19; x < 22; x += 7)
-            p.drawLine(x, -9, x, x % 2 ? -1 : 3);
-        p.restore();
+        p.setPen(QPen(QColor("#e6bd74"), 3));
+        line({5, 40}, {58, 40});
+        for (int x = 6; x < 59; x += 7)
+            line({double(x), 40}, {double(x), double(x % 2 ? 30 : 25)});
+        p.setPen(QPen(muted, 2));
+        line({7, 18}, {7, 52});
+        line({57, 18}, {57, 52});
     } else if (kind == "fillet") {
-        p.drawPath([] {
-            QPainterPath path;
-            path.moveTo(12, 51);
-            path.lineTo(12, 32);
-            path.quadTo(12, 12, 32, 12);
-            path.lineTo(51, 12);
-            path.lineTo(51, 51);
-            path.closeSubpath();
-            return path;
-        }());
-        p.setPen(QPen(QColor("#dc873a"), 3));
-        p.drawArc(QRectF(12, 12, 40, 40), 90 * 16, 90 * 16);
+        p.setPen(Qt::NoPen);
+        p.setBrush(top);
+        QPainterPath path;
+        path.moveTo(8, 53);
+        path.lineTo(8, 28);
+        path.quadTo(8, 9, 28, 9);
+        path.lineTo(50, 9);
+        path.lineTo(57, 16);
+        path.lineTo(57, 53);
+        path.closeSubpath();
+        p.drawPath(path);
+        p.setBrush(blue);
+        QPainterPath edge;
+        edge.moveTo(8, 28);
+        edge.quadTo(8, 9, 28, 9);
+        edge.lineTo(35, 16);
+        edge.quadTo(16, 16, 16, 35);
+        edge.closeSubpath();
+        p.drawPath(edge);
     } else if (kind == "revolve") {
-        p.drawRect(QRectF(29, 19, 12, 29));
+        p.setPen(QPen(top, 9));
         p.setBrush(Qt::NoBrush);
-        p.setPen(QPen(QColor("#398caf"), 3));
-        p.drawArc(QRectF(10, 8, 44, 44), 30 * 16, 300 * 16);
-        p.drawLine(52, 21, 55, 9);
-        p.drawLine(52, 21, 40, 19);
-    } else if (kind == "fit") {
-        p.setBrush(Qt::NoBrush);
-        p.drawRect(QRectF(19, 19, 26, 26));
-        for (int x : {10, 54})
-            for (int y : {10, 54}) {
-                p.drawLine(x, y, x + (x == 10 ? 10 : -10), y);
-                p.drawLine(x, y, x, y + (y == 10 ? 10 : -10));
-            }
-    } else if (kind == "transform" || kind == "copy") {
-        p.setPen(QPen(QColor("#398caf"), 3));
-        p.drawLine(12, 49, 51, 10);
-        p.drawLine(51, 10, 51, 27);
-        p.drawLine(51, 10, 34, 10);
-        p.drawLine(12, 49, 12, 34);
-        p.drawLine(12, 49, 27, 49);
+        p.drawArc(9, 12, 46, 30, 0, 180 * 16);
+        p.setPen(QPen(blue, 14));
+        p.drawArc(9, 20, 46, 30, 0, 180 * 16);
+        p.setBrush(side);
+        p.setPen(Qt::NoPen);
+        p.drawPolygon(QPolygonF{{8, 32}, {22, 26}, {22, 48}, {8, 42}});
     } else if (kind == "cylinder") {
-        p.drawRect(QRectF(15, 19, 34, 29));
-        p.drawEllipse(QRectF(15, 39, 34, 15));
-        p.drawEllipse(QRectF(15, 11, 34, 15));
+        p.setPen(Qt::NoPen);
+        p.setBrush(blue);
+        p.drawRect(12, 17, 40, 31);
+        p.drawEllipse(12, 39, 40, 17);
+        p.setBrush(top);
+        p.drawEllipse(12, 9, 40, 17);
+    } else if (kind == "transform" || kind == "pan") {
+        p.setPen(QPen(top, 4));
+        line({32, 5}, {32, 59});
+        line({5, 32}, {59, 32});
+        for (int a = 0; a < 4; ++a) {
+            p.save();
+            p.translate(32, 32);
+            p.rotate(90 * a);
+            line({0, -27}, {-7, -19});
+            line({0, -27}, {7, -19});
+            p.restore();
+        }
+    } else if (kind == "orbit") {
+        p.setBrush(Qt::NoBrush);
+        p.setPen(QPen(ink, 3));
+        p.drawEllipse(7, 21, 50, 23);
+        p.drawEllipse(24, 6, 16, 51);
+        line({51, 21}, {59, 22});
+    } else if (kind == "fit" || kind == "search") {
+        p.setBrush(Qt::NoBrush);
+        p.setPen(QPen(kind == "search" ? QColor("#62c895") : ink, 2, Qt::DashLine));
+        p.drawRect(8, 8, 42, 41);
+        if (kind == "search") {
+            p.setBrush(top);
+            p.setPen(Qt::NoPen);
+            p.drawPolygon(QPolygonF{{30, 27}, {53, 42}, {43, 45}, {48, 58}, {41, 61}, {35, 47}, {28, 54}});
+        } else {
+            p.setPen(QPen(ink, 2));
+            p.drawRect(19, 18, 22, 22);
+        }
+    } else if (kind == "zoom") {
+        p.setBrush(Qt::NoBrush);
+        p.setPen(QPen(ink, 4));
+        p.drawEllipse(8, 7, 33, 33);
+        line({36, 37}, {56, 57});
+    } else if (kind == "display") {
+        p.setBrush(Qt::NoBrush);
+        p.setPen(QPen(ink, 3));
+        p.drawRect(6, 9, 52, 35);
+        line({32, 44}, {32, 55});
+        line({19, 56}, {45, 56});
+    } else if (kind == "plane") {
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor("#f2b77c"));
+        p.drawPolygon(QPolygonF{{30, 7}, {55, 22}, {35, 53}, {10, 38}});
+        p.setBrush(QColor("#82d2bf"));
+        p.drawPolygon(QPolygonF{{10, 20}, {34, 6}, {34, 52}, {10, 59}});
+    } else if (kind == "joint") {
+        p.setPen(QPen(ink, 6));
+        line({14, 48}, {46, 16});
+        p.setBrush(Qt::NoBrush);
+        p.drawEllipse(5, 35, 21, 21);
+        p.drawEllipse(36, 6, 21, 21);
+    } else if (kind == "component") {
+        cube(5, 25, 29, 32);
+        cube(29, 7, 29, 32);
+    } else if (kind == "copy" || kind == "boolean" || kind == "cut") {
+        cube(5, 20, 34, 36);
+        cube(26, 6, 33, 37);
+        if (kind == "cut") {
+            p.setPen(Qt::NoPen);
+            p.setBrush(QColor("#364353"));
+            p.drawRect(23, 30, 18, 20);
+        }
+    } else if (kind == "hole") {
+        cube(7, 5, 48, 52);
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor("#364353"));
+        p.drawEllipse(17, 26, 23, 23);
+        p.setBrush(side);
+        p.drawEllipse(20, 27, 15, 21);
+    } else if (kind == "finish") {
+        p.setPen(QPen(QColor("#70cba4"), 7));
+        line({9, 34}, {25, 49});
+        line({25, 49}, {55, 14});
+    } else if (kind == "import") {
+        cube(9, 25, 31, 32);
+        p.setPen(QPen(blue, 5));
+        line({45, 5}, {45, 33});
+        line({45, 33}, {36, 24});
+        line({45, 33}, {54, 24});
+    } else if (kind == "parallel" || kind == "constraint" || kind == "offset" || kind == "tangent") {
+        p.setPen(QPen(blue, 4));
+        line({15, 49}, {31, 12});
+        line({33, 49}, {49, 12});
     } else {
-        p.drawPolygon(QPolygonF{{12, 22}, {32, 11}, {52, 22}, {52, 45}, {32, 56}, {12, 45}});
-        p.setBrush(QColor("#a9c9d7"));
-        p.drawPolygon(QPolygonF{{32, 33}, {52, 22}, {52, 45}, {32, 56}});
-        p.drawLine(12, 22, 32, 33);
-        p.drawLine(32, 33, 32, 56);
+        cube(7, 5, 48, 53);
         if (kind == "extrude") {
-            p.setPen(QPen(QColor("#dc873a"), 3));
-            p.drawLine(32, 27, 32, 4);
-            p.drawLine(32, 4, 25, 11);
-            p.drawLine(32, 4, 39, 11);
+            p.setPen(QPen(top, 3));
+            line({59, 48}, {59, 6});
+            line({59, 6}, {52, 14});
         }
     }
     return QIcon(pix);
@@ -144,10 +324,19 @@ class Form : public QDialog {
     QMap<QString, QComboBox *> combos;
     Form(QWidget *parent, QString title) : QDialog(parent) {
         setWindowTitle(title);
-        setMinimumWidth(340);
+        if (auto *host = parent->findChild<Viewport *>()) {
+            setParent(host);
+            setWindowFlags(Qt::Widget);
+        } else
+            setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
+        setFixedWidth(290);
         layout = new QFormLayout(this);
-        layout->setContentsMargins(22, 20, 22, 20);
-        layout->setSpacing(13);
+        layout->setContentsMargins(12, 10, 12, 12);
+        layout->setSpacing(8);
+        auto *heading = new QLabel("−   " + title.toUpper());
+        heading->setStyleSheet(
+            "color:#dbe5ef;border-bottom:1px solid #526374;padding-bottom:7px;font-size:11px;");
+        layout->addRow(heading);
     }
     void number(QString key, QString label, double val, double min = -100000, double max = 100000,
                 QString unit = " mm") {
@@ -174,7 +363,7 @@ class Form : public QDialog {
     void note(QString text) {
         auto *l = new QLabel(text);
         l->setWordWrap(true);
-        l->setStyleSheet("color:#64748b;font-size:12px;");
+        l->setStyleSheet("color:#aebfce;font-size:11px;");
         layout->addRow(l);
     }
     QJsonObject values() const {
@@ -191,10 +380,15 @@ class Form : public QDialog {
         connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
         layout->addRow(buttons);
         if (parentWidget()) {
-            auto r = parentWidget()->geometry();
-            move(r.right() - width() - 35, r.top() + 180);
+            move(parentWidget()->width() - width() - 12, 116);
         }
-        return exec() == Accepted;
+        QEventLoop loop;
+        connect(this, &QDialog::finished, &loop, &QEventLoop::quit);
+        setWindowModality(Qt::NonModal);
+        show();
+        raise();
+        loop.exec();
+        return result() == Accepted;
     }
 };
 QList<QPair<QString, QString>> planes = {{"XY — Top", "XY"}, {"XZ — Front", "XZ"}, {"YZ — Right", "YZ"}};
@@ -209,7 +403,19 @@ QAction *Window::command(QString key, QString label, QString shortcut, std::func
     a->setObjectName(key);
     if (!shortcut.isEmpty())
         a->setShortcut(QKeySequence(shortcut));
-    connect(a, &QAction::triggered, this, [this, fn] { run(fn); });
+    connect(a, &QAction::triggered, this, [this, fn, key] {
+        if (activeCommand && key != "fit") {
+            activeCommand->raise();
+            return;
+        }
+        if (key != "fit")
+            for (auto *dialog : findChildren<QDialog *>())
+                if (dialog->isVisible()) {
+                    dialog->raise();
+                    return;
+                }
+        run(fn);
+    });
     addAction(a);
     commands[key] = a;
     return a;
@@ -222,23 +428,46 @@ Window::Window() {
     setWindowTitle("MecaCAD");
     qApp->setStyle("Fusion");
     QPalette palette;
-    palette.setColor(QPalette::Window, QColor("#f3f5f7"));
-    palette.setColor(QPalette::WindowText, QColor("#243548"));
-    palette.setColor(QPalette::Base, Qt::white);
-    palette.setColor(QPalette::Text, QColor("#243548"));
-    palette.setColor(QPalette::Button, QColor("#edf1f5"));
-    palette.setColor(QPalette::ButtonText, QColor("#243548"));
-    palette.setColor(QPalette::Highlight, QColor("#258bb8"));
+    palette.setColor(QPalette::Window, QColor("#364353"));
+    palette.setColor(QPalette::WindowText, QColor("#d9e0e8"));
+    palette.setColor(QPalette::Base, QColor("#303d4b"));
+    palette.setColor(QPalette::Text, QColor("#d9e0e8"));
+    palette.setColor(QPalette::Button, QColor("#364353"));
+    palette.setColor(QPalette::ButtonText, QColor("#d9e0e8"));
+    palette.setColor(QPalette::Highlight, QColor("#357899"));
     palette.setColor(QPalette::HighlightedText, Qt::white);
     qApp->setPalette(palette);
     qApp->setStyleSheet(R"(
-        QMainWindow,QDialog{background:#f3f5f7;color:#243548;} QWidget{font-family:'Helvetica Neue','Segoe UI';font-size:13px;}
-        QMenuBar,QMenu,QToolBar{background:#fafbfc;color:#243548;} QMenu{border:1px solid #c8d1dc;padding:6px;} QMenu::item{padding:8px 32px 8px 14px;} QMenu::item:selected{background:#dcecf6;} QMenu::item:disabled{color:#a3aeb9;}
-        QToolBar{border:0;spacing:8px;padding:5px;} QToolButton{border:1px solid transparent;border-radius:5px;padding:5px;color:#293f50;} QToolButton:hover{background:#e2edf4;border-color:#c5dbe9;} QToolButton:pressed{background:#c7e2f1;} QToolButton::menu-indicator{width:0;}
-        QTabBar::tab{padding:11px 20px;color:#68798b;background:transparent;border-bottom:3px solid transparent;font-size:11px;font-weight:600;} QTabBar::tab:selected{color:#217ca9;border-bottom:3px solid #2589b7;} QTabBar::tab:disabled{color:#a1adbb;}
-        QDockWidget{font-weight:600;} QDockWidget::title{background:#e5eaf0;padding:9px;color:#42546b;} QTreeWidget{background:#f4f6f9;border:0;outline:0;color:#34475c;padding:7px;font-size:12px;} QTreeWidget::item{height:29px;} QTreeWidget::item:selected{background:#d3e9f6;color:#173c58;border-radius:4px;}
-        QLineEdit,QDoubleSpinBox,QComboBox{background:white;border:1px solid #cbd5df;border-radius:4px;padding:7px;color:#263a50;min-height:17px;} QLineEdit:focus,QDoubleSpinBox:focus,QComboBox:focus{border-color:#268bb8;} QPushButton{background:#e6edf3;border:1px solid #cbd5df;border-radius:4px;padding:8px 13px;color:#2c4359;} QPushButton:hover{background:#d6e7f2;} QPushButton:default{background:#2489b6;color:white;border-color:#2489b6;}
-        QStatusBar{background:#edf1f5;color:#5d7186;border-top:1px solid #d2dbe4;font-size:11px;} QListWidget{background:#f0f3f7;border:0;outline:0;} QListWidget::item{border:1px solid #ced9e4;border-radius:5px;background:#fafcfe;margin:5px;padding:4px;color:#536c81;} QListWidget::item:selected{background:#d5ebf7;border-color:#318fb9;color:#174c6b;} QScrollBar:horizontal{height:9px;background:#e2e8f0;} QScrollBar::handle:horizontal{background:#aabac9;border-radius:4px;min-width:30px;}
+        QWidget{font-family:'Helvetica Neue';font-size:12px;color:#dce3eb;}
+        QMainWindow,QDialog{background:#364353;}
+        QDialog{border:1px solid #566879;}
+        QMenuBar,QMenu{background:#303d4c;color:#e0e6ed;} QMenu{border:1px solid #526576;padding:4px;}
+        QMenu::item{padding:6px 30px 6px 12px;} QMenu::item:selected{background:#42667f;} QMenu::item:disabled{color:#8292a3;}
+        QToolBar{border:0;spacing:2px;padding:0;background:#202b37;}
+        QToolButton{border:1px solid transparent;border-radius:0;padding:2px;color:#dce3eb;}
+        QToolButton:hover{background:#455e73;border-color:#708a9f;} QToolButton:pressed,QToolButton:checked{background:#345c75;border-color:#55b8e3;}
+        QToolButton::menu-indicator{width:0;}
+        QTabBar::tab{padding:3px 17px;color:#dce2e9;background:transparent;border:0;border-bottom:2px solid transparent;font-size:10px;font-weight:600;}
+        QTabBar::tab:selected{border-bottom:2px solid #d8e3ee;} QTabBar::tab:disabled{color:#a2adbb;}
+        QDockWidget{font-weight:500;background:transparent;} QDockWidget::title{background:#354353;padding:4px 8px;color:#d6dfe8;border:1px solid #49596a;font-size:11px;}
+        QTreeWidget{background:transparent;border:0;outline:0;color:#dae2ec;padding:2px 0;font-size:11px;}
+        QTreeWidget::item{height:21px;padding:0;} QTreeWidget::item:selected{background:#293747;color:#e5eef6;}
+        QTreeWidget::item:hover{background:#42566b;}
+        QLineEdit,QDoubleSpinBox,QComboBox{background:#293644;border:1px solid #526477;border-radius:0;padding:3px 5px;color:#e0e8f0;min-height:18px;selection-background-color:#367998;}
+        QLineEdit:focus,QDoubleSpinBox:focus,QComboBox:focus{border-color:#54bfea;}
+        QComboBox QAbstractItemView{background:#2d3d4d;color:#e1e9f2;selection-background-color:#44657f;}
+        QPushButton{background:#364353;border:1px solid #718499;border-radius:1px;padding:4px 12px;color:#e0e6ef;}
+        QPushButton:hover{background:#496379;} QPushButton:default{background:#34556d;border-color:#56aacf;}
+        QCheckBox{spacing:4px;} QScrollArea{border:0;background:#364353;}
+        QStatusBar{background:#364353;color:#99acbd;border:0;font-size:10px;min-height:0;}
+        QListWidget{background:transparent;border:0;outline:0;}
+        QListWidget::item{border:1px solid transparent;border-radius:0;background:transparent;margin:0;padding:1px;}
+        QListWidget::item:selected{background:#4c6d84;border-color:#62b8df;}
+        QListWidget::item:hover{background:#485b6c;}
+        QScrollBar:horizontal{height:5px;background:#354352;} QScrollBar::handle:horizontal{background:#6f8294;min-width:24px;}
+        QScrollBar:vertical{width:5px;background:#354352;} QScrollBar::handle:vertical{background:#6f8294;min-height:24px;}
+        QScrollBar::add-line,QScrollBar::sub-line{width:0;height:0;}
+        QToolTip{background:#24313f;color:#e2eaf3;border:1px solid #6c8499;padding:6px;}
     )");
     auto *file = menuBar()->addMenu("File");
     auto *edit = menuBar()->addMenu("Edit");
@@ -340,39 +569,69 @@ Window::Window() {
             this, "MecaCAD — Quick start",
             "1. Create Sketch → choose XY, XZ or YZ.\n2. Draw a rectangle (R), circle (C) or line (L).\n3. "
             "Select the sketch in the Browser; edit dimensions on the right.\n4. Finish Sketch → Extrude "
-            "(E).\n5. Save and use File → Export.\n\nMiddle drag: pan · Shift+middle drag: orbit · Scroll: zoom · F: "
+            "(E).\n5. Save and use File → Export.\n\nMiddle drag: pan · Shift+middle drag: orbit · Scroll: "
+            "zoom · F: "
             "fit\nLine: Enter finishes; Shift+Enter closes the profile.\n\nVersion 0.1: one profile per "
             "sketch; dimensions drive rectangles/circles. General sketch constraints, face attachment, "
             "assemblies and simulation are not yet available.");
     });
     auto *bar = addToolBar("Application");
+    bar->setObjectName("applicationToolbar");
     bar->setMovable(false);
-    bar->setIconSize({20, 20});
-    auto *brand = new QLabel("  MECA<span style='color:#238fb7'>CAD</span>  ");
-    brand->setStyleSheet("font-size:17px;font-weight:700;letter-spacing:1px;");
-    bar->addWidget(brand);
-    for (auto key : {"new", "open", "save", "undo", "redo"})
+    bar->setIconSize({16, 16});
+    bar->setFixedHeight(28);
+    auto *files = new QToolButton;
+    files->setIcon(icon("grid"));
+    files->setToolTip("File / projects");
+    files->setMenu(file);
+    files->setPopupMode(QToolButton::InstantPopup);
+    bar->addWidget(files);
+    for (auto key : {"new", "save", "undo", "redo"})
         bar->addAction(commands[key]);
-    bar->addSeparator();
+    auto *home = new QToolButton;
+    home->setIcon(icon("home"));
+    home->setToolTip("Open design");
+    connect(home, &QToolButton::clicked, commands["open"], &QAction::trigger);
+    bar->addWidget(home);
     documentTitle = new QLabel("Untitled");
-    documentTitle->setStyleSheet("padding:0 22px;color:#4b6177;");
+    documentTitle->setObjectName("documentTab");
+    documentTitle->setStyleSheet(
+        "background:#364353;padding:5px 28px;color:#e1e8ef;font-size:11px;font-weight:600;");
+    documentTitle->setMinimumWidth(380);
+    documentTitle->setMaximumWidth(640);
+    documentTitle->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     bar->addWidget(documentTitle);
-    auto *spacer = new QWidget;
-    spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    bar->addWidget(spacer);
-    auto *badge = new QLabel("LOCAL  ·  v0.1   ");
-    badge->setStyleSheet("font-size:10px;color:#72899e;font-weight:600;");
-    bar->addWidget(badge);
+    auto *newTab = new QToolButton;
+    newTab->setText("+");
+    newTab->setToolTip("New Design");
+    connect(newTab, &QToolButton::clicked, commands["new"], &QAction::trigger);
+    bar->addWidget(newTab);
+    auto *space = new QWidget;
+    space->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    bar->addWidget(space);
+    auto *local = new QLabel("MecaCAD   ·   Local   ");
+    local->setStyleSheet("color:#9badbf;font-size:10px;");
+    bar->addWidget(local);
+    auto *helpButton = new QToolButton;
+    helpButton->setText("?");
+    helpButton->setToolTip("Help");
+    helpButton->setMenu(help);
+    helpButton->setPopupMode(QToolButton::InstantPopup);
+    bar->addWidget(helpButton);
     auto *central = new QWidget;
     auto *layout = new QVBoxLayout(central);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
-    auto *tabrow = new QWidget;
-    auto *tablayout = new QHBoxLayout(tabrow);
-    tablayout->setContentsMargins(12, 0, 12, 0);
+    auto *header = new QWidget;
+    header->setObjectName("commandHeader");
+    header->setStyleSheet("#commandHeader{background:#364353;}");
+    auto *headerRow = new QHBoxLayout(header);
+    headerRow->setContentsMargins(10, 0, 6, 4);
+    headerRow->setSpacing(10);
     auto *workspace = new QToolButton;
-    workspace->setText("DESIGN  ▾");
-    workspace->setStyleSheet("font-size:12px;font-weight:600;padding:13px 15px;");
+    workspace->setText("DESIGN ▾");
+    workspace->setFixedSize(98, 54);
+    workspace->setStyleSheet("border:1px solid #73899e;border-radius:3px;font-size:11px;font-weight:600;");
     auto *workspaces = new QMenu(workspace);
     workspaces->addAction("Design");
     for (auto name : {"Render", "Animation", "Simulation", "Manufacture", "Drawing", "Electronics"}) {
@@ -381,101 +640,190 @@ Window::Window() {
     }
     workspace->setMenu(workspaces);
     workspace->setPopupMode(QToolButton::InstantPopup);
-    tablayout->addWidget(workspace);
+    headerRow->addWidget(workspace, 0, Qt::AlignBottom);
+    auto *toolsColumn = new QVBoxLayout;
+    toolsColumn->setContentsMargins(0, 0, 0, 0);
+    toolsColumn->setSpacing(0);
     tabs = new QTabBar;
-    for (auto title : {"SOLID", "SURFACE", "MESH", "SHEET METAL", "TOOLS"})
+    tabs->setObjectName("workspaceTabs");
+    tabs->setFixedHeight(22);
+    for (auto title : {"SOLID", "SURFACE", "MESH", "SHEET METAL", "PLASTIC", "MANAGE", "UTILITIES"})
         tabs->addTab(title);
-    for (int i = 1; i < 5; ++i)
+    for (int i = 1; i < tabs->count(); ++i)
         tabs->setTabEnabled(i, false);
-    tablayout->addWidget(tabs);
-    tablayout->addStretch();
-    layout->addWidget(tabrow);
+    toolsColumn->addWidget(tabs, 0, Qt::AlignLeft);
     ribbon = new QWidget;
     ribbon->setObjectName("ribbon");
-    ribbon->setStyleSheet("#ribbon{background:#fafbfc;border-bottom:1px solid #cdd8e3;}");
-    layout->addWidget(ribbon);
-    layout->removeWidget(tabrow);
-    layout->removeWidget(ribbon);
-    auto *header = new QWidget;
-    auto *headerLayout = new QVBoxLayout(header);
-    headerLayout->setContentsMargins(0, 0, 0, 0);
-    headerLayout->setSpacing(0);
-    headerLayout->addWidget(tabrow);
-    headerLayout->addWidget(ribbon);
+    ribbon->setFixedHeight(54);
+    toolsColumn->addWidget(ribbon);
+    headerRow->addLayout(toolsColumn, 1);
     header->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     addToolBarBreak();
     auto *headerBar = addToolBar("Design commands");
     headerBar->setObjectName("designToolbar");
     headerBar->setMovable(false);
-    headerBar->setStyleSheet("QToolBar{padding:0;border:0;}");
+    headerBar->setStyleSheet("QToolBar{padding:0;border:0;background:#364353;}");
     headerBar->addWidget(header);
     canvas = new Viewport(&model);
     layout->addWidget(canvas, 1);
-    auto *navigation = new QWidget;
-    navigation->setStyleSheet("background:#e7edf3;");
+    navigation = new QWidget(canvas);
+    navigation->setObjectName("navigationOverlay");
+    navigation->setStyleSheet("#navigationOverlay{background:rgba(48,62,78,190);border-radius:3px;}");
     auto *nav = new QHBoxLayout(navigation);
-    nav->setContentsMargins(8, 2, 8, 2);
-    nav->addStretch();
-    for (auto name : {"iso", "top", "front", "right"}) {
+    nav->setContentsMargins(5, 1, 5, 1);
+    nav->setSpacing(0);
+    auto navButton = [&](QString glyph, QString tip, std::function<void()> fn) {
         auto *b = new QToolButton;
-        b->setText(QString(name).toUpper());
-        connect(b, &QToolButton::clicked, this, [this, name] { canvas->view(name); });
+        b->setIcon(icon(glyph));
+        b->setIconSize({18, 18});
+        b->setFixedSize(28, 25);
+        b->setToolTip(tip);
+        connect(b, &QToolButton::clicked, this, fn);
         nav->addWidget(b);
-    }
-    auto *fit = new QToolButton;
-    fit->setDefaultAction(commands["fit"]);
-    nav->addWidget(fit);
-    nav->addStretch();
-    auto *snap = new QCheckBox("Snap 1 mm");
+        return b;
+    };
+    navButton("orbit", "Orbit · Shift + middle drag", [this] {
+        canvas->setTool({});
+        canvas->navigationMode = "orbit";
+    });
+    navButton("home", "Home view", [this] {
+        canvas->view("iso");
+        canvas->fit();
+    });
+    navButton("pan", "Pan · middle drag", [this] {
+        canvas->setTool({});
+        canvas->navigationMode = "pan";
+    });
+    navButton("zoom", "Zoom in", [this] { canvas->zoomBy(.8f); });
+    navButton("fit", "Fit · F", [this] { canvas->fit(); });
+    auto *display = navButton("display", "Display settings", [] {});
+    auto *displayMenu = new QMenu(display);
+    displayMenu->addAction(theme);
+    auto *edges = displayMenu->addAction("Visible edges");
+    edges->setCheckable(true);
+    edges->setChecked(true);
+    connect(edges, &QAction::toggled, this, [this](bool yes) {
+        canvas->showEdges = yes;
+        canvas->update();
+    });
+    display->setMenu(displayMenu);
+    display->setPopupMode(QToolButton::InstantPopup);
+    auto *grid = navButton("grid", "Grid and snaps", [] {});
+    auto *gridMenu = new QMenu(grid);
+    auto *snap = gridMenu->addAction("Snap to 1 mm");
+    snap->setCheckable(true);
     snap->setChecked(true);
-    connect(snap, &QCheckBox::toggled, this, [this](bool v) { canvas->snap = v; });
-    nav->addWidget(snap);
-    layout->addWidget(navigation);
+    connect(snap, &QAction::toggled, this, [this](bool v) { canvas->snap = v; });
+    grid->setMenu(gridMenu);
+    grid->setPopupMode(QToolButton::InstantPopup);
     auto *history = new QWidget;
+    history->setObjectName("historyStrip");
+    history->setFixedHeight(38);
     auto *historyLayout = new QHBoxLayout(history);
-    historyLayout->setContentsMargins(14, 4, 12, 4);
-    auto *historyTitle = new QLabel("HISTORY\nParametric");
-    historyTitle->setStyleSheet("color:#7b8ea1;font-size:10px;");
-    historyLayout->addWidget(historyTitle);
+    historyLayout->setContentsMargins(8, 0, 8, 0);
+    historyLayout->setSpacing(1);
     timeline = new QListWidget;
+    timeline->setObjectName("timeline");
     timeline->setFlow(QListView::LeftToRight);
     timeline->setWrapping(false);
-    timeline->setFixedHeight(70);
+    timeline->setFixedHeight(34);
+    timeline->setIconSize({18, 18});
     timeline->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
     timeline->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    auto historyButton = [&](QString glyph, QString tip, int jump) {
+        auto *b = new QToolButton;
+        b->setText(glyph);
+        b->setFixedSize(22, 25);
+        b->setToolTip(tip);
+        connect(b, &QToolButton::clicked, this, [this, jump] {
+            if (timeline->count() == 0)
+                return;
+            int row = jump == -2  ? 0
+                      : jump == 2 ? timeline->count() - 1
+                                  : std::clamp(timeline->currentRow() + jump, 0, timeline->count() - 1);
+            select(timeline->item(row)->data(Qt::UserRole).toString());
+            timeline->scrollToItem(timeline->item(row));
+        });
+        historyLayout->addWidget(b);
+    };
+    historyButton("⏮", "Select first feature", -2);
+    historyButton("◀", "Select previous feature", -1);
+    auto *play = new QToolButton;
+    play->setText("▶");
+    play->setFixedSize(22, 25);
+    play->setToolTip("History playback — planned");
+    play->setEnabled(false);
+    historyLayout->addWidget(play);
+    historyButton("▶", "Select next feature", 1);
+    historyButton("⏭", "Select last feature", 2);
+    historyLayout->addSpacing(8);
     historyLayout->addWidget(timeline, 1);
+    auto *historyHelp = new QToolButton;
+    historyHelp->setText("⚙");
+    historyHelp->setToolTip("Parametric history · select a feature to edit");
+    historyHelp->setMenu(edit);
+    historyHelp->setPopupMode(QToolButton::InstantPopup);
+    historyLayout->addWidget(historyHelp);
     layout->addWidget(history);
     setCentralWidget(central);
-    auto *browser = new QDockWidget("BROWSER", this);
+    browser = new QDockWidget("BROWSER", canvas);
     browser->setObjectName("browserDock");
     browser->setFeatures(QDockWidget::NoDockWidgetFeatures);
-    browser->setMinimumWidth(215);
-    browser->setMaximumWidth(380);
+    browser->setFixedWidth(264);
     tree = new QTreeWidget;
     tree->setHeaderHidden(true);
+    tree->setColumnCount(2);
+    tree->setColumnWidth(0, 24);
+    tree->setIconSize({14, 14});
+    tree->setIndentation(14);
+    tree->setUniformRowHeights(true);
+    tree->setRootIsDecorated(false);
+    tree->setTreePosition(1);
+    tree->setRootIsDecorated(true);
+    tree->header()->setSectionResizeMode(0, QHeaderView::Fixed);
+    tree->header()->setSectionResizeMode(1, QHeaderView::Stretch);
     tree->setContextMenuPolicy(Qt::CustomContextMenu);
     browser->setWidget(tree);
-    addDockWidget(Qt::LeftDockWidgetArea, browser);
-    properties = new QDockWidget("PROPERTIES", this);
+    properties = new QDockWidget("EDIT FEATURE", canvas);
     properties->setObjectName("propertiesDock");
-    properties->setMinimumWidth(250);
-    properties->setMaximumWidth(350);
+    properties->setFixedWidth(280);
     properties->setFeatures(QDockWidget::DockWidgetClosable);
     propertyBody = new QWidget;
+    propertyBody->setObjectName("propertyBody");
+    propertyBody->setStyleSheet("#propertyBody{background:#364353;}");
     propertyForm = new QFormLayout(propertyBody);
-    propertyForm->setContentsMargins(14, 18, 14, 18);
-    propertyForm->setSpacing(12);
+    propertyForm->setContentsMargins(10, 10, 10, 10);
+    propertyForm->setSpacing(7);
     auto *propertyScroll = new QScrollArea;
     propertyScroll->setWidgetResizable(true);
     propertyScroll->setFrameShape(QFrame::NoFrame);
     propertyScroll->setWidget(propertyBody);
     properties->setWidget(propertyScroll);
-    addDockWidget(Qt::RightDockWidgetArea, properties);
     properties->hide();
     status = new QLabel("Ready");
     statusBar()->addWidget(status, 1);
-    statusBar()->addPermanentWidget(new QLabel("  mm   |   Offline   "));
-    canvas->onSelect = [this](QString id) { select(id); };
+    statusBar()->hide();
+    canvas->installEventFilter(this);
+    browser->show();
+    navigation->show();
+    QTimer::singleShot(0, this, [this] { positionPanels(); });
+    canvas->onSelect = [this](QString id) {
+        if (activeCommand) {
+            if (commandSelection)
+                commandSelection(id);
+            return;
+        }
+        select(id);
+    };
+    canvas->onPlaneChosen = [this](QString name, double offset) {
+        canvas->plane = name;
+        canvas->planeOffset = offset;
+        canvas->sketchMode = true;
+        canvas->view("top");
+        canvas->setTool(pendingSketchTool);
+        buildRibbon();
+        status->setText("Sketch: clique para desenhar.");
+    };
     canvas->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(canvas, &QWidget::customContextMenuRequested, this, [this](QPoint position) {
         QMenu menu;
@@ -503,17 +851,21 @@ Window::Window() {
         if (!refreshing && tree->currentItem())
             select(tree->currentItem()->data(0, Qt::UserRole).toString());
     });
-    connect(tree, &QTreeWidget::itemChanged, this, [this](QTreeWidgetItem *item, int) {
-        if (refreshing)
+    connect(tree, &QTreeWidget::itemClicked, this, [this](QTreeWidgetItem *item, int column) {
+        if (activeCommand)
             return;
         QString id = item->data(0, Qt::UserRole).toString();
-        if (!id.isEmpty())
+        if (column == 0 && !id.isEmpty())
             run([&] {
                 model.toggle(id);
                 refresh();
             });
+        else if (id.isEmpty())
+            item->setExpanded(!item->isExpanded());
     });
     connect(tree, &QTreeWidget::customContextMenuRequested, this, [this](QPoint pos) {
+        if (activeCommand)
+            return;
         auto *item = tree->itemAt(pos);
         if (!item)
             return;
@@ -546,8 +898,10 @@ Window::Window() {
     });
     connect(timeline, &QListWidget::itemClicked, this,
             [this](QListWidgetItem *item) { select(item->data(Qt::UserRole).toString()); });
-    connect(timeline, &QListWidget::itemDoubleClicked, this,
-            [this](QListWidgetItem *) { properties->show(); });
+    connect(timeline, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem *) {
+        if (!activeCommand)
+            properties->show();
+    });
     recoveryPath = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/recovery.mcad";
     QDir().mkpath(QFileInfo(recoveryPath).absolutePath());
     auto *timer = new QTimer(this);
@@ -570,6 +924,27 @@ Window::Window() {
         }
     });
 }
+void Window::positionPanels() {
+    if (!canvas || !browser || !properties || !navigation)
+        return;
+    browser->setGeometry(4, 4, 264, std::max(100, canvas->height() - 48));
+    properties->setGeometry(std::max(275, canvas->width() - 292), 116, 280,
+                            std::min(440, std::max(120, canvas->height() - 155)));
+    navigation->adjustSize();
+    navigation->move((canvas->width() - navigation->width()) / 2, canvas->height() - 32);
+    browser->raise();
+    properties->raise();
+    navigation->raise();
+    if (activeCommand) {
+        activeCommand->move(canvas->width() - activeCommand->width() - 12, 116);
+        activeCommand->raise();
+    }
+}
+bool Window::eventFilter(QObject *object, QEvent *event) {
+    if (object == canvas && event->type() == QEvent::Resize)
+        positionPanels();
+    return QMainWindow::eventFilter(object, event);
+}
 void Window::run(const std::function<void()> &fn) {
     try {
         fn();
@@ -588,35 +963,49 @@ void Window::buildRibbon() {
         delete old;
     }
     auto *row = new QHBoxLayout(ribbon);
-    row->setContentsMargins(12, 7, 12, 5);
-    row->setSpacing(10);
-    auto group = [&](QString title, QStringList visible, QStringList menuItems, QStringList planned = {}) {
+    row->setContentsMargins(0, 0, 0, 0);
+    row->setSpacing(5);
+    auto group = [&](QString title, QStringList visible, QStringList menuItems,
+                     QStringList planned = QStringList{}, QStringList preview = QStringList{}) {
         auto *container = new QWidget;
         auto *vertical = new QVBoxLayout(container);
-        vertical->setContentsMargins(3, 0, 3, 0);
+        vertical->setContentsMargins(0, 0, 0, 0);
         vertical->setSpacing(0);
         auto *buttons = new QHBoxLayout;
-        buttons->setSpacing(0);
+        buttons->setSpacing(1);
         for (auto key : visible) {
             auto *b = new QToolButton;
             b->setDefaultAction(commands[key]);
-            b->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
-            b->setIconSize({32, 32});
-            b->setMinimumSize(std::max(65, b->fontMetrics().horizontalAdvance(commands[key]->text()) + 18),
-                              57);
+            b->setToolButtonStyle(Qt::ToolButtonIconOnly);
+            b->setIconSize({29, 29});
+            b->setFixedSize(32, 34);
+            b->setToolTip(commands[key]->text() +
+                          (commands[key]->shortcut().isEmpty()
+                               ? ""
+                               : " · " + commands[key]->shortcut().toString(QKeySequence::NativeText)));
+            buttons->addWidget(b);
+        }
+        for (auto key : preview) {
+            auto *b = new QToolButton;
+            b->setIcon(icon(key));
+            b->setIconSize({29, 29});
+            b->setFixedSize(32, 34);
+            b->setEnabled(false);
+            b->setToolTip(key + " — planned");
             buttons->addWidget(b);
         }
         vertical->addLayout(buttons);
         auto *drop = new QToolButton;
-        drop->setText(title + "  ▾");
-        drop->setStyleSheet("font-size:10px;padding:3px;");
+        drop->setText(title + " ▾");
+        drop->setFixedHeight(17);
+        drop->setStyleSheet("font-size:10px;padding:0;");
         auto *menu = new QMenu(drop);
         for (auto key : menuItems)
             menu->addAction(commands[key]);
         if (!planned.isEmpty())
             menu->addSeparator();
-        for (auto text : planned) {
-            auto *a = menu->addAction(text + "  (planned)");
+        for (auto label : planned) {
+            auto *a = menu->addAction(label + " — planned");
             a->setEnabled(false);
         }
         drop->setMenu(menu);
@@ -625,35 +1014,42 @@ void Window::buildRibbon() {
         row->addWidget(container);
         auto *line = new QFrame;
         line->setFrameShape(QFrame::VLine);
-        line->setStyleSheet("color:#d5dfe7;");
+        line->setFixedHeight(44);
+        line->setStyleSheet("color:#536171;");
         row->addWidget(line);
     };
     if (canvas->sketchMode) {
         tabs->setTabText(0, "SKETCH");
-        group("CREATE", {"polyline", "rectangle", "circle"},
+        group("CREATE", {"polyline", "rectangle", "circle", "arc", "exact"},
               {"polyline", "rectangle", "circle", "arc", "exact"}, {"Spline", "Polygon", "Slot", "Text"});
-        group("MODIFY", {"dimension"}, {"dimension"}, {"Trim", "Extend", "Offset", "Mirror"});
+        group("MODIFY", {"dimension"}, {"dimension"}, {"Trim", "Extend", "Offset", "Mirror"},
+              {"trim", "offset"});
         group("CONSTRAINTS", {}, {},
-              {"Coincident", "Horizontal / Vertical", "Parallel", "Perpendicular", "Tangent", "Equal"});
+              {"Coincident", "Horizontal / Vertical", "Parallel", "Perpendicular", "Tangent", "Equal"},
+              {"constraint", "parallel", "tangent"});
         row->addStretch();
         auto *finish = new QToolButton;
         finish->setDefaultAction(commands["finish"]);
+        finish->setIcon(icon("finish"));
         finish->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
-        finish->setIconSize({32, 32});
-        finish->setStyleSheet("background:#dceee0;border:1px solid #b1d6ba;padding:10px;color:#2f6641;");
+        finish->setIconSize({27, 27});
+        finish->setStyleSheet("color:#b6e6ba;font-size:10px;");
         row->addWidget(finish);
     } else {
         tabs->setTabText(0, "SOLID");
-        group("CREATE", {"sketch", "extrude", "revolve"},
+        group("CREATE", {"sketch", "extrude", "revolve", "hole", "box", "cylinder"},
               {"sketch", "extrude", "revolve", "hole", "box", "cylinder", "sphere"},
               {"Sweep", "Loft", "Pattern", "Mirror"});
-        group("MODIFY", {"fillet", "transform"}, {"fillet", "transform", "copy", "boolean", "cut", "common"},
+        group("MODIFY", {"fillet", "boolean", "cut", "copy", "transform"},
+              {"fillet", "transform", "copy", "boolean", "cut", "common"},
               {"Chamfer", "Shell", "Draft", "Scale", "Split Body"});
-        group("ASSEMBLE", {}, {}, {"New Component", "Joint", "As-Built Joint"});
-        group("CONSTRUCT", {}, {}, {"Offset Plane", "Midplane", "Axis"});
+        group("ASSEMBLE", {}, {}, {"New Component", "Joint", "As-Built Joint"}, {"joint", "component"});
+        group("CONFIGURE", {}, {}, {"Configuration Table"}, {"configure"});
+        group("CONSTRUCT", {}, {}, {"Offset Plane", "Midplane", "Axis"}, {"plane"});
         group("INSPECT", {"measure"}, {"measure"}, {"Section Analysis", "Interference"});
-        group("INSERT", {}, {"import"});
-        group("SELECT", {}, {"search"});
+        group("INSERT", {"import"}, {"import"}, {"Canvas", "Mesh"});
+        group("SELECT", {"search"}, {"search"});
+        group("POSITION", {"transform"}, {"transform", "copy"});
         row->addStretch();
     }
 }
@@ -670,34 +1066,42 @@ void Window::refresh(bool fit) {
     QString title = model.filePath.isEmpty() ? "Untitled" : QFileInfo(model.filePath).completeBaseName();
     documentTitle->setText(title + (model.dirty ? " *" : ""));
     setWindowTitle(title + (model.dirty ? " *" : "") + " — MecaCAD");
-    auto *root = new QTreeWidgetItem(tree, {"◉  " + title});
-    auto *settings = new QTreeWidgetItem(root, {"Document Settings"});
-    new QTreeWidgetItem(settings, {"Units: mm"});
-    auto *views = new QTreeWidgetItem(root, {"Named Views"});
+    auto *root = new QTreeWidgetItem(tree, {"", title});
+    root->setIcon(0, icon("eye"));
+    root->setIcon(1, icon("component"));
+    auto *settings = new QTreeWidgetItem(root, {"", "Document Settings"});
+    settings->setIcon(1, icon("gear"));
+    new QTreeWidgetItem(settings, {"", "Units: mm"});
+    auto *views = new QTreeWidgetItem(root, {"", "Named Views"});
+    views->setIcon(1, icon("folder"));
     for (auto s : {"Top", "Front", "Right", "Home"})
-        new QTreeWidgetItem(views, {s});
-    auto *origin = new QTreeWidgetItem(root, {"Origin"});
+        new QTreeWidgetItem(views, {"", s});
+    auto *origin = new QTreeWidgetItem(root, {"", "Origin"});
+    origin->setIcon(1, icon("folder"));
     for (auto s : {"XY", "XZ", "YZ"})
-        new QTreeWidgetItem(origin, {s});
-    auto *bodies = new QTreeWidgetItem(root, {"Bodies"});
-    auto *sketches = new QTreeWidgetItem(root, {"Sketches"});
-    auto *history = new QTreeWidgetItem(root, {"Features"});
+        new QTreeWidgetItem(origin, {"", s});
+    auto *bodies = new QTreeWidgetItem(root, {"", "Bodies"});
+    bodies->setIcon(1, icon("folder"));
+    auto *sketches = new QTreeWidgetItem(root, {"", "Sketches"});
+    sketches->setIcon(1, icon("folder"));
+    auto *history = new QTreeWidgetItem(root, {"", "Features"});
+    history->setIcon(1, icon("folder"));
     for (auto &f : model.features) {
         bool consumed = model.consumed(f.id);
         auto *parent = f.type == "sketch" ? sketches : (consumed ? history : bodies);
-        auto *item = new QTreeWidgetItem(parent, {f.name});
-        item->setIcon(0, icon(f.type));
+        auto *item = new QTreeWidgetItem(parent, {"", f.name});
+        item->setIcon(0, icon(f.visible ? "eye" : "hidden"));
+        item->setIcon(1, icon(f.type));
         item->setData(0, Qt::UserRole, f.id);
-        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
-        item->setCheckState(0, f.visible ? Qt::Checked : Qt::Unchecked);
+        item->setToolTip(0, "Click to toggle visibility");
         if (consumed)
-            item->setForeground(0, QColor("#8d9aaa"));
+            item->setForeground(1, QColor("#9baab9"));
         if (f.id == selected)
             tree->setCurrentItem(item);
-        auto *step = new QListWidgetItem(icon(f.type), QString::number(timeline->count() + 1), timeline);
+        auto *step = new QListWidgetItem(icon(f.type), "", timeline);
         step->setData(Qt::UserRole, f.id);
         step->setToolTip(f.name + " — " + displayType(f.type) + "\nDouble-click to edit");
-        step->setSizeHint({66, 45});
+        step->setSizeHint({25, 27});
         if (f.id == selected)
             timeline->setCurrentItem(step);
     }
@@ -715,6 +1119,12 @@ void Window::refresh(bool fit) {
                         .arg(model.features.size()));
 }
 void Window::select(const QString &id) {
+    if (activeCommand) {
+        if (commandSelection)
+            commandSelection(id);
+        return;
+    }
+    properties->hide();
     selected = id;
     canvas->selected = id;
     canvas->update();
@@ -818,7 +1228,7 @@ void Window::buildProperties() {
         propertyForm->addRow(extrude);
         connect(extrude, &QPushButton::clicked, commands["extrude"], &QAction::trigger);
     }
-    properties->show();
+    positionPanels();
 }
 void Window::applyProperties() {
     auto p = model.get(selected).p;
@@ -846,24 +1256,19 @@ void Window::primitive(const QString &type) {
     }
 }
 void Window::startSketch() {
-    Form f(this, "Create Sketch");
-    f.choice("plane", "Plane", planes, canvas->plane);
-    f.number("offset", "Offset", 0);
-    f.note("Escolha um plano de origem. Cada perfil criado será um sketch independente.");
-    if (!f.acceptForm())
-        return;
-    auto p = f.values();
-    canvas->plane = p["plane"].toString();
-    canvas->planeOffset = p["offset"].toDouble();
-    canvas->sketchMode = true;
-    canvas->view(canvas->plane == "XY" ? "top" : canvas->plane == "XZ" ? "front" : "right");
-    canvas->setTool("rectangle");
-    buildRibbon();
-    status->setText("Sketch: escolha uma ferramenta e clique na área de desenho.");
+    pendingSketchTool = "rectangle";
+    canvas->sketchMode = false;
+    canvas->setTool({});
+    canvas->choosingPlane = true;
+    canvas->view("iso");
+    properties->hide();
+    canvas->update();
+    status->setText("Selecione um plano ou uma face plana alinhada aos eixos.");
 }
 void Window::finishSketch() {
     canvas->setTool({});
     canvas->sketchMode = false;
+    canvas->choosingPlane = false;
     buildRibbon();
     canvas->view("iso");
     canvas->update();
@@ -871,6 +1276,7 @@ void Window::finishSketch() {
 void Window::sketchTool(const QString &type) {
     if (!canvas->sketchMode)
         startSketch();
+    pendingSketchTool = type;
     if (canvas->sketchMode) {
         canvas->setTool(type);
         status->setText(type == "arc" ? "Arco: clique início, ponto intermediário e fim."
@@ -902,32 +1308,99 @@ void Window::exactSketch() {
 }
 void Window::extrude(bool revolve) {
     QList<QPair<QString, QString>> sketches, bodies = {{"New Body", ""}};
-    for (auto &f : model.features)
-        if (f.type == "sketch")
-            sketches.append({f.name, f.id});
+    for (auto &feature : model.features)
+        if (feature.type == "sketch")
+            sketches.append({feature.name, feature.id});
     for (auto i : model.bodies())
         bodies.append({model.features[i].name, model.features[i].id});
     if (sketches.empty())
-        throw std::runtime_error("Crie um sketch fechado antes de extrudar.");
-    Form f(this, revolve ? "Revolve" : "Extrude");
-    f.choice("source", "Profile", sketches, selected);
+        throw std::runtime_error("Crie um perfil fechado antes de extrudar.");
+    Form panel(this, revolve ? "Revolve" : "Extrude");
+    panel.choice("source", "Profile", sketches, selected);
     if (revolve) {
-        f.number("angle", "Angle", 360, .01, 360, " °");
-        f.number("axis", "Vertical axis U", 0);
+        panel.number("angle", "Angle", 360, .01, 360, " °");
+        panel.number("axis", "Axis position", 0);
     } else
-        f.number("d", "Distance", 10);
-    f.choice("target", "Body", bodies);
-    f.choice("mode", "Operation", {{"Join / New Body", "join"}, {"Cut", "cut"}});
-    f.note(revolve ? "Revolução em torno do eixo vertical local do sketch."
-                   : "Distância positiva segue a normal do plano. Valores negativos invertem a direção.");
-    if (f.acceptForm()) {
-        auto p = f.values();
+        panel.number("d", "Distance", 10);
+    panel.choice("target", "Target body", bodies);
+    panel.choice("mode", "Operation", {{"New Body / Join", "join"}, {"Cut", "cut"}});
+    panel.note(
+        revolve
+            ? "Selecione o perfil na área de desenho."
+            : "Arraste a seta azul para definir a distância.\nClique em outro perfil para trocar a seleção.");
+    auto *feedback = new QLabel;
+    feedback->setWordWrap(true);
+    feedback->setStyleSheet("color:#edc17e;font-size:11px;");
+    panel.layout->addRow(feedback);
+    Model preview = model;
+    QString previousSelection = selected;
+    canvas->sketchMode = false;
+    canvas->choosingPlane = false;
+    canvas->setTool({});
+    canvas->view("iso");
+    buildRibbon();
+    properties->hide();
+    activeCommand = &panel;
+    auto updatePreview = [&] {
+        try {
+            auto parameters = panel.values();
+            if (parameters["mode"] == "cut" && parameters["target"].toString().isEmpty())
+                throw std::runtime_error("Selecione o corpo a cortar.");
+            preview = model;
+            QString id = preview.add(revolve ? "revolve" : "extrude", parameters, "Preview");
+            const auto &sketch = model.get(parameters["source"].toString());
+            Bnd_Box box;
+            BRepBndLib::AddOptimal(sketch.shape, box);
+            double x, y, z, X, Y, Z;
+            box.Get(x, y, z, X, Y, Z);
+            canvas->handleOrigin = QVector3D((x + X) / 2, (y + Y) / 2, (z + Z) / 2);
+            canvas->handleAxis = Model::planeNormal(sketch.p["plane"].toString("XY"));
+            canvas->handleDistance = parameters["d"].toDouble(10);
+            canvas->handleActive = !revolve;
+            canvas->selected = id;
+            canvas->setModel(&preview);
+            feedback->clear();
+        } catch (const std::exception &error) {
+            feedback->setText(QString::fromUtf8(error.what()));
+        } catch (const Standard_Failure &error) {
+            feedback->setText(QString::fromUtf8(error.GetMessageString()));
+        }
+    };
+    QTimer debounce;
+    debounce.setSingleShot(true);
+    debounce.setInterval(35);
+    connect(&debounce, &QTimer::timeout, &panel, updatePreview);
+    for (auto *spin : panel.nums)
+        connect(spin, qOverload<double>(&QDoubleSpinBox::valueChanged), &panel, [&] { debounce.start(); });
+    for (auto *combo : panel.combos)
+        connect(combo, qOverload<int>(&QComboBox::currentIndexChanged), &panel, [&] { debounce.start(); });
+    commandSelection = [&](QString id) {
+        int index = panel.combos["source"]->findData(id);
+        if (index >= 0)
+            panel.combos["source"]->setCurrentIndex(index);
+    };
+    canvas->onHandleDistance = [&](double distance) { panel.nums["d"]->setValue(distance); };
+    canvas->onCancelCommand = [&] { panel.reject(); };
+    canvas->onAcceptCommand = [&] { panel.accept(); };
+    QTimer::singleShot(0, &panel, updatePreview);
+    bool accepted = panel.acceptForm();
+    debounce.stop();
+    activeCommand.clear();
+    commandSelection = {};
+    canvas->onHandleDistance = {};
+    canvas->onCancelCommand = {};
+    canvas->onAcceptCommand = {};
+    canvas->handleActive = false;
+    canvas->selected = previousSelection;
+    canvas->setModel(&model);
+    if (accepted) {
+        auto p = panel.values();
         if (p["mode"] == "cut" && p["target"].toString().isEmpty())
             throw std::runtime_error("Escolha um corpo para o corte.");
         selected = model.add(revolve ? "revolve" : "extrude", p, revolve ? "Revolve" : "Extrude");
-        finishSketch();
-        refresh(true);
-    }
+    } else
+        selected = previousSelection;
+    refresh();
 }
 void Window::booleanOp(const QString &mode) {
     QList<QPair<QString, QString>> bodies;
@@ -953,18 +1426,93 @@ void Window::transform(bool copy) {
         bodies.append({model.features[i].name, model.features[i].id});
     if (bodies.empty())
         throw std::runtime_error("Crie um corpo primeiro.");
-    Form f(this, copy ? "Create Copy" : "Move / Copy");
-    f.choice("source", "Body", bodies, selected);
-    f.number("x", "X distance", copy ? 50 : 0);
-    f.number("y", "Y distance", 0);
-    f.number("z", "Z distance", 0);
-    f.choice("axis", "Rotation axis", {{"X", "X"}, {"Y", "Y"}, {"Z", "Z"}}, "Z");
-    f.number("angle", "Rotation", 0, -36000, 36000, " °");
-    f.note("Rotação em torno da origem global, seguida da translação.");
-    if (f.acceptForm()) {
-        selected = model.add(copy ? "copy" : "transform", f.values(), copy ? "Copy" : "Move");
-        refresh(true);
-    }
+    Form panel(this, copy ? "Create Copy" : "Move / Copy");
+    panel.choice("source", "Body", bodies, selected);
+    panel.number("x", "X distance", copy ? 50 : 0);
+    panel.number("y", "Y distance", 0);
+    panel.number("z", "Z distance", 0);
+    panel.choice("axis", "Rotation axis", {{"X", "X"}, {"Y", "Y"}, {"Z", "Z"}}, "Z");
+    panel.number("angle", "Rotation", 0, -36000, 36000, " °");
+    for (auto *spin : panel.nums)
+        panel.layout->setRowVisible(spin, false);
+    panel.layout->setRowVisible(panel.combos["axis"], false);
+    auto *precision = new QPushButton("Precise values / rotation ▸");
+    precision->setCheckable(true);
+    panel.layout->addRow(precision);
+    connect(precision, &QPushButton::toggled, &panel, [&panel, precision](bool expanded) {
+        for (auto *spin : panel.nums)
+            panel.layout->setRowVisible(spin, expanded);
+        panel.layout->setRowVisible(panel.combos["axis"], expanded);
+        precision->setText(expanded ? "Precise values / rotation ▾" : "Precise values / rotation ▸");
+        panel.adjustSize();
+    });
+    panel.note("Arraste as setas X, Y ou Z na peça.\nRotação numérica em torno da origem global.");
+    auto *feedback = new QLabel;
+    feedback->setWordWrap(true);
+    feedback->setStyleSheet("color:#edc17e;font-size:11px;");
+    panel.layout->addRow(feedback);
+    Model preview = model;
+    QString previousSelection = selected;
+    properties->hide();
+    canvas->setTool({});
+    activeCommand = &panel;
+    auto updatePreview = [&] {
+        try {
+            auto parameters = panel.values();
+            preview = model;
+            QString id = preview.add(copy ? "copy" : "transform", parameters, "Preview");
+            Bnd_Box box;
+            BRepBndLib::AddOptimal(preview.get(id).shape, box);
+            double x, y, z, X, Y, Z;
+            box.Get(x, y, z, X, Y, Z);
+            canvas->moveDistances =
+                QVector3D(parameters["x"].toDouble(), parameters["y"].toDouble(), parameters["z"].toDouble());
+            canvas->handleOrigin = QVector3D((x + X) / 2, (y + Y) / 2, (z + Z) / 2) - canvas->moveDistances;
+            canvas->moveHandleLength = std::max(10., std::max({X - x, Y - y, Z - z}) * .6);
+            canvas->moveHandleActive = true;
+            canvas->selected = id;
+            canvas->setModel(&preview);
+            feedback->clear();
+        } catch (const std::exception &error) {
+            feedback->setText(QString::fromUtf8(error.what()));
+        } catch (const Standard_Failure &error) {
+            feedback->setText(QString::fromUtf8(error.GetMessageString()));
+        }
+    };
+    QTimer debounce;
+    debounce.setSingleShot(true);
+    debounce.setInterval(35);
+    connect(&debounce, &QTimer::timeout, &panel, updatePreview);
+    for (auto *spin : panel.nums)
+        connect(spin, qOverload<double>(&QDoubleSpinBox::valueChanged), &panel, [&] { debounce.start(); });
+    for (auto *combo : panel.combos)
+        connect(combo, qOverload<int>(&QComboBox::currentIndexChanged), &panel, [&] { debounce.start(); });
+    commandSelection = [&](QString id) {
+        int index = panel.combos["source"]->findData(id);
+        if (index >= 0)
+            panel.combos["source"]->setCurrentIndex(index);
+    };
+    canvas->onMoveDistance = [&](int axis, double distance) {
+        panel.nums[QString("xyz")[axis]]->setValue(distance);
+    };
+    canvas->onCancelCommand = [&] { panel.reject(); };
+    canvas->onAcceptCommand = [&] { panel.accept(); };
+    QTimer::singleShot(0, &panel, updatePreview);
+    bool accepted = panel.acceptForm();
+    debounce.stop();
+    activeCommand.clear();
+    commandSelection = {};
+    canvas->onMoveDistance = {};
+    canvas->onCancelCommand = {};
+    canvas->onAcceptCommand = {};
+    canvas->moveHandleActive = false;
+    canvas->selected = previousSelection;
+    canvas->setModel(&model);
+    if (accepted)
+        selected = model.add(copy ? "copy" : "transform", panel.values(), copy ? "Copy" : "Move");
+    else
+        selected = previousSelection;
+    refresh();
 }
 void Window::hole() {
     QList<QPair<QString, QString>> bodies;
@@ -1051,6 +1599,15 @@ void Window::save(bool as) {
     refresh();
 }
 bool Window::canLeave() {
+    if (activeCommand) {
+        activeCommand->raise();
+        return false;
+    }
+    for (auto *dialog : findChildren<QDialog *>())
+        if (dialog->isVisible()) {
+            dialog->raise();
+            return false;
+        }
     if (!model.dirty)
         return true;
     auto answer = QMessageBox::question(this, "Unsaved changes", "Salvar as alterações antes de continuar?",
@@ -1090,6 +1647,17 @@ void Window::autosave() {
         status->setText("Falha na recuperação automática: " + file.errorString());
 }
 void Window::closeEvent(QCloseEvent *e) {
+    if (activeCommand) {
+        activeCommand->reject();
+        e->ignore();
+        return;
+    }
+    for (auto *dialog : findChildren<QDialog *>())
+        if (dialog->isVisible()) {
+            dialog->reject();
+            e->ignore();
+            return;
+        }
     bool ok = false;
     run([&] { ok = canLeave(); });
     if (ok) {

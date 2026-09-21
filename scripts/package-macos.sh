@@ -3,14 +3,21 @@ set -eu
 project_dir="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 cd "$project_dir"
 qt_prefix="$(brew --prefix qtbase)"
-cmake --install build --prefix dist
-"$qt_prefix/bin/macdeployqt" dist/MecaCAD.app -always-overwrite -verbose=1
+package_dir="$(mktemp -d "$project_dir/build/package-0.2.XXXXXX")"
+cmake --install build --prefix "$package_dir"
+bundle="$package_dir/MecaCAD.app"
+"$qt_prefix/bin/macdeployqt" "$bundle" -always-overwrite -verbose=1
 for framework in QtCore QtDBus QtGui QtOpenGL QtOpenGLWidgets QtWidgets; do
-    binary="dist/MecaCAD.app/Contents/Frameworks/$framework.framework/Versions/A/$framework"
+    binary="$bundle/Contents/Frameworks/$framework.framework/Versions/A/$framework"
     if test -f "$binary"; then
         install_name_tool -id "@rpath/$framework.framework/Versions/A/$framework" "$binary"
     fi
 done
-codesign --force --deep --sign - dist/MecaCAD.app
-codesign --verify --deep --strict dist/MecaCAD.app
-ditto -c -k --sequesterRsrc --keepParent dist/MecaCAD.app dist/MecaCAD-0.1-macOS-arm64.zip
+codesign --force --deep --sign - "$bundle"
+codesign --verify --deep --strict "$bundle"
+# Keep prior packages intact, including an app that may currently be running.
+destination="dist/MecaCAD-0.2.app"
+test ! -e "$destination" || { echo "Package already exists: $destination"; exit 1; }
+mkdir -p dist
+ditto "$bundle" "$destination"
+ditto -c -k --sequesterRsrc --keepParent "$destination" dist/MecaCAD-0.2-macOS-arm64.zip

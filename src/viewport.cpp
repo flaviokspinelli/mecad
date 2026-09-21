@@ -110,6 +110,22 @@ void Viewport::refresh() {
             vertices.push_back(n);
         }
     }
+    for (auto i : model->bodies())
+        for (TopExp_Explorer it(model->features[i].shape, TopAbs_EDGE); it.More(); it.Next()) {
+            BRepAdaptor_Curve c(TopoDS::Edge(it.Current()));
+            int steps = c.GetType() == GeomAbs_Line ? 1 : 64;
+            QVector3D previous;
+            for (int j = 0; j <= steps; ++j) {
+                auto q = c.Value(c.FirstParameter() + (c.LastParameter() - c.FirstParameter()) * j / steps);
+                QVector3D point(q.X(), q.Y(), q.Z());
+                if (j)
+                    for (auto v : {previous, point}) {
+                        vertices.push_back(v);
+                        vertices.push_back({0, 0, 1});
+                    }
+                previous = point;
+            }
+        }
     upload = true;
     update();
 }
@@ -128,7 +144,7 @@ void Viewport::fit() {
         double x, y, z, X, Y, Z;
         box.Get(x, y, z, X, Y, Z);
         center = QVector3D((x + X) / 2, (y + Y) / 2, (z + Z) / 2);
-        span = std::max(20., std::sqrt((X - x) * (X - x) + (Y - y) * (Y - y) + (Z - z) * (Z - z)) * 1.5);
+        span = std::max(20., std::sqrt((X - x) * (X - x) + (Y - y) * (Y - y) + (Z - z) * (Z - z)) * 1.1);
     }
     update();
 }
@@ -144,6 +160,15 @@ void Viewport::view(QString name) {
     } else if (name == "right") {
         yaw = 0;
         pitch = 0;
+    } else if (name == "left") {
+        yaw = 180;
+        pitch = 0;
+    } else if (name == "back") {
+        yaw = 90;
+        pitch = 0;
+    } else if (name == "bottom") {
+        yaw = 0;
+        pitch = -90;
     } else {
         yaw = -55;
         pitch = 32;
@@ -152,18 +177,34 @@ void Viewport::view(QString name) {
 }
 void Viewport::setTool(QString name) {
     tool = name;
+    navigationMode.clear();
     draft.clear();
     setCursor(tool.isEmpty() ? Qt::ArrowCursor : Qt::CrossCursor);
     setFocus();
     update();
 }
 void Viewport::paintGL() {
-    QColor bg = light ? QColor("#e8edf2") : QColor("#202936");
+    QColor bg = light ? QColor("#e8edf2") : QColor("#465465");
     glClearColor(bg.redF(), bg.greenF(), bg.blueF(), 1);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glEnable(GL_SCISSOR_TEST);
+    int pw = width() * devicePixelRatioF(), ph = height() * devicePixelRatioF();
+    for (int i = 0; i < 48; ++i) {
+        float t = float(i) / 47;
+        QColor bottom = light ? QColor("#e8edf2") : QColor("#485666"),
+               top = light ? QColor("#d8e0e7") : QColor("#344150");
+        glScissor(0, i * ph / 48, pw, (i + 1) * ph / 48 - i * ph / 48);
+        glClearColor(bottom.redF() * (1 - t) + top.redF() * t, bottom.greenF() * (1 - t) + top.greenF() * t,
+                     bottom.blueF() * (1 - t) + top.blueF() * t, 1);
+        glClear(GL_COLOR_BUFFER_BIT);
+    }
+    glDisable(GL_SCISSOR_TEST);
+
     if (ready && !vertices.empty()) {
         glEnable(GL_DEPTH_TEST);
         glDisable(GL_CULL_FACE);
+        glEnable(GL_POLYGON_OFFSET_FILL);
+        glPolygonOffset(1, 1);
         shader.bind();
         vao.bind();
         buffer.bind();
@@ -182,9 +223,14 @@ void Viewport::paintGL() {
             while (end < int(mesh.size()) && mesh[end].feature == mesh[start].feature)
                 ++end;
             bool chosen = model->features[mesh[start].feature].id == selected;
-            shader.setUniformValue("color", chosen ? QVector3D(.2, .74, 1) : QVector3D(.68, .77, .86));
+            shader.setUniformValue("color", chosen ? QVector3D(.42, .77, .94) : QVector3D(.83, .86, .89));
             glDrawArrays(GL_TRIANGLES, start * 3, (end - start) * 3);
             start = end;
+        }
+        glDisable(GL_POLYGON_OFFSET_FILL);
+        if (showEdges && vertices.size() / 2 > mesh.size() * 3) {
+            shader.setUniformValue("color", QVector3D(.16, .21, .26));
+            glDrawArrays(GL_LINES, int(mesh.size() * 3), int(vertices.size() / 2 - mesh.size() * 3));
         }
         buffer.release();
         vao.release();
@@ -291,7 +337,8 @@ void Viewport::paintOverlay(QPainter &p) {
     }
     p.setPen(light ? QColor("#475569") : QColor("#a4b3c5"));
     p.setFont(QFont("Helvetica Neue", 11));
-    p.drawText(24, 30, sketchMode ? "SKETCH  /  " + plane + "  /  mm" : "DESIGN  /  SÓLIDOS  /  mm");
+    if (sketchMode)
+        p.drawText(290, 24, "SKETCH  /  " + plane + "  /  mm");
     if (mesh.empty() && model->features.empty() && !sketchMode) {
         p.setPen(light ? QColor("#576a7e") : QColor("#90a2b7"));
         p.setFont(QFont("Helvetica Neue", 20));
@@ -300,25 +347,142 @@ void Viewport::paintOverlay(QPainter &p) {
         p.drawText(rect().adjusted(0, 42, 0, 0), Qt::AlignCenter,
                    "Crie um sketch ou abra o exemplo de suporte");
     }
-    // Compact orientation control with directly selectable views.
-    int cx = width() - 94;
-    QRect face(cx, 48, 66, 48);
-    p.setPen(QPen(QColor("#75879b"), 1));
-    p.setBrush(light ? QColor("#fafcff") : QColor("#344154"));
-    p.drawRoundedRect(face, 5, 5);
-    p.setPen(light ? QColor("#344154") : QColor("#dce7f4"));
-    p.setFont(QFont("Helvetica Neue", 10, QFont::DemiBold));
-    p.drawText(face, Qt::AlignCenter, "TOP");
-    p.drawText(QRect(cx - 13, 100, 55, 24), Qt::AlignCenter, "FRONT");
-    p.drawText(QRect(cx + 43, 100, 45, 24), Qt::AlignCenter, "RIGHT");
-    p.drawText(QRect(cx, 129, 65, 24), Qt::AlignCenter, "ISO");
-    p.setPen(light ? QColor("#506479") : QColor("#869bb1"));
-    p.setFont(QFont("Helvetica Neue", 10));
-    p.drawText(24, height() - 22,
-               sketchMode ? "Clique para desenhar  ·  Enter conclui linha  ·  Esc cancela  ·  Grade: 1 mm"
-                          : "Botão central: pan  ·  Shift + central: órbita  ·  Roda: zoom  ·  F: enquadrar");
+    cubeFaces.clear();
+    // The cube follows the camera. Each visible face is a real view target.
+    float ca = yaw * M_PI / 180, cb = pitch * M_PI / 180;
+    QVector3D eye(std::cos(cb) * std::cos(ca), std::cos(cb) * std::sin(ca), std::sin(cb));
+    QMatrix4x4 cubeView;
+    cubeView.lookAt(eye * 4, QVector3D(), std::abs(pitch) > 89 ? QVector3D(0, 1, 0) : QVector3D(0, 0, 1));
+    QPointF anchor(width() - 60, 58);
+    auto cubePoint = [&](QVector3D v) {
+        auto q = cubeView.map(v);
+        return anchor + QPointF(q.x() * 27, -q.y() * 27);
+    };
+    struct Face {
+        QString name;
+        QVector3D n;
+        QVector<QVector3D> corners;
+        QColor color;
+    };
+    QVector<Face> faces = {
+        {"top", {0, 0, 1}, {{-1, -1, 1}, {1, -1, 1}, {1, 1, 1}, {-1, 1, 1}}, QColor("#a7b4c2")},
+        {"bottom", {0, 0, -1}, {{-1, -1, -1}, {-1, 1, -1}, {1, 1, -1}, {1, -1, -1}}, QColor("#8b9baa")},
+        {"front", {0, -1, 0}, {{-1, -1, -1}, {1, -1, -1}, {1, -1, 1}, {-1, -1, 1}}, QColor("#91a1b2")},
+        {"back", {0, 1, 0}, {{1, 1, -1}, {-1, 1, -1}, {-1, 1, 1}, {1, 1, 1}}, QColor("#91a1b2")},
+        {"right", {1, 0, 0}, {{1, -1, -1}, {1, 1, -1}, {1, 1, 1}, {1, -1, 1}}, QColor("#b6c0cb")},
+        {"left", {-1, 0, 0}, {{-1, 1, -1}, {-1, -1, -1}, {-1, -1, 1}, {-1, 1, 1}}, QColor("#9cabbc")}};
+    p.setFont(QFont("Helvetica Neue", 8));
+    for (auto &face : faces)
+        if (QVector3D::dotProduct(eye, face.n) > .01) {
+            QPolygonF polygon;
+            for (auto v : face.corners)
+                polygon << cubePoint(v);
+            cubeFaces.append({face.name, polygon});
+            p.setPen(QPen(QColor("#687c90"), 1));
+            p.setBrush(face.color);
+            p.drawPolygon(polygon);
+            auto mid = polygon.boundingRect().center();
+            p.setPen(QColor("#405265"));
+            p.drawText(QRectF(mid.x() - 25, mid.y() - 8, 50, 16), Qt::AlignCenter, face.name.toUpper());
+        }
+    p.setPen(QColor("#96abbe"));
+    p.drawText(QRect(width() - 84, 102, 50, 16), Qt::AlignCenter, "HOME");
+    p.setPen(QPen(QColor("#5bc087"), 1.5));
+    p.drawLine(cubePoint({-1, -1, -1}), cubePoint({-1, 1.6, -1}));
+    p.setPen(QPen(QColor("#61a7e3"), 1.5));
+    p.drawLine(cubePoint({-1, -1, -1}), cubePoint({-1, -1, 1.6}));
+    if (choosingPlane) {
+        planeRegions.clear();
+        int i = 0;
+        for (auto planeName : {"XY", "XZ", "YZ"}) {
+            QPolygonF polygon;
+            for (auto q : {QPointF(-15, -15), QPointF(25, -15), QPointF(25, 25), QPointF(-15, 25)})
+                polygon << project(Model::planePoint(planeName, q.x(), q.y()));
+            QColor c = i == 0   ? QColor(80, 155, 222, 70)
+                       : i == 1 ? QColor(230, 157, 75, 70)
+                                : QColor(80, 197, 144, 70);
+            p.setBrush(c);
+            p.setPen(QPen(QColor("#a5ccdf"), 1));
+            p.drawPolygon(polygon);
+            planeRegions.append({planeName, polygon});
+            p.setPen(QColor("#ebf1f7"));
+            p.drawText(polygon.boundingRect(), Qt::AlignCenter, planeName);
+            ++i;
+        }
+        p.setPen(QColor("#e0e9f2"));
+        p.drawText(QRect(290, 20, width() - 420, 30), Qt::AlignCenter,
+                   "Select a plane or an axis-aligned planar face");
+    }
+    if (moveHandleActive) {
+        const QColor colors[] = {QColor("#ee8886"), QColor("#88da9a"), QColor("#72cffa")};
+        auto base = project(handleOrigin + moveDistances);
+        for (int axis = 0; axis < 3; ++axis) {
+            auto tip = project(moveHandleTip(axis));
+            auto d = tip - base;
+            double length = std::hypot(d.x(), d.y());
+            p.setPen(QPen(colors[axis], 3));
+            p.drawLine(base, tip);
+            p.setBrush(colors[axis]);
+            if (length > 1) {
+                d /= length;
+                QPointF n(-d.y(), d.x());
+                p.drawPolygon(QPolygonF{tip, tip - d * 12 + n * 5, tip - d * 12 - n * 5});
+            }
+            p.drawEllipse(tip, 5, 5);
+            p.drawText(tip + QPointF(9, -9), QString("XYZ")[axis]);
+        }
+    }
+    if (handleActive) {
+        auto base = project(handleOrigin), tip = project(handleOrigin + handleAxis * handleDistance);
+        p.setPen(QPen(QColor("#69d4fc"), 3));
+        p.drawLine(base, tip);
+        auto direction = tip - base;
+        if (QLineF(base, tip).length() < 1)
+            direction = project(handleOrigin + handleAxis * 10) - base;
+        double len = std::hypot(direction.x(), direction.y());
+        if (len > 1) {
+            direction /= len;
+            QPointF n(-direction.y(), direction.x());
+            p.setBrush(QColor("#69d4fc"));
+            p.drawPolygon(QPolygonF{tip, tip - direction * 13 + n * 6, tip - direction * 13 - n * 6});
+        }
+        p.setPen(QPen(QColor("#d8f3ff"), 1));
+        p.setBrush(QColor("#3c667c"));
+        p.drawEllipse(tip, 6, 6);
+        p.setPen(QColor("#edf8fc"));
+        p.drawText(tip + QPointF(12, -12), QString::number(handleDistance, 'f', 2) + " mm");
+    }
 }
 QString Viewport::pick(QPointF pixel) const {
+    for (auto &feature : model->features)
+        if (feature.type == "sketch" && feature.visible && !model->consumed(feature.id)) {
+            const auto &p = feature.p;
+            QString plane = p["plane"].toString("XY"), kind = p["profile"].toString();
+            QPolygonF region;
+            auto add = [&](double u, double v) {
+                region << project(Model::planePoint(plane, u, v, p["offset"].toDouble()));
+            };
+            double x = p["x"].toDouble(), y = p["y"].toDouble();
+            if (kind == "rectangle") {
+                double w = p["w"].toDouble(), h = p["h"].toDouble();
+                add(x, y);
+                add(x + w, y);
+                add(x + w, y + h);
+                add(x, y + h);
+            } else if (kind == "circle") {
+                for (int i = 0; i < 64; ++i) {
+                    double a = i * 2 * M_PI / 64, r = p["r"].toDouble();
+                    add(x + r * std::cos(a), y + r * std::sin(a));
+                }
+            } else if (kind == "polyline" && p["closed"].toBool()) {
+                for (auto vertex : p["points"].toArray()) {
+                    auto a = vertex.toArray();
+                    add(a[0].toDouble(), a[1].toDouble());
+                }
+            }
+            if (region.size() > 2 && region.containsPoint(pixel, Qt::OddEvenFill))
+                return feature.id;
+        }
     for (auto &f : model->features)
         if (f.type == "sketch" && f.visible && (!model->consumed(f.id) || f.id == selected)) {
             for (TopExp_Explorer it(f.shape, TopAbs_EDGE); it.More(); it.Next()) {
@@ -385,19 +549,61 @@ void Viewport::finishPolyline(bool close) {
         a.append(QJsonArray{p.x(), p.y()});
     submit({{"profile", "polyline"}, {"points", a}, {"closed", close}});
 }
+QVector3D Viewport::moveHandleTip(int axis) const {
+    QVector3D direction;
+    direction[axis] = moveHandleLength;
+    return handleOrigin + moveDistances + direction;
+}
 void Viewport::mousePressEvent(QMouseEvent *e) {
     setFocus();
     last = pressed = e->position();
+    draggingHandle = handleActive && e->button() == Qt::LeftButton &&
+                     QLineF(e->position(), project(handleOrigin + handleAxis * handleDistance)).length() < 18;
+    if (moveHandleActive && e->button() == Qt::LeftButton) {
+        double nearest = 18;
+        for (int axis = 0; axis < 3; ++axis) {
+            double distance = QLineF(e->position(), project(moveHandleTip(axis))).length();
+            if (distance < nearest) {
+                nearest = distance;
+                moveAxis = axis;
+                draggingHandle = true;
+                handleAxis = QVector3D();
+                handleAxis[axis] = 1;
+                handleDistance = moveDistances[axis];
+            }
+        }
+    }
 }
 void Viewport::mouseMoveEvent(QMouseEvent *e) {
     auto delta = e->position() - last;
     last = e->position();
     cursor = planeAt(e->position());
+    if (draggingHandle) {
+        auto a = project(handleOrigin), b = project(handleOrigin + handleAxis);
+        auto dir = b - a;
+        double length = QPointF::dotProduct(dir, dir);
+        if (length > 1e-6) {
+            handleDistance += QPointF::dotProduct(delta, dir) / length;
+            if (snap)
+                handleDistance = std::round(handleDistance * 10) / 10;
+            if (moveHandleActive) {
+                moveDistances[moveAxis] = handleDistance;
+                if (onMoveDistance)
+                    onMoveDistance(moveAxis, handleDistance);
+            } else if (onHandleDistance)
+                onHandleDistance(handleDistance);
+        }
+        update();
+        return;
+    }
     const bool middle = e->buttons().testFlag(Qt::MiddleButton);
-    const bool alternative = e->buttons().testFlag(Qt::LeftButton) && e->modifiers().testFlag(Qt::AltModifier);
-    if (middle || alternative) {
-        const bool orbit = !sketchMode && (middle ? e->modifiers().testFlag(Qt::ShiftModifier)
-                                                : !e->modifiers().testFlag(Qt::ShiftModifier));
+    const bool alternative =
+        e->buttons().testFlag(Qt::LeftButton) && e->modifiers().testFlag(Qt::AltModifier);
+    const bool toolbarNavigation = e->buttons().testFlag(Qt::LeftButton) && !navigationMode.isEmpty();
+    if (middle || alternative || toolbarNavigation) {
+        const bool orbit = !sketchMode && (toolbarNavigation ? navigationMode == "orbit"
+                                           : middle          ? e->modifiers().testFlag(Qt::ShiftModifier)
+                                                             : !e->modifiers().testFlag(Qt::ShiftModifier));
         if (!orbit) {
             auto inv = matrix().inverted();
             auto a = inv.map(QVector3D(0, 0, 0)),
@@ -411,19 +617,66 @@ void Viewport::mouseMoveEvent(QMouseEvent *e) {
     update();
 }
 void Viewport::mouseReleaseEvent(QMouseEvent *e) {
+    if (draggingHandle) {
+        draggingHandle = false;
+        return;
+    }
     if (QLineF(pressed, e->position()).length() > 4 || e->button() != Qt::LeftButton)
         return;
-    int cx = width() - 94;
     auto s = e->position();
-    if (s.x() > cx - 15 && s.x() < cx + 90 && s.y() > 45 && s.y() < 155) {
-        if (s.y() < 98)
-            view("top");
-        else if (s.y() < 125)
-            view(s.x() < cx + 43 ? "front" : "right");
-        else
-            view("iso");
-        if (sketchMode)
-            view(plane == "XY" ? "top" : plane == "XZ" ? "front" : "right");
+    for (auto &face : cubeFaces)
+        if (face.second.containsPoint(s, Qt::OddEvenFill)) {
+            view(face.first);
+            return;
+        }
+    if (QRect(width() - 84, 100, 50, 20).contains(s.toPoint())) {
+        view("iso");
+        return;
+    }
+    if (choosingPlane) {
+        QString name;
+        double offset = 0;
+        QVector3D origin, direction;
+        ray(s, origin, direction);
+        float nearest = std::numeric_limits<float>::max();
+        for (auto &t : mesh) {
+            auto e1 = t.b - t.a, e2 = t.c - t.a, h = QVector3D::crossProduct(direction, e2);
+            float det = QVector3D::dotProduct(e1, h);
+            if (std::abs(det) < 1e-8)
+                continue;
+            auto so = origin - t.a;
+            float u = QVector3D::dotProduct(so, h) / det;
+            if (u < 0 || u > 1)
+                continue;
+            auto q = QVector3D::crossProduct(so, e1);
+            float v = QVector3D::dotProduct(direction, q) / det, dist = QVector3D::dotProduct(e2, q) / det;
+            if (v < 0 || u + v > 1 || dist < 0 || dist >= nearest)
+                continue;
+            auto n = QVector3D::crossProduct(e1, e2).normalized();
+            auto hit = origin + direction * dist;
+            if (std::abs(n.z()) > .999) {
+                name = "XY";
+                offset = hit.z();
+            } else if (std::abs(n.y()) > .999) {
+                name = "XZ";
+                offset = -hit.y();
+            } else if (std::abs(n.x()) > .999) {
+                name = "YZ";
+                offset = hit.x();
+            } else
+                continue;
+            nearest = dist;
+        }
+        if (name.isEmpty())
+            for (auto &region : planeRegions)
+                if (region.second.containsPoint(s, Qt::OddEvenFill)) {
+                    name = region.first;
+                    break;
+                }
+        if (!name.isEmpty() && onPlaneChosen) {
+            choosingPlane = false;
+            onPlaneChosen(name, offset);
+        }
         return;
     }
     if (sketchMode && !tool.isEmpty()) {
@@ -467,23 +720,27 @@ void Viewport::mouseReleaseEvent(QMouseEvent *e) {
 }
 void Viewport::wheelEvent(QWheelEvent *e) {
     if (!e->pixelDelta().isNull()) {
-        auto delta=e->pixelDelta();
-        if(e->modifiers().testFlag(Qt::ShiftModifier) && !sketchMode) {
-            yaw-=delta.x()*.4;
-            pitch=std::clamp(pitch+float(delta.y())*.4f,-89.f,89.f);
+        auto delta = e->pixelDelta();
+        if (e->modifiers().testFlag(Qt::ShiftModifier) && !sketchMode) {
+            yaw -= delta.x() * .4;
+            pitch = std::clamp(pitch + float(delta.y()) * .4f, -89.f, 89.f);
         } else {
-            auto inv=matrix().inverted();
-            center+=inv.map(QVector3D(-2.*delta.x()/width(),2.*delta.y()/height(),0))-inv.map(QVector3D());
+            auto inv = matrix().inverted();
+            center += inv.map(QVector3D(-2. * delta.x() / width(), 2. * delta.y() / height(), 0)) -
+                      inv.map(QVector3D());
         }
-    } else span = std::clamp(span * float(std::exp(-e->angleDelta().y() * .001)), 1.f, 1e6f);
+    } else
+        span = std::clamp(span * float(std::exp(-e->angleDelta().y() * .001)), 1.f, 1e6f);
     update();
 }
 bool Viewport::event(QEvent *event) {
-    if(event->type()==QEvent::NativeGesture) {
-        auto *gesture=static_cast<QNativeGestureEvent*>(event);
-        if(gesture->gestureType()==Qt::ZoomNativeGesture) {
-            span=std::clamp(span*float(std::exp(-gesture->value())),1.f,1e6f);
-            update();event->accept();return true;
+    if (event->type() == QEvent::NativeGesture) {
+        auto *gesture = static_cast<QNativeGestureEvent *>(event);
+        if (gesture->gestureType() == Qt::ZoomNativeGesture) {
+            span = std::clamp(span * float(std::exp(-gesture->value())), 1.f, 1e6f);
+            update();
+            event->accept();
+            return true;
         }
     }
     return QOpenGLWidget::event(event);
@@ -491,8 +748,15 @@ bool Viewport::event(QEvent *event) {
 void Viewport::keyPressEvent(QKeyEvent *e) {
     if (e->key() == Qt::Key_Escape) {
         draft.clear();
+        choosingPlane = false;
+        if (onCancelCommand)
+            onCancelCommand();
         setTool({});
     } else if (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter) {
+        if (onAcceptCommand) {
+            onAcceptCommand();
+            return;
+        }
         if (tool == "polyline")
             finishPolyline(e->modifiers().testFlag(Qt::ShiftModifier));
     } else if (e->key() == Qt::Key_F)
@@ -500,4 +764,13 @@ void Viewport::keyPressEvent(QKeyEvent *e) {
     else
         QOpenGLWidget::keyPressEvent(e);
     update();
+}
+
+void Viewport::zoomBy(float factor) {
+    span = std::clamp(span * factor, 1.f, 1e6f);
+    update();
+}
+void Viewport::setModel(Model *m) {
+    model = m;
+    refresh();
 }

@@ -1,4 +1,4 @@
-# MecaCAD 0.1
+# MecaCAD 0.2
 
 CAD desktop para peças mecatrônicas simples. Implementação independente em C++20,
 Qt Widgets 6 e Open CASCADE 7.9. A versão inicial executa modelagem real e foi
@@ -8,13 +8,22 @@ desenvolvida e testada em macOS 14, Apple Silicon.
 
 ## Abrir
 
-Abra `dist/MecaCAD.app`. O pacote local reúne o executável e suas bibliotecas.
+Abra `dist/MecaCAD-0.2.app`. O pacote local reúne o executável e suas bibliotecas.
 O código-fonte não depende da pasta `dist`, que é gerada e ignorada pelo Git.
 
 Para começar: **File → Open example — mounting bracket**. Também existem os
 arquivos `examples/Mounting-bracket.mcad`, `.step`, `.stl` e `Base-profile.dxf`.
 
-Leia o [guia de uso](docs/GUIA.md) e o [estado da entrega](docs/ENTREGA-0.1.md).
+Leia o [guia de uso](docs/GUIA.md) e o [estado da entrega](docs/ENTREGA-0.2.md).
+
+## Novidades de interação
+
+- Interface escura compacta, Browser sobre o canvas, cubo clicável e histórico por ícones.
+- Create Sketch: escolher o plano diretamente na área 3D, sem formulário inicial.
+- Extrude: prévia e seta de distância arrastável; Enter confirma, Esc cancela.
+- Move/Copy: translação por setas X/Y/Z, com valores exatos e rotação recolhidos por padrão.
+- Selecionar não abre formulário. Duplo clique no histórico ou Edit Feature abre os parâmetros.
+- Prévia não modifica o documento; confirmar cria uma operação, cancelar preserva o histórico.
 
 ## Implementado
 
@@ -37,13 +46,16 @@ familiar não significa equivalência total de interface ou funcionalidades ao F
 
 ## Limites atuais
 
-A versão 0.1 tem um perfil por sketch. Retângulos e círculos têm parâmetros
+A versão 0.2 tem um perfil por sketch. Retângulos e círculos têm parâmetros
 dimensionais; ainda não há um solucionador geral de restrições, trim/extend,
-sketch ligado a face, seleção individual de arestas para filete, montagens,
+sketch associado persistentemente a face, seleção individual de arestas para filete, montagens,
 simulação, desenhos técnicos, CAM ou importação de arquivos nativos do Fusion.
 O histórico pode ser editado, mas não reordenado ou percorrido com rollback.
 STEP preserva geometria, não o histórico paramétrico do aplicativo de origem.
 O recálculo é síncrono e a versão é indicada para modelos pequenos.
+O clique em faces para iniciar sketch aceita apenas faces alinhadas a XY/XZ/YZ,
+registrando seu plano e offset. Rotação, furos e filetes ainda usam campos numéricos;
+não há anéis de rotação, arraste de vértices ou solucionador de restrições.
 
 ## Compilar no macOS
 
