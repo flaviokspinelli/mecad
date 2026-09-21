@@ -6,7 +6,7 @@ Progresso após essa versão: [registro de execução](docs/PROGRESSO.md).
 UX-05: [pivô de rotação configurável e alças XY/XZ/YZ](docs/ROTATION-PIVOT.md)
 implementados e testados em desenvolvimento, incluindo escolha de pivô em
 vértices STL visíveis; aceite integral ainda pendente.
-Pedido vigente: **fechar um mini-MVP interno de 5 itens**, sem ampliar o escopo.
+Pedido vigente: **fechar um mini-MVP interno de 6 itens**, sem ampliar o escopo.
 Este mini-MVP substitui a entrega anterior dos 8 itens e todas as ampliações
 anteriores.
 A lista fica congelada; nenhum novo recurso entra automaticamente.
@@ -24,9 +24,12 @@ Lista congelada do mini-MVP:
   liberdade/conflitos, arraste com restrições e snapping/inferências.
 - MVP-HISTÓRICO — referências topológicas, grafo de dependências, diagnóstico e
   reparo, parâmetros/expressões, reordenação/supressão e reedição sem duplicação.
+- MVP-MODELAGEM — extrusão/corte, furos paramétricos, filetes, chanfros,
+  booleanas/divisão e medição/análise.
 
-Status: **2/5 aceites verificados em desenvolvimento**; MVP-INTERFACE,
-MVP-SKETCH e MVP-HISTÓRICO permanecem em execução, sem ampliar o escopo.
+Status: **2/6 aceites verificados em desenvolvimento**; MVP-INTERFACE,
+MVP-SKETCH, MVP-HISTÓRICO e MVP-MODELAGEM permanecem em execução, sem ampliar
+o escopo.
 Evidências: `core_tests`
 (39/39) e o conjunto direcionado de `ui_tests` (17/17). Não fazem parte deste
 aceite CI completo, empacotamento reproduzível, logs avançados ou documentação
