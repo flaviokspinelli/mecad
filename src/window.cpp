@@ -330,6 +330,11 @@ QIcon icon(const QString &kind) {
 }
 class Form : public QDialog {
   public:
+    std::function<bool()> validate;
+    void accept() override {
+        if (!validate || validate())
+            QDialog::accept();
+    }
     QFormLayout *layout;
     QMap<QString, QDoubleSpinBox *> nums;
     QMap<QString, QComboBox *> combos;
@@ -1506,6 +1511,13 @@ void Window::extrude(bool revolve) {
     panel.choice("target", "Target body", bodies, originalTarget);
     panel.choice("mode", "Operation", {{"New Body / Join", "join"}, {"Cut", "cut"}},
                  initial["mode"].toString("join"));
+    auto chooseCutTarget = [&] {
+        if (panel.combos["mode"]->currentData() == "cut" &&
+            panel.combos["target"]->currentData().toString().isEmpty() && bodies.size() == 2)
+            panel.combos["target"]->setCurrentIndex(1);
+    };
+    connect(panel.combos["mode"], qOverload<int>(&QComboBox::currentIndexChanged), &panel, chooseCutTarget);
+    chooseCutTarget();
     panel.note(
         revolve
             ? "Selecione o perfil na área de desenho."
@@ -1533,8 +1545,6 @@ void Window::extrude(bool revolve) {
                 feedback->setText("Selecione um perfil para extrudar. Nenhum corpo novo foi criado.");
                 return;
             }
-            if (parameters["mode"] == "cut" && parameters["target"].toString().isEmpty())
-                throw std::runtime_error("Selecione o corpo a cortar.");
             const auto &sketch = model.get(parameters["source"].toString());
             Bnd_Box box;
             BRepBndLib::AddOptimal(sketch.shape, box);
@@ -1547,9 +1557,13 @@ void Window::extrude(bool revolve) {
             if (!revolve && std::abs(canvas->handleDistance) < 1e-7) {
                 canvas->selected = sketch.id;
                 canvas->setModel(&model);
-                feedback->setText("Arraste a seta ou digite uma distância para iniciar a extrusão.");
+                feedback->setText(parameters["mode"] == "cut"
+                    ? "Arraste a seta para dentro da peça. Se houver várias peças, clique no corpo a cortar ou escolha Target body."
+                    : "Arraste a seta ou digite uma distância para iniciar a extrusão.");
                 return;
             }
+            if (parameters["mode"] == "cut" && parameters["target"].toString().isEmpty())
+                throw std::runtime_error("Clique na peça a cortar ou escolha Target body.");
             preview = model;
             QString id = editing;
             if (editing.isEmpty())
@@ -1560,8 +1574,12 @@ void Window::extrude(bool revolve) {
             canvas->setModel(&preview);
             feedback->clear();
         } catch (const std::exception &error) {
+            canvas->selected = panel.combos["source"]->currentData().toString();
+            canvas->setModel(&model);
             feedback->setText(QString::fromUtf8(error.what()));
         } catch (const Standard_Failure &error) {
+            canvas->selected = panel.combos["source"]->currentData().toString();
+            canvas->setModel(&model);
             feedback->setText(QString::fromUtf8(error.GetMessageString()));
         }
     };
@@ -1583,8 +1601,27 @@ void Window::extrude(bool revolve) {
         int index = panel.combos["source"]->findData(id);
         if (index >= 0)
             panel.combos["source"]->setCurrentIndex(index);
+        else if (panel.combos["mode"]->currentData() == "cut") {
+            int target = panel.combos["target"]->findData(id);
+            if (target > 0)
+                panel.combos["target"]->setCurrentIndex(target);
+        }
     };
     canvas->onHandleDistance = [&](double distance) { panel.nums["d"]->setValue(distance); };
+    panel.validate = [&] {
+        const auto p = panel.values();
+        if (p["source"].toString().isEmpty() || (!revolve && std::abs(p["d"].toDouble()) < 1e-7))
+            return true;
+        try {
+            Model check = model;
+            if (editing.isEmpty()) check.add(operation, p);
+            else check.edit(editing, p, originalName);
+            return true;
+        } catch (...) {
+            updatePreview();
+            return false;
+        }
+    };
     canvas->onCancelCommand = [&] { panel.reject(); };
     canvas->onAcceptCommand = [&] { panel.accept(); };
     QTimer::singleShot(0, &panel, updatePreview);

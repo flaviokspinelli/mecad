@@ -8,7 +8,13 @@ desenvolvida e testada em macOS 14, Apple Silicon.
 
 ## Abrir
 
-Abra `dist/MecaCAD-0.2.22.app`. O pacote local reúne o executável e suas bibliotecas.
+Abra `dist/MecaCAD-0.2.23.app`. O pacote local reúne o executável e suas bibliotecas.
+
+Na 0.2.23, Extrude → Cut escolhe automaticamente o destino quando há uma única
+peça CAD disponível. Com várias peças, escolha Target body ou clique na peça.
+Arraste para dentro do corpo: num sketch XY na face superior, a distância será
+negativa. Cortes sem interseção são recusados e a prévia anterior é removida.
+OK/Enter mantém o painel aberto se os parâmetros forem inválidos.
 
 Na 0.2.22, selecione linhas/vértices de retângulos, polígonos ou polilinhas e use
 M para movê-los no plano do sketch com prévia. Pontos compartilhados acompanham as

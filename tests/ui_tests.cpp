@@ -12,6 +12,46 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void extrudeCutPreview() {
+        Window window;
+        auto body = window.model.add("box", {{"w",30},{"h",30},{"d",10}});
+        auto sketch = window.model.add("sketch", {{"profile","rectangle"},{"plane","XY"},{"offset",10},
+                                                 {"x",10},{"y",10},{"w",10},{"h",10}});
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        window.activateWindow();
+        QVERIFY(QTest::qWaitForWindowActive(&window));
+        auto *v = window.findChild<Viewport *>();
+        v->refresh(); v->fit(); v->onSelect(sketch);
+        auto before = window.model.json();
+        bool preview = false, invalidCleared = false, keptOpen = false;
+        QTimer::singleShot(180, [&] {
+            for (auto *combo : window.findChildren<QComboBox *>()) {
+                int index = combo->findData("cut");
+                if (index >= 0) combo->setCurrentIndex(index);
+            }
+            v->onHandleDistance(-5);
+            QTest::qWait(100);
+            if (v->model->features.size() == 3)
+                preview = std::abs(Model::volume(v->model->features.back().shape)-8500)<.01;
+            v->grab().save(QDir::currentPath() + "/extrude-cut-test.png");
+            v->onHandleDistance(5);
+            QTest::qWait(100);
+            invalidCleared = v->model->json() == before;
+            v->onAcceptCommand();
+            keptOpen = bool(v->onHandleDistance);
+            if (v->onHandleDistance) {
+                v->onHandleDistance(-5);
+                v->onAcceptCommand();
+            }
+        });
+        window.findChild<QAction *>("extrude")->trigger();
+        QVERIFY(preview); QVERIFY(invalidCleared); QVERIFY(keptOpen);
+        QCOMPARE(window.model.features.back().p["target"].toString(), body);
+        QVERIFY(std::abs(Model::volume(window.model.features.back().shape)-8500)<.01);
+        QVERIFY(window.model.undo());
+        QCOMPARE(window.model.json(), before);
+    }
     void editSelectedElementsAndBodies() {
         Window window;
         auto id = window.model.add("sketch", {{"profile", "rectangle"}, {"plane", "XY"}, {"w", 20}, {"h", 20}, {"offset",10}});

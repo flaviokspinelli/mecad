@@ -11,6 +11,23 @@
 class CoreTests : public QObject {
     Q_OBJECT
   private slots:
+    void extrudeCutValidation() {
+        Model model;
+        auto body = model.add("box", {{"w",30},{"h",30},{"d",10}});
+        auto sketch = model.add("sketch", {{"profile","rectangle"},{"plane","XY"},{"offset",10},
+                                          {"x",10},{"y",10},{"w",10},{"h",10}});
+        auto before = model.json();
+        QVERIFY_THROWS_EXCEPTION(std::exception, model.add("extrude", {{"source",sketch},{"d",-5},{"mode","cut"}}));
+        QCOMPARE(model.json(), before);
+        QVERIFY_THROWS_EXCEPTION(std::exception, model.add("extrude", {{"source",sketch},{"d",5},{"mode","cut"},{"target",body}}));
+        QCOMPARE(model.json(), before);
+        auto cut = model.add("extrude", {{"source",sketch},{"d",-5},{"mode","cut"},{"target",body}});
+        QVERIFY(std::abs(Model::volume(model.get(cut).shape)-8500)<.01);
+        QVERIFY(model.undo());
+        QCOMPARE(model.json(), before);
+        auto through = model.add("extrude", {{"source",sketch},{"d",-20},{"mode","cut"},{"target",body}});
+        QVERIFY(std::abs(Model::volume(model.get(through).shape)-8000)<.01);
+    }
     void sketchElementEditing() {
         for (auto plane : {"XY", "XZ", "YZ"}) {
             Model model;

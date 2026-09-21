@@ -327,11 +327,17 @@ void Model::rebuild() {
                                   angle * M_PI / 180)
                                   .Shape();
                 }
+                require(p["mode"] != "cut" || !p["target"].toString().isEmpty(),
+                        "Selecione uma peça de destino para o corte.");
                 if (!p["target"].toString().isEmpty()) {
                     auto target = source("target");
-                    if (p["mode"] == "cut")
-                        f.shape = BRepAlgoAPI_Cut(target, f.shape).Shape();
-                    else
+                    if (p["mode"] == "cut") {
+                        BRepAlgoAPI_Cut cut(target, f.shape);
+                        require(cut.IsDone(), "Não foi possível calcular o corte.");
+                        f.shape = cut.Shape();
+                        require(!f.shape.IsNull() && volume(target) - volume(f.shape) > 1e-7,
+                                "A extrusão não atravessa a peça. Arraste a seta para dentro dela ou inverta o sinal da distância.");
+                    } else
                         f.shape = BRepAlgoAPI_Fuse(target, f.shape).Shape();
                 }
             } else if (f.type == "boolean") {
