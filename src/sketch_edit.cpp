@@ -77,7 +77,7 @@ void Model::editSketchElements(const QString &id, const QVector<int> &edgeIndice
         return p;
     };
     if (!erase) {
-        QPointF local(plane == "YZ" ? delta.y() : delta.x(), plane == "XY" ? delta.y() : delta.z());
+        QPointF local = planeCoordinates(plane, planePoint(plane, 0, 0) + delta);
         if (local.manhattanLength() < 1e-8)
             return;
         for (int i : affected)

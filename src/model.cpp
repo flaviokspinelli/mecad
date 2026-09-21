@@ -34,6 +34,9 @@
 #include <Standard_Failure.hxx>
 #include <StlAPI_Writer.hxx>
 #include <TopExp_Explorer.hxx>
+#include <TopExp.hxx>
+#include <TopTools_IndexedMapOfShape.hxx>
+#include <BRepAdaptor_Surface.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Compound.hxx>
 #include <cmath>
@@ -59,9 +62,21 @@ double positive(const QJsonObject &p, const char *k, double fallback = 1) {
     return n;
 }
 gp_Pnt planePointExact(const QString &plane, double u, double v, double offset = 0) {
+    require(std::isfinite(u) && std::isfinite(v) && std::isfinite(offset) &&
+                std::abs(u) <= 1e6 && std::abs(v) <= 1e6, "Ponto fora do intervalo permitido.");
+    if (plane.startsWith("FACE:")) {
+        auto a = QJsonDocument::fromJson(plane.mid(5).toUtf8()).array();
+        require(a.size() == 9, "Plano de face inválido.");
+        for (auto number : a)
+            require(number.isDouble() && std::isfinite(number.toDouble()), "Plano de face inválido.");
+        gp_Pnt origin(a[0].toDouble(), a[1].toDouble(), a[2].toDouble());
+        gp_Vec x(a[3].toDouble(), a[4].toDouble(), a[5].toDouble());
+        gp_Vec y(a[6].toDouble(), a[7].toDouble(), a[8].toDouble());
+        require(std::abs(x.Magnitude()-1)<1e-5 && std::abs(y.Magnitude()-1)<1e-5 && std::abs(x.Dot(y))<1e-5,
+                "Eixos de face inválidos.");
+        return origin.Translated(x*u + y*v + x.Crossed(y)*offset);
+    }
     require(plane == "XY" || plane == "XZ" || plane == "YZ", "Plano inválido.");
-    require(std::isfinite(u) && std::isfinite(v) && std::abs(u) <= 1e6 && std::abs(v) <= 1e6,
-            "Ponto fora do intervalo permitido.");
     if (plane == "XZ")
         return {u, -offset, v};
     if (plane == "YZ")
@@ -118,6 +133,10 @@ QJsonObject Feature::json() const {
     return {{"id", id}, {"name", name}, {"type", type}, {"parameters", p}, {"visible", visible}};
 }
 QVector3D Model::planePoint(const QString &plane, double u, double v, double offset) {
+    if (plane.startsWith("FACE:")) {
+        auto point = planePointExact(plane, u, v, offset);
+        return {float(point.X()), float(point.Y()), float(point.Z())};
+    }
     if (plane == "XZ")
         return QVector3D(u, -offset, v);
     if (plane == "YZ")
@@ -125,11 +144,37 @@ QVector3D Model::planePoint(const QString &plane, double u, double v, double off
     return QVector3D(u, v, offset);
 }
 QVector3D Model::planeNormal(const QString &plane) {
+    if (plane.startsWith("FACE:")) {
+        auto origin = planePointExact(plane, 0, 0);
+        gp_Vec n(origin, planePointExact(plane, 0, 0, 1));
+        return QVector3D(n.X(), n.Y(), n.Z()).normalized();
+    }
     if (plane == "XZ")
         return {0, -1, 0};
     if (plane == "YZ")
         return {1, 0, 0};
     return {0, 0, 1};
+}
+QPointF Model::planeCoordinates(const QString &plane, QVector3D point) {
+    auto origin = planePoint(plane, 0, 0);
+    auto x = (planePoint(plane, 1, 0)-origin).normalized();
+    auto y = (planePoint(plane, 0, 1)-origin).normalized();
+    return {QVector3D::dotProduct(point-origin, x), QVector3D::dotProduct(point-origin, y)};
+}
+QString Model::facePlane(const TopoDS_Shape &shape, int index) {
+    TopTools_IndexedMapOfShape faces;
+    TopExp::MapShapes(shape, TopAbs_FACE, faces);
+    require(index >= 0 && index < faces.Extent(), "Selecione uma face.");
+    auto face = TopoDS::Face(faces(index+1));
+    BRepAdaptor_Surface surface(face);
+    require(surface.GetType() == GeomAbs_Plane, "O sketch exige uma face plana. Faces curvas não definem um plano de desenho.");
+    auto plane = surface.Plane();
+    gp_Vec x(plane.XAxis().Direction()), normal(plane.Axis().Direction());
+    if (face.Orientation() == TopAbs_REVERSED) normal.Reverse();
+    auto y = normal.Crossed(x);
+    auto o = plane.Location();
+    QJsonArray frame{o.X(),o.Y(),o.Z(),x.X(),x.Y(),x.Z(),y.X(),y.Y(),y.Z()};
+    return "FACE:" + QString::fromUtf8(QJsonDocument(frame).toJson(QJsonDocument::Compact));
 }
 Feature &Model::get(const QString &id) {
     for (auto &f : features)
@@ -464,8 +509,10 @@ std::vector<Triangle> Model::triangles() const {
         const auto &shape = features[i].shape;
         if (!isMesh(features[i].id))
             BRepMesh_IncrementalMesh mesh(shape, 0.15, false, 0.35, true);
-        for (TopExp_Explorer it(shape, TopAbs_FACE); it.More(); it.Next()) {
-            auto face = TopoDS::Face(it.Current());
+        TopTools_IndexedMapOfShape faces;
+        TopExp::MapShapes(shape, TopAbs_FACE, faces);
+        for (int faceIndex = 1; faceIndex <= faces.Extent(); ++faceIndex) {
+            auto face = TopoDS::Face(faces(faceIndex));
             TopLoc_Location location;
             auto tri = BRep_Tool::Triangulation(face, location);
             if (tri.IsNull())
@@ -479,7 +526,7 @@ std::vector<Triangle> Model::triangles() const {
                 tri->Triangle(j).Get(a, b, c);
                 if (face.Orientation() == TopAbs_REVERSED)
                     std::swap(b, c);
-                result.push_back({point(a), point(b), point(c), i});
+                result.push_back({point(a), point(b), point(c), i, faceIndex-1});
             }
         }
     }

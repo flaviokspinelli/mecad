@@ -78,8 +78,9 @@ QPointF Viewport::planeAt(QPointF pixel, bool grid) const {
     float denominator = QVector3D::dotProduct(d, n);
     if (std::abs(denominator) < 1e-6)
         return {};
-    auto hit = o + d * ((planeOffset - QVector3D::dotProduct(o, n)) / denominator);
-    double u = plane == "YZ" ? hit.y() : hit.x(), v = plane == "XY" ? hit.y() : hit.z();
+    auto hit = o + d * (QVector3D::dotProduct(Model::planePoint(plane, 0, 0, planeOffset)-o, n) / denominator);
+    auto coordinates = Model::planeCoordinates(plane, hit);
+    double u = coordinates.x(), v = coordinates.y();
     if (snap && grid) {
         u = std::round(u);
         v = std::round(v);
@@ -98,7 +99,7 @@ QPointF Viewport::sketchPoint(QPointF pixel) {
     QVector<QLineF> segments;
     auto screen = [&](QPointF p) { return project(Model::planePoint(plane, p.x(), p.y(), planeOffset)); };
     auto local = [&](const gp_Pnt &p) {
-        return QPointF(plane == "YZ" ? p.Y() : p.X(), plane == "XY" ? p.Y() : p.Z());
+        return Model::planeCoordinates(plane, {float(p.X()),float(p.Y()),float(p.Z())});
     };
     for (const auto &f : model->features) {
         if (f.type != "sketch" || !(f.id == selected || (f.visible && !model->consumed(f.id))) ||
@@ -375,11 +376,17 @@ void Viewport::paintGL() {
         int start = 0;
         while (start < int(mesh.size())) {
             int end = start + 1;
-            while (end < int(mesh.size()) && mesh[end].feature == mesh[start].feature)
+            while (end < int(mesh.size()) && mesh[end].feature == mesh[start].feature && mesh[end].face == mesh[start].face)
                 ++end;
             bool chosen = objectSelected(model->features[mesh[start].feature].id);
+            auto matchesFace = [&](const SelectionTarget &target) {
+                return target.kind == "face" && target.feature == model->features[mesh[start].feature].id && target.index == mesh[start].face;
+            };
+            chosen = chosen || matchesFace(selectedDetail);
+            for (const auto &target : selectedDetails) chosen = chosen || matchesFace(target);
             bool hovered = hoveredDetail.feature == model->features[mesh[start].feature].id &&
                            hoveredDetail.kind == "object";
+            hovered = hovered || matchesFace(hoveredDetail);
             shader.setUniformValue("color", chosen    ? QVector3D(.42, .77, .94)
                                             : hovered ? QVector3D(.97, .80, .50)
                                                       : QVector3D(.83, .86, .89));
@@ -504,7 +511,7 @@ void Viewport::paintOverlay(QPainter &p) {
     } else if (hasSubselection()) {
         p.setPen(QColor("#cceaff"));
         p.drawText(290, 45,
-                   (selectedDetail.kind == "vertex" ? QString("Vértice %1 selecionado")
+                   (selectedDetail.kind == "face" ? QString("Face %1 selecionada") : selectedDetail.kind == "vertex" ? QString("Vértice %1 selecionado")
                                                     : QString("Aresta %1 selecionada"))
                        .arg(selectedDetail.index + 1));
     }
@@ -585,7 +592,7 @@ void Viewport::paintOverlay(QPainter &p) {
     p.setPen(light ? QColor("#475569") : QColor("#a4b3c5"));
     p.setFont(QFont("Helvetica Neue", 11));
     if (sketchMode)
-        p.drawText(290, 24, "SKETCH  /  " + plane + "  /  mm");
+        p.drawText(290, 24, "SKETCH  /  " + (plane.startsWith("FACE:") ? QString("FACE") : plane) + "  /  mm");
     if (mesh.empty() && model->features.empty() && !sketchMode && !choosingPlane) {
         p.setPen(light ? QColor("#576a7e") : QColor("#90a2b7"));
         p.setFont(QFont("Helvetica Neue", 12));
@@ -1237,36 +1244,21 @@ void Viewport::mouseReleaseEvent(QMouseEvent *e) {
     if (choosingPlane) {
         QString name;
         double offset = 0;
-        QVector3D origin, direction;
-        ray(s, origin, direction);
-        float nearest = std::numeric_limits<float>::max();
-        for (auto &t : mesh) {
-            auto e1 = t.b - t.a, e2 = t.c - t.a, h = QVector3D::crossProduct(direction, e2);
-            float det = QVector3D::dotProduct(e1, h);
-            if (std::abs(det) < 1e-8)
-                continue;
-            auto so = origin - t.a;
-            float u = QVector3D::dotProduct(so, h) / det;
-            if (u < 0 || u > 1)
-                continue;
-            auto q = QVector3D::crossProduct(so, e1);
-            float v = QVector3D::dotProduct(direction, q) / det, dist = QVector3D::dotProduct(e2, q) / det;
-            if (v < 0 || u + v > 1 || dist < 0 || dist >= nearest)
-                continue;
-            auto n = QVector3D::crossProduct(e1, e2).normalized();
-            auto hit = origin + direction * dist;
-            if (std::abs(n.z()) > .999) {
-                name = "XY";
-                offset = hit.z();
-            } else if (std::abs(n.y()) > .999) {
-                name = "XZ";
-                offset = -hit.y();
-            } else if (std::abs(n.x()) > .999) {
-                name = "YZ";
-                offset = hit.x();
-            } else
-                continue;
-            nearest = dist;
+        auto target = pickDetail(s, true);
+        if (!target.feature.isEmpty() && target.index >= 0) {
+            try {
+                if (model->isMesh(target.feature)) {
+                    if (onHint) onHint("STL não possui faces CAD. Selecione um plano de origem.");
+                    return;
+                }
+                name = Model::facePlane(model->get(target.feature).shape, target.index);
+            } catch (const std::exception &error) {
+                if (onHint) onHint(QString::fromUtf8(error.what()));
+                return;
+            } catch (const Standard_Failure &) {
+                if (onHint) onHint("Selecione uma face plana CAD.");
+                return;
+            }
         }
         if (name.isEmpty())
             for (auto region = planeRegions.crbegin(); region != planeRegions.crend(); ++region)

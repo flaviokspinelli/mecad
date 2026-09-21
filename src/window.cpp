@@ -568,6 +568,9 @@ Window::Window() {
     edit->addAction(command("delete", "Apagar peça", "Backspace", [this] {
         if (!canvas->selectedDetails.empty()) {
             const auto items = canvas->selectedDetails;
+            for (const auto &item : items)
+                if (item.kind == "face")
+                    throw std::runtime_error("Apagar faces de um sólido ainda não está disponível. Selecione o corpo inteiro para apagar a peça.");
             Model work = model;
             QSet<QString> owners;
             for (const auto &item : items) owners.insert(item.feature);
@@ -663,6 +666,7 @@ Window::Window() {
     for (auto entry : QList<QPair<QString, QString>>{{"auto", "Automático"},
                                                      {"object", "Objetos / perfis"},
                                                      {"edge", "Linhas / arestas"},
+                                                     {"face", "Faces"},
                                                      {"vertex", "Vértices"}}) {
         auto *action = command("select_" + entry.first, entry.second, "", [this, mode = entry.first] {
             canvas->selectionFilter = mode;
@@ -1212,7 +1216,7 @@ void Window::buildRibbon() {
         group("INSPECT", {"measure"}, {"measure"}, {"Section Analysis", "Interference"});
         group("INSERT", {"import"}, {"import"}, {"Canvas"});
         group("SELECT", {"search"},
-              {"select_auto", "select_object", "select_edge", "select_vertex", "search"});
+              {"select_auto", "select_object", "select_edge", "select_vertex", "select_face", "search"});
         group("POSITION", {"transform"}, {"transform", "copy"});
         row->addStretch();
     }
@@ -1429,13 +1433,20 @@ void Window::primitive(const QString &type) {
 }
 void Window::startSketch() {
     pendingSketchTool = "rectangle";
+    if (canvas->selectedDetail.kind == "face" && canvas->selectedDetails.size() <= 1) {
+        auto target = canvas->selectedDetail;
+        auto plane = Model::facePlane(model.get(target.feature).shape, target.index);
+        canvas->choosingPlane = false;
+        canvas->onPlaneChosen(plane, 0);
+        return;
+    }
     canvas->sketchMode = false;
     canvas->setTool({});
     canvas->choosingPlane = true;
     canvas->view("iso");
     properties->hide();
     canvas->update();
-    status->setText("Selecione um plano ou uma face plana alinhada aos eixos.");
+    status->setText("Selecione um plano ou uma face plana da peça, inclusive inclinada.");
 }
 void Window::finishSketch() {
     canvas->setTool({});
@@ -1460,7 +1471,10 @@ void Window::sketchTool(const QString &type) {
 void Window::exactSketch() {
     Form f(this, "Sketch — dimensions");
     f.choice("profile", "Profile", {{"Rectangle", "rectangle"}, {"Circle", "circle"}});
-    f.choice("plane", "Plane", planes, canvas->plane);
+    auto availablePlanes = planes;
+    if (canvas->plane.startsWith("FACE:"))
+        availablePlanes.append({"Face selecionada", canvas->plane});
+    f.choice("plane", "Plane", availablePlanes, canvas->plane);
     f.number("x", "X", 0);
     f.number("y", "Y", 0);
     f.number("offset", "Plane offset", canvas->planeOffset);
@@ -1922,6 +1936,10 @@ void Window::fillet() {
     }
 }
 void Window::measure() {
+    if (canvas->selectedDetail.kind == "face") {
+        QMessageBox::information(this, "Face", "Use Create Sketch para desenhar sobre uma face plana. Para medir a peça, selecione o corpo no Browser.");
+        return;
+    }
     if (canvas->selectedDetails.size() > 1) {
         QMessageBox::information(this, "Seleção múltipla",
                                  "Selecione somente uma aresta, vértice ou objeto para medir.");

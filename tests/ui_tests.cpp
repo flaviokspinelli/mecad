@@ -12,6 +12,71 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void frontFaceProfilePriority() {
+        Window window;
+        auto body = window.model.add("box", {{"w",30},{"h",30},{"d",30}});
+        auto sketch = window.model.add("sketch", {{"profile","rectangle"},{"plane","XZ"},
+                                                 {"x",10},{"y",5},{"w",10},{"h",15}});
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto *v = window.findChild<Viewport *>();
+        v->refresh(); v->fit(); v->view("iso");
+        auto pixel = v->project({15,0,12}).toPoint();
+        QCOMPARE(v->pickDetail(pixel).feature, sketch);
+        QTest::mouseClick(v, Qt::LeftButton, Qt::NoModifier, pixel);
+        QCOMPARE(v->selectedDetail.feature, sketch);
+        QCOMPARE(v->selectedDetail.kind, QString("object"));
+        v->grab().save(QDir::currentPath()+"/front-profile-selection-test.png");
+        v->selectionFilter = "face";
+        auto face = v->pickDetail(pixel);
+        QCOMPARE(face.feature, body);
+        QCOMPARE(face.kind, QString("face"));
+        QVERIFY(Model::planeNormal(Model::facePlane(window.model.get(body).shape, face.index)).y() < -.99);
+        v->selectionFilter = "auto";
+        window.model.edit(sketch, {{"profile","rectangle"},{"plane","XZ"},{"offset",-30},
+                                  {"x",10},{"y",5},{"w",10},{"h",15}}, "Hidden sketch");
+        v->refresh();
+        QVERIFY(v->pickDetail(v->project({15,30,12})).feature != sketch);
+    }
+    void faceSelectionAndSketch() {
+        Window window;
+        auto body = window.model.add("box", {{"w",30},{"h",30},{"d",10}});
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto *v = window.findChild<Viewport *>();
+        v->refresh(); v->fit(); v->view("iso");
+        auto pixel = v->project({15,15,10}).toPoint();
+        auto face = v->pickDetail(pixel);
+        QCOMPARE(face.kind, QString("face"));
+        QCOMPARE(face.feature, body);
+        QTest::mouseClick(v, Qt::LeftButton, Qt::NoModifier, pixel);
+        QCOMPARE(v->selectedDetail.kind, QString("face"));
+        v->grab().save(QDir::currentPath()+"/face-selection-test.png");
+        window.findChild<QAction *>("sketch")->trigger();
+        QVERIFY(v->sketchMode);
+        QVERIFY(v->plane.startsWith("FACE:"));
+        QVERIFY(Model::planeNormal(v->plane).z() > .99);
+        auto local = Model::planeCoordinates(v->plane, {15,15,10});
+        auto back = v->planeAt(v->project({15,15,10}), false);
+        QVERIFY(QLineF(local,back).length()<.001);
+        QTest::mouseClick(v, Qt::LeftButton, Qt::NoModifier, v->project(Model::planePoint(v->plane,local.x()-3,local.y()-3)).toPoint());
+        QTest::mouseClick(v, Qt::LeftButton, Qt::NoModifier, v->project(Model::planePoint(v->plane,local.x()+3,local.y()+3)).toPoint());
+        QCOMPARE(window.model.features.size(), size_t(2));
+        auto sketch = window.model.features.back().id;
+        window.findChild<QAction *>("finish")->trigger();
+        auto target = v->pickDetail(v->project({15,15,10}));
+        QCOMPARE(target.feature, sketch);
+        QCOMPARE(target.kind, QString("object"));
+        QCOMPARE(v->pickDetail(v->project({25,25,10})).kind, QString("face"));
+        v->onSelect(sketch);
+        bool acceptedProfile = false;
+        QTimer::singleShot(180, [&] {
+            acceptedProfile = v->handleActive && v->handleDistance == 0;
+            v->onCancelCommand();
+        });
+        window.findChild<QAction *>("extrude")->trigger();
+        QVERIFY(acceptedProfile);
+    }
     void extrudeCutPreview() {
         Window window;
         auto body = window.model.add("box", {{"w",30},{"h",30},{"d",10}});

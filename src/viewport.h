@@ -29,9 +29,9 @@ class Viewport : public QOpenGLWidget, protected QOpenGLFunctions {
     QString selectionFilter = "auto";
     bool hasSubselection() const {
         for (const auto &target : selectedDetails)
-            if (target.kind == "edge" || target.kind == "vertex")
+            if (target.kind == "edge" || target.kind == "vertex" || target.kind == "face")
                 return true;
-        return selectedDetail.kind == "edge" || selectedDetail.kind == "vertex";
+        return selectedDetail.kind == "edge" || selectedDetail.kind == "vertex" || selectedDetail.kind == "face";
     }
     bool objectSelected(const QString &id) const {
         for (const auto &target : selectedDetails)

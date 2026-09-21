@@ -7,6 +7,8 @@
 #include <cmath>
 #include <limits>
 #include <QPainterPath>
+#include <QMap>
+#include <QSet>
 
 QVector<Viewport::SelectionTarget> Viewport::pickArea(QRectF area, bool crossing) const {
     QVector<SelectionTarget> result;
@@ -30,6 +32,20 @@ QVector<Viewport::SelectionTarget> Viewport::pickArea(QRectF area, bool crossing
     for (const auto &feature : model->features) {
         if (!feature.visible || feature.type == "remove" || model->consumed(feature.id))
             continue;
+        if (selectionFilter == "face") {
+            if (model->isMesh(feature.id)) continue;
+            QMap<int, QVector<QVector3D>> faces;
+            QSet<int> crossed;
+            for (const auto &triangle : mesh) if (model->features[triangle.feature].id == feature.id) {
+                QVector<QVector3D> points{triangle.a, triangle.b, triangle.c};
+                faces[triangle.face] += points;
+                if (matches(points, true)) crossed.insert(triangle.face);
+            }
+            for (auto it = faces.cbegin(); it != faces.cend(); ++it)
+                if (crossing ? crossed.contains(it.key()) : matches(it.value(), false))
+                    result.append({feature.id, "face", it.key(), {}});
+            continue;
+        }
         if (selectionFilter == "vertex") {
             if (model->isMesh(feature.id))
                 continue;
@@ -105,7 +121,7 @@ Viewport::SelectionTarget Viewport::pickDetail(QPointF pixel, bool objectOnly) c
             if (u < -1e-6 || v < -1e-6 || u + v > 1.000001 || distance < 0 || distance >= closest)
                 continue;
             closest = distance;
-            result = {model->features[triangle.feature].id, "object", -1, {origin + direction * distance}};
+            result = {model->features[triangle.feature].id, "object", triangle.face, {origin + direction * distance}};
         }
         return result;
     };
@@ -178,6 +194,8 @@ Viewport::SelectionTarget Viewport::pickDetail(QPointF pixel, bool objectOnly) c
         }
         if (!sketch)
             continue;
+        if (!objectOnly && selectionFilter == "face")
+            continue;
         // Profile interiors compete by depth with solids, never by creation order.
         const auto &p = feature.p;
         QPolygonF polygon;
@@ -213,7 +231,7 @@ Viewport::SelectionTarget Viewport::pickDetail(QPointF pixel, bool objectOnly) c
         auto planeOrigin = Model::planePoint(planeName, 0, 0, p["offset"].toDouble());
         auto point = origin + direction * (QVector3D::dotProduct(planeOrigin - origin, normal) / denominator);
         float z = depth(point);
-        if (z < objectDepth - 1e-6f) {
+        if (z <= objectDepth + 1e-6f) {
             objectDepth = z;
             object = {feature.id, "object", -1, {}};
         }
@@ -224,6 +242,11 @@ Viewport::SelectionTarget Viewport::pickDetail(QPointF pixel, bool objectOnly) c
         if (objectOnly || selectionFilter == "object")
             return {bestEdge.feature, "object", -1, {}};
         return bestEdge;
+    }
+    if (!objectOnly && (selectionFilter == "auto" || selectionFilter == "face") && object.index >= 0 &&
+        !model->isMesh(object.feature)) {
+        object.kind = "face";
+        return object;
     }
     if (objectOnly || selectionFilter == "auto" || selectionFilter == "object")
         return object;

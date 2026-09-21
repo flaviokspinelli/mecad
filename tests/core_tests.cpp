@@ -11,6 +11,29 @@
 class CoreTests : public QObject {
     Q_OBJECT
   private slots:
+    void planarFaceFrames() {
+        Model model;
+        auto box = model.add("box", {{"w",30},{"h",30},{"d",10}});
+        auto body = model.add("transform", {{"source",box},{"axis","Y"},{"angle",30},{"x",15}});
+        int top = -1;
+        QString plane;
+        for (const auto &triangle : model.triangles()) {
+            auto candidate = Model::facePlane(model.get(body).shape, triangle.face);
+            if (Model::planeNormal(candidate).z() > .8) { top=triangle.face; plane=candidate; break; }
+        }
+        QVERIFY(top >= 0);
+        auto point = Model::planePoint(plane, 4, 5);
+        auto local = Model::planeCoordinates(plane, point);
+        QVERIFY(std::abs(local.x()-4)<1e-4 && std::abs(local.y()-5)<1e-4);
+        auto sketch = model.add("sketch", {{"plane",plane},{"profile","rectangle"},{"w",4},{"h",5}});
+        auto extrude = model.add("extrude", {{"source",sketch},{"d",2}});
+        QVERIFY(std::abs(Model::volume(model.get(extrude).shape)-40)<.001);
+        Model loaded;
+        loaded.loadJson(model.json());
+        QVERIFY(std::abs(Model::volume(loaded.get(extrude).shape)-40)<.001);
+        model.editSketchElements(sketch, {0,1,2,3}, {}, Model::planePoint(plane,1,2)-Model::planePoint(plane,0,0), false);
+        QVERIFY(std::abs(Model::volume(model.get(extrude).shape)-40)<.001);
+    }
     void extrudeCutValidation() {
         Model model;
         auto body = model.add("box", {{"w",30},{"h",30},{"d",10}});

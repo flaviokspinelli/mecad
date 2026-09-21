@@ -8,7 +8,16 @@ desenvolvida e testada em macOS 14, Apple Silicon.
 
 ## Abrir
 
-Abra `dist/MecaCAD-0.2.23.app`. O pacote local reúne o executável e suas bibliotecas.
+Abra `dist/MecaCAD-0.2.24.app`. O pacote local reúne o executável e suas bibliotecas.
+
+Na 0.2.24, clique no interior de uma face plana e use Create Sketch para desenhar
+sobre ela, inclusive em faces inclinadas. Também pode iniciar Create Sketch e
+então escolher a face. Um perfil fechado sobre a face tem prioridade no clique
+em seu interior, permitindo selecionar o sketch e abrir Extrude. O filtro Faces
+permite selecionar a face mesmo onde há um perfil. Para selecionar o corpo inteiro,
+use o Browser ou o filtro Objetos / perfis. Faces curvas e malhas STL não são
+suportes de sketch. O plano da face fica salvo no projeto, mas nesta versão não
+acompanha alterações posteriores na posição/geometria do corpo de suporte.
 
 Na 0.2.23, Extrude → Cut escolhe automaticamente o destino quando há uma única
 peça CAD disponível. Com várias peças, escolha Target body ou clique na peça.

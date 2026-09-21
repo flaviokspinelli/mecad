@@ -3,6 +3,7 @@
 #include <QJsonObject>
 #include <QString>
 #include <QVector3D>
+#include <QPointF>
 #include <TopoDS_Shape.hxx>
 #include <vector>
 
@@ -16,6 +17,7 @@ struct Feature {
 struct Triangle {
     QVector3D a, b, c;
     int feature;
+    int face = -1;
 };
 class Model {
   public:
@@ -52,6 +54,8 @@ class Model {
     static double volume(const TopoDS_Shape &s);
     static QVector3D planePoint(const QString &plane, double u, double v, double offset = 0);
     static QVector3D planeNormal(const QString &plane);
+    static QPointF planeCoordinates(const QString &plane, QVector3D point);
+    static QString facePlane(const TopoDS_Shape &shape, int index);
 
   private:
     std::vector<QJsonObject> past, future;
