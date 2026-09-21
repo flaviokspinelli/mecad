@@ -29,9 +29,11 @@ Lista congelada do mini-MVP:
 - MVP-FABRICAÇÃO-QUALIDADE — STEP/STL/DXF confiáveis, PDF/DXF técnico,
   regressões encadeadas, testes reais de interface e corpus de mecatrônica.
 
-Status: **2/7 aceites verificados em desenvolvimento**; MVP-INTERFACE,
+Status: **DESENVOLVIMENTO PAUSADO — 2/7 aceites verificados**. MVP-INTERFACE,
 MVP-SKETCH, MVP-HISTÓRICO e MVP-MODELAGEM permanecem em execução, sem ampliar
-o escopo. MVP-FABRICAÇÃO-QUALIDADE também permanece em execução.
+o escopo. MVP-FABRICAÇÃO-QUALIDADE também permanece pendente. O trabalho será
+retomado somente quando solicitado; até lá, não iniciar itens novos nem alterar
+o escopo congelado.
 Evidências: `core_tests`
 (39/39) e o conjunto direcionado de `ui_tests` (17/17). Não fazem parte deste
 aceite CI completo, empacotamento reproduzível, logs avançados ou documentação

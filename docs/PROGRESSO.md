@@ -2,6 +2,10 @@
 
 ## 21/09/2026 — mini-MVP congelado validado
 
+O desenvolvimento foi pausado a pedido do usuário. O backlog permanece
+congelado em sete frentes, com duas validadas e cinco pendentes; a retomada
+deverá continuar exatamente desse ponto, sem reabrir o escopo.
+
 O escopo ativo foi reduzido e congelado em sete itens: confiabilidade essencial
 (comandos seguros, undo/redo, recuperação, integridade `.mcad` e erros claros),
 base do produto (arquitetura, preferências, documentação mínima e testes locais)
