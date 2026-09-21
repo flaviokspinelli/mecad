@@ -138,6 +138,27 @@ class UiTests : public QObject {
         v->viewDirection({1, 1, 1});
         QTRY_VERIFY(!v->isViewAnimating());
         QVERIFY((v->cameraDirection() - QVector3D(0, 0, 1)).length() < .001);
+        v->setTool("rectangle");
+        v->grab();
+        auto cubePoint = targetPixel({0, 0, 1});
+        QVERIFY(cubePoint.x() >= 0);
+        auto beforeOrbit = v->cameraDirection();
+        int accidentalProfiles = 0;
+        v->onProfile = [&](QJsonObject) { ++accidentalProfiles; };
+        QTest::mousePress(v, Qt::LeftButton, Qt::NoModifier, cubePoint);
+        auto dragEnd = cubePoint + QPoint(-130, 75);
+        QMouseEvent cubeDrag(QEvent::MouseMove, QPointF(dragEnd), QPointF(v->mapToGlobal(dragEnd)),
+                             Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(v, &cubeDrag);
+        QVERIFY((v->cameraDirection() - beforeOrbit).length() > .1);
+        QCOMPARE(static_cast<QWidget*>(v)->cursor().shape(), Qt::ClosedHandCursor);
+        QTest::mouseRelease(v, Qt::LeftButton, Qt::NoModifier, dragEnd);
+        QVERIFY(!v->isViewAnimating());
+        QCOMPARE(v->plane, QString("XY"));
+        QVERIFY(v->sketchMode);
+        QCOMPARE(accidentalProfiles, 0);
+        QCOMPARE(model.json(), original);
+        viewport.grab().save(QDir::currentPath() + "/cube-drag-test.png");
         viewport.close();
     }
     void sketchToSolid() {

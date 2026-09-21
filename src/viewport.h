@@ -85,6 +85,8 @@ class Viewport : public QOpenGLWidget, protected QOpenGLFunctions {
     QVector<QPair<QString, QPolygonF>> planeRegions;
     QPointF planeHover{-1, -1};
     bool draggingHandle = false;
+    bool cubePressed = false, cubeDragging = false;
+    float cubeStartYaw = 0, cubeStartPitch = 0;
     bool sketchPressCandidate = false, sketchDragging = false;
     QMatrix4x4 matrix() const;
     void ray(QPointF p, QVector3D &origin, QVector3D &direction) const;

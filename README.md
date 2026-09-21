@@ -8,7 +8,7 @@ desenvolvida e testada em macOS 14, Apple Silicon.
 
 ## Abrir
 
-Abra `dist/MecaCAD-0.2.4.app`. O pacote local reúne o executável e suas bibliotecas.
+Abra `dist/MecaCAD-0.2.5.app`. O pacote local reúne o executável e suas bibliotecas.
 O código-fonte não depende da pasta `dist`, que é gerada e ignorada pelo Git.
 
 Para começar: **File → Open example — mounting bracket**. Também existem os
@@ -18,14 +18,17 @@ Leia o [guia de uso](docs/GUIA.md) e o [estado da entrega](docs/ENTREGA-0.2.md).
 
 ## Novidades de interação
 
+Na 0.2.5, segurar e arrastar o cubo orbita a câmera, inclusive durante sketch,
+sem alterar seu plano geométrico. Cliques simples continuam escolhendo vistas.
+
 Na 0.2.3, retângulos e círculos aceitam pressionar, arrastar e soltar, com prévia
 durante o gesto. Dois cliques continuam disponíveis. Line também permite iniciar
 o primeiro segmento por arraste; Enter conclui a cadeia. Esc cancela o gesto.
 
 Na 0.2.2, faces, arestas e cantos do cubo são clicáveis e têm realce sob o mouse.
 A câmera gira com transição suave de 300 ms; uma nova escolha redireciona o
-movimento e a navegação manual o interrompe. Durante sketch, o plano de trabalho
-continua travado para preservar o desenho 2D.
+movimento e a navegação manual o interrompe. Durante sketch, clicar em uma vista
+retorna à orientação do plano de trabalho; arrastar permite inspecionar em 3D.
 
 A correção 0.2.1 limpa a escolha de planos: sem texto de boas-vindas sobreposto,
 sem grade/eixos atravessando a seleção, rótulos separados e realce sob o mouse.

@@ -45,6 +45,7 @@ estão desabilitadas. O nome **MecaCAD** identifica um aplicativo independente.
 | Mover com prévia | M, arrastar uma seta X/Y/Z, Enter |
 | Cancelar prévia sem gravar uma operação | Esc |
 | Trocar vista com animação | Clique em uma face, aresta ou canto do cubo |
+| Orbitar pelo cubo, inclusive durante sketch | Segurar o cubo com botão esquerdo e arrastar |
 | Pan | Arrastar com botão central |
 | Órbita | Shift + arrastar com botão central |
 | Zoom | Roda do mouse |
@@ -62,7 +63,9 @@ estão desabilitadas. O nome **MecaCAD** identifica um aplicativo independente.
 | Cancelar ferramenta ou perfil em andamento | Esc |
 | Concluir polilinha aberta / fechada | Enter / Shift+Enter |
 
-A câmera permanece perpendicular ao plano durante o sketch. O atalho de dimensão
+A câmera começa perpendicular ao plano no sketch; arrastar o cubo permite
+inspecionar em 3D sem mudar o plano do desenho. Clicar numa face do cubo durante
+o sketch retorna à orientação do plano de trabalho. O atalho de dimensão
 leva ao painel de parâmetros do objeto selecionado. As combinações de pan e
 órbita seguem a [referência de navegação da Autodesk](https://www.autodesk.com/products/fusion-360/blog/quick-tip-pan-zoom-orbit-preferences/).
 

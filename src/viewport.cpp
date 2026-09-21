@@ -360,11 +360,17 @@ void Viewport::paintOverlay(QPainter &p) {
     if (!draft.empty()) {
         p.setPen(QPen(QColor("#62dbbf"), 2, Qt::DashLine));
         auto a = pixel(draft.front()), b = pixel(cursor);
-        if (tool == "rectangle")
-            p.drawRect(QRectF(a, b).normalized());
-        else if (tool == "circle") {
-            double r = QLineF(a, b).length();
-            p.drawEllipse(a, r, r);
+        if (tool == "rectangle") {
+            auto origin = draft.front();
+            p.drawPolygon(QPolygonF{a, pixel({cursor.x(), origin.y()}), b, pixel({origin.x(), cursor.y()})});
+        } else if (tool == "circle") {
+            double r = QLineF(draft.front(), cursor).length();
+            QPolygonF circle;
+            for (int i = 0; i < 64; ++i) {
+                double angle = 2 * M_PI * i / 64;
+                circle << pixel(draft.front() + QPointF(r * std::cos(angle), r * std::sin(angle)));
+            }
+            p.drawPolygon(circle);
         } else {
             for (int i = 1; i < draft.size(); ++i)
                 p.drawLine(pixel(draft[i - 1]), pixel(draft[i]));
@@ -674,6 +680,18 @@ QVector3D Viewport::moveHandleTip(int axis) const {
 }
 void Viewport::mousePressEvent(QMouseEvent *e) {
     setFocus();
+    cubePressed = e->button() == Qt::LeftButton && !cubeDirectionAt(e->position()).isNull();
+    cubeDragging = false;
+    if (cubePressed) {
+        cameraAnimation.stop();
+        cubeStartYaw = yaw;
+        cubeStartPitch = pitch;
+        last = pressed = e->position();
+        sketchPressCandidate = false;
+        draggingHandle = false;
+        setCursor(Qt::ClosedHandCursor);
+        return;
+    }
     if (sketchDragging)
         draft.clear();
     sketchDragging = false;
@@ -703,10 +721,32 @@ void Viewport::mousePressEvent(QMouseEvent *e) {
 }
 void Viewport::mouseMoveEvent(QMouseEvent *e) {
     planeHover = e->position();
-    setToolTip(QRect(width() - 84, 100, 50, 20).contains(planeHover.toPoint()) ? "Vista inicial" : QString());
+    if (cubePressed) {
+        auto movement = e->position() - pressed;
+        if (cubeDragging || QLineF(pressed, e->position()).length() > 4) {
+            cubeDragging = true;
+            yaw = cubeStartYaw - movement.x() * .5;
+            float elevation = cubeStartPitch + movement.y() * .5;
+            if (std::abs(cubeStartPitch) > 89)
+                elevation = std::copysign(90.f, cubeStartPitch) -
+                            std::copysign(float(std::abs(movement.y()) * .5), cubeStartPitch);
+            pitch = std::clamp(elevation, -89.f, 89.f);
+            update();
+        }
+        last = e->position();
+        setCursor(Qt::ClosedHandCursor);
+        return;
+    }
+    setToolTip(QRect(width() - 84, 100, 50, 20).contains(planeHover.toPoint()) ? "Vista inicial"
+               : !cubeDirectionAt(planeHover).isNull()
+                   ? "Arraste para orbitar; clique para escolher uma vista"
+                   : QString());
     bool overCube = !cubeDirectionAt(planeHover).isNull() ||
                     QRect(width() - 84, 100, 50, 20).contains(planeHover.toPoint());
-    setCursor(overCube ? Qt::PointingHandCursor : tool.isEmpty() ? Qt::ArrowCursor : Qt::CrossCursor);
+    setCursor(!cubeDirectionAt(planeHover).isNull() ? Qt::OpenHandCursor
+              : overCube                            ? Qt::PointingHandCursor
+              : tool.isEmpty()                      ? Qt::ArrowCursor
+                                                    : Qt::CrossCursor);
     auto delta = e->position() - last;
     last = e->position();
     cursor = planeAt(e->position());
@@ -759,6 +799,15 @@ void Viewport::mouseMoveEvent(QMouseEvent *e) {
     update();
 }
 void Viewport::mouseReleaseEvent(QMouseEvent *e) {
+    if (cubePressed || cubeDragging) {
+        bool wasDragged = cubeDragging;
+        cubePressed = cubeDragging = false;
+        setCursor(cubeDirectionAt(e->position()).isNull() ? Qt::ArrowCursor : Qt::OpenHandCursor);
+        if (wasDragged) {
+            update();
+            return;
+        }
+    }
     bool sketchDrag = sketchPressCandidate && e->button() == Qt::LeftButton &&
                       !e->modifiers().testFlag(Qt::AltModifier) &&
                       QLineF(pressed, e->position()).length() > 4;
@@ -904,6 +953,10 @@ bool Viewport::event(QEvent *event) {
 }
 void Viewport::keyPressEvent(QKeyEvent *e) {
     if (e->key() == Qt::Key_Escape) {
+        if (cubePressed) {
+            cubePressed = false;
+            cubeDragging = true;
+        }
         cameraAnimation.stop();
         draft.clear();
         choosingPlane = false;
