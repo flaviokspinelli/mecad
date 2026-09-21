@@ -1,4 +1,4 @@
-# Backlog mestre — MecaCAD profissional
+# Backlog mestre — Mecad profissional
 
 Atualização: 21/09/2026. Base: MecaCAD 0.2.25, macOS Apple Silicon.
 

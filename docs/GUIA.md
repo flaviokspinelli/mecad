@@ -1,4 +1,4 @@
-# Guia rápido — MecaCAD 0.2
+# Guia rápido — Mecad 0.2
 
 ## Primeira peça
 
@@ -34,7 +34,7 @@ a edição. Na versão atual, a edição numérica acontece no painel direito.
 | Botão direito no sketch, no Browser | Edit Sketch, Extrude e DXF |
 
 Assemble, Construct e demais funções planejadas são referências de organização e
-estão desabilitadas. O nome **MecaCAD** identifica um aplicativo independente.
+estão desabilitadas. O nome **Mecad** identifica um aplicativo independente.
 
 ## Navegação e atalhos
 

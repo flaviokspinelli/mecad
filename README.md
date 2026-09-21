@@ -1,4 +1,4 @@
-# MecaCAD 0.2
+# Mecad 0.2
 
 CAD desktop para peças mecatrônicas simples. Implementação independente em C++20,
 Qt Widgets 6 e Open CASCADE 7.9. A versão inicial executa modelagem real e foi
@@ -8,7 +8,8 @@ desenvolvida e testada em macOS 14, Apple Silicon.
 
 ## Abrir
 
-Abra `dist/MecaCAD-0.2.25.app`. O pacote local reúne o executável e suas bibliotecas.
+Abra o aplicativo Mecad pelo build local. O formato `.mcad` permanece compatível
+com os documentos existentes.
 
 Na 0.2.25, novos sketches criados em faces guardam uma referência ao suporte e
 acompanham mudanças dimensionais que preservem sua topologia. Seleções de arestas
@@ -220,7 +221,7 @@ outras plataformas, mas isso não substitui o teste nessas plataformas.
 
 - `mecacore`: documento, operações paramétricas, núcleo geométrico e exportadores.
 - `mecaui`: interface Qt Widgets e viewport OpenGL.
-- `MecaCAD`: aplicativo desktop.
+- `Mecad`: aplicativo desktop.
 - `core_tests`: testes de geometria, arquivos e recálculo.
 - `ui_tests`: fluxo de sketch → sólido por cliques na interface.
 - `.mcad`: JSON versionado em milímetros; geometria importada é incorporada ao arquivo.
