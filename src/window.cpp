@@ -1370,10 +1370,16 @@ void Window::extrude(bool revolve) {
     debounce.setSingleShot(true);
     debounce.setInterval(35);
     connect(&debounce, &QTimer::timeout, &panel, updatePreview);
+    // Throttle instead of restarting the timer: continuous dragging must render
+    // intermediate solids, not wait until the pointer stops moving.
+    auto schedulePreview = [&] {
+        if (!debounce.isActive())
+            debounce.start();
+    };
     for (auto *spin : panel.nums)
-        connect(spin, qOverload<double>(&QDoubleSpinBox::valueChanged), &panel, [&] { debounce.start(); });
+        connect(spin, qOverload<double>(&QDoubleSpinBox::valueChanged), &panel, schedulePreview);
     for (auto *combo : panel.combos)
-        connect(combo, qOverload<int>(&QComboBox::currentIndexChanged), &panel, [&] { debounce.start(); });
+        connect(combo, qOverload<int>(&QComboBox::currentIndexChanged), &panel, schedulePreview);
     commandSelection = [&](QString id) {
         int index = panel.combos["source"]->findData(id);
         if (index >= 0)

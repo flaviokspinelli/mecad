@@ -63,6 +63,7 @@ class Viewport : public QOpenGLWidget, protected QOpenGLFunctions {
     bool event(QEvent *) override;
 
   private:
+    friend class UiTests;
     Model *model;
     QWidget *overlay;
     std::vector<Triangle> mesh;

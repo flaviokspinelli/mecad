@@ -151,7 +151,7 @@ class UiTests : public QObject {
                              Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
         QApplication::sendEvent(v, &cubeDrag);
         QVERIFY((v->cameraDirection() - beforeOrbit).length() > .1);
-        QCOMPARE(static_cast<QWidget*>(v)->cursor().shape(), Qt::ClosedHandCursor);
+        QCOMPARE(static_cast<QWidget *>(v)->cursor().shape(), Qt::ClosedHandCursor);
         QTest::mouseRelease(v, Qt::LeftButton, Qt::NoModifier, dragEnd);
         QVERIFY(!v->isViewAnimating());
         QCOMPARE(v->plane, QString("XY"));
@@ -188,6 +188,8 @@ class UiTests : public QObject {
         window.findChild<QAction *>("finish")->trigger();
         QVERIFY(!v->sketchMode);
         bool dragged = false;
+        int liveMeshUpdates = 0;
+        bool liveShrink = false;
         QTimer::singleShot(180, [&] {
             QVERIFY(v->handleActive);
             QCOMPARE(window.model.features.size(), size_t(1));
@@ -195,7 +197,33 @@ class UiTests : public QObject {
             auto start = v->project(v->handleOrigin + v->handleAxis * before).toPoint();
             auto end = v->project(v->handleOrigin + v->handleAxis * (before + 12)).toPoint();
             QTest::mousePress(v, Qt::LeftButton, Qt::NoModifier, start);
-            QTest::mouseMove(v, end, 30);
+            auto meshExtent = [&] {
+                double extent = -1e10;
+                for (const auto &triangle : v->mesh)
+                    for (auto point : {triangle.a, triangle.b, triangle.c})
+                        extent = std::max(
+                            extent, double(QVector3D::dotProduct(point - v->handleOrigin, v->handleAxis)));
+                return extent;
+            };
+            double lastExtent = meshExtent();
+            // Keep moving faster than the preview interval, without releasing.
+            // The actual rendered solid must update, not only its arrow.
+            for (int step = 1; step <= 40; ++step) {
+                double distance = before + (step <= 20 ? step * 1.2 : 24 - (step - 20) * .6);
+                auto point = v->project(v->handleOrigin + v->handleAxis * distance).toPoint();
+                QMouseEvent move(QEvent::MouseMove, QPointF(point), QPointF(v->mapToGlobal(point)),
+                                 Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+                QApplication::sendEvent(v, &move);
+                QTest::qWait(10);
+                double extent = meshExtent();
+                if (std::abs(extent - lastExtent) > .01) {
+                    ++liveMeshUpdates;
+                    if (extent < lastExtent)
+                        liveShrink = true;
+                    lastExtent = extent;
+                }
+            }
+            window.grab().save(QDir::currentPath() + "/extrude-live-drag.png");
             QTest::mouseRelease(v, Qt::LeftButton, Qt::NoModifier, end);
             dragged = v->handleDistance > before + 5;
             QTest::qWait(80);
@@ -204,6 +232,8 @@ class UiTests : public QObject {
         });
         window.findChild<QAction *>("extrude")->trigger();
         QVERIFY(dragged);
+        QVERIFY(liveMeshUpdates >= 2);
+        QVERIFY(liveShrink);
         QCOMPARE(window.model.features.size(), size_t(2));
         QCOMPARE(window.model.bodies().size(), size_t(1));
         const auto &p = window.model.get(sketch).p;
