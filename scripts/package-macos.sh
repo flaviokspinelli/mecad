@@ -16,8 +16,8 @@ done
 codesign --force --deep --sign - "$bundle"
 codesign --verify --deep --strict "$bundle"
 # Keep prior packages intact, including an app that may currently be running.
-destination="dist/MecaCAD-0.2.7.app"
+destination="dist/MecaCAD-0.2.8.app"
 test ! -e "$destination" || { echo "Package already exists: $destination"; exit 1; }
 mkdir -p dist
 ditto "$bundle" "$destination"
-ditto -c -k --sequesterRsrc --keepParent "$destination" dist/MecaCAD-0.2.7-macOS-arm64.zip
+ditto -c -k --sequesterRsrc --keepParent "$destination" dist/MecaCAD-0.2.8-macOS-arm64.zip

@@ -71,6 +71,25 @@ leva ao painel de parâmetros do objeto selecionado. As combinações de pan e
 
 ## Sketches e planos
 
+### Encaixe inteligente (ímã)
+
+Ativo por padrão. Aproxime o cursor de extremidades, pontos médios, centros,
+interseções de segmentos ou origem: um marcador verde identifica o encaixe.
+Guias tracejadas indicam alinhamento horizontal/vertical com pontos existentes
+ou com os pontos do perfil em andamento. Funciona tanto por clique quanto por arraste.
+
+A tolerância é visual (10 pixels para adquirir um ponto, até 15 para soltá-lo),
+independente do zoom. Pontos geométricos têm prioridade sobre Snap to 1 mm.
+Desative **Encaixe inteligente** no menu da grade para desenhar livremente;
+o encaixe na grade é uma opção independente.
+
+São usadas referências de sketches exibidos no mesmo plano e offset. Não inclui
+projeção de arestas de sólidos, tangência, interseções com curvas ou um solucionador
+de restrições: o alinhamento posiciona o novo ponto, mas não o vincula a futuras
+alterações da geometria usada como referência.
+
+### Perfis
+
 Cada retângulo, círculo, arco ou cadeia de linhas cria um sketch independente.
 Uma polilinha fecha ao clicar novamente no primeiro ponto ou usar Shift+Enter.
 Arcos usam três cliques: início, ponto intermediário e fim. Arcos e linhas abertas

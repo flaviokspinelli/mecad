@@ -11,6 +11,109 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void smartSketchSnapping() {
+        Model model;
+        Viewport v(&model);
+        v.resize(900, 600);
+        v.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&v));
+        v.sketchMode = true;
+        v.setTool("rectangle");
+        for (auto plane : {"XY", "XZ", "YZ"}) {
+            model.clear();
+            v.selected.clear();
+            v.plane = plane;
+            v.planeOffset = 8;
+            v.view("top");
+            auto rectangle = model.add("sketch", {{"profile", "rectangle"},
+                                                  {"plane", plane},
+                                                  {"offset", 8},
+                                                  {"x", 10.25},
+                                                  {"y", 12.75},
+                                                  {"w", 30},
+                                                  {"h", 20}});
+            model.add("sketch", {{"profile", "circle"},
+                                 {"plane", plane},
+                                 {"offset", 8},
+                                 {"x", 60.25},
+                                 {"y", 42.75},
+                                 {"r", 8}});
+            model.add("sketch", {{"profile", "polyline"},
+                                 {"plane", plane},
+                                 {"offset", 8},
+                                 {"points", QJsonArray{QJsonArray{80, 10}, QJsonArray{100, 10}}}});
+            model.add("sketch", {{"profile", "polyline"},
+                                 {"plane", plane},
+                                 {"offset", 8},
+                                 {"points", QJsonArray{QJsonArray{86, 0}, QJsonArray{86, 40}}}});
+            v.refresh();
+            v.fit();
+            v.setTool("rectangle");
+            auto screen = [&](QPointF p) { return v.project(Model::planePoint(plane, p.x(), p.y(), 8)); };
+            for (auto point : {QPointF(10.25, 12.75), QPointF(25.25, 12.75), QPointF(60.25, 42.75),
+                               QPointF(86, 10), QPointF(0, 0)}) {
+                v.magnetLabel.clear();
+                QVERIFY(QLineF(v.sketchPoint(screen(point) + QPointF(3, -2)), point).length() < .0001);
+                QVERIFY(!v.magnetLabel.isEmpty());
+            }
+            v.magnetLabel.clear();
+            auto vertical = v.sketchPoint(screen({25.25, 70}) + QPointF(3, 0));
+            QCOMPARE(vertical.x(), 25.25);
+            QVERIFY(v.magnetLabel.contains("Vertical"));
+            v.magnetLabel.clear();
+            auto horizontal = v.sketchPoint(screen({58, 12.75}) + QPointF(0, 3));
+            QCOMPARE(horizontal.y(), 12.75);
+            QVERIFY(v.magnetLabel.contains("Horizontal"));
+            v.magnetLabel.clear();
+            v.sketchPoint(screen({10.25, 12.75}));
+            QCOMPARE(v.sketchPoint(screen({10.25, 12.75}) + QPointF(12, 0)), QPointF(10.25, 12.75));
+            v.smartSnap = false;
+            QVERIFY(QLineF(v.sketchPoint(screen({10.25, 12.75})), QPointF(10.25, 12.75)).length() > .1);
+            QVERIFY(v.magnetLabel.isEmpty());
+            v.smartSnap = true;
+            for (float zoom : {.5f, 2.f}) {
+                v.zoomBy(zoom);
+                v.magnetLabel.clear();
+                QCOMPARE(v.sketchPoint(screen({10.25, 12.75}) + QPointF(8, 0)), QPointF(10.25, 12.75));
+            }
+            auto hidden = model.add("sketch", {{"profile", "circle"},
+                                               {"plane", plane},
+                                               {"offset", 8},
+                                               {"x", 125.4},
+                                               {"y", 73.6},
+                                               {"r", 4}});
+            model.get(hidden).visible = false;
+            model.add("sketch", {{"profile", "circle"},
+                                 {"plane", plane},
+                                 {"offset", 18},
+                                 {"x", 125.4},
+                                 {"y", 73.6},
+                                 {"r", 4}});
+            v.snap = false;
+            v.magnetLabel.clear();
+            QVERIFY(QLineF(v.sketchPoint(screen({125.4, 73.6})), QPointF(125.4, 73.6)).length() < .001);
+            QVERIFY(v.magnetLabel.isEmpty());
+            v.snap = true;
+            QJsonObject created;
+            v.onProfile = [&](QJsonObject p) { created = p; };
+            auto start = (screen({10.25, 12.75}) + QPointF(3, -2)).toPoint();
+            auto end = (screen({60.25, 42.75}) + QPointF(3, -2)).toPoint();
+            v.setTool("rectangle");
+            QTest::mousePress(&v, Qt::LeftButton, Qt::NoModifier, start);
+            QMouseEvent move(QEvent::MouseMove, QPointF(end), QPointF(v.mapToGlobal(end)), Qt::NoButton,
+                             Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(&v, &move);
+            QTest::mouseRelease(&v, Qt::LeftButton, Qt::NoModifier, end);
+            QCOMPARE(created["x"].toDouble(), 10.25);
+            QCOMPARE(created["y"].toDouble(), 12.75);
+            QCOMPARE(created["w"].toDouble(), 50.);
+            QCOMPARE(created["h"].toDouble(), 30.);
+            v.selected = rectangle;
+            v.cursor = v.sketchPoint(screen({58, 12.75}) + QPointF(0, 3));
+            v.grab().save(QDir::currentPath() + "/smart-snap-test.png");
+            v.onProfile = {};
+        }
+    }
     void adjacentPlaneSelection() {
         Model model;
         Viewport v(&model);

@@ -714,6 +714,14 @@ Window::Window() {
     snap->setCheckable(true);
     snap->setChecked(true);
     connect(snap, &QAction::toggled, this, [this](bool v) { canvas->snap = v; });
+    auto *smartSnap = gridMenu->addAction("Encaixe inteligente");
+    smartSnap->setObjectName("smartSnap");
+    smartSnap->setCheckable(true);
+    smartSnap->setChecked(true);
+    connect(smartSnap, &QAction::toggled, this, [this](bool enabled) {
+        canvas->smartSnap = enabled;
+        canvas->update();
+    });
     grid->setMenu(gridMenu);
     grid->setPopupMode(QToolButton::InstantPopup);
     auto *history = new QWidget;

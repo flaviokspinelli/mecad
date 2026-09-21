@@ -13,6 +13,7 @@
 #include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
 #include <cmath>
+#include <gp_Circ.hxx>
 #include <limits>
 
 class CanvasOverlay : public QWidget {
@@ -69,7 +70,7 @@ void Viewport::ray(QPointF p, QVector3D &o, QVector3D &d) const {
     o = a.toVector3DAffine();
     d = (b.toVector3DAffine() - o).normalized();
 }
-QPointF Viewport::planeAt(QPointF pixel) const {
+QPointF Viewport::planeAt(QPointF pixel, bool grid) const {
     QVector3D o, d;
     ray(pixel, o, d);
     auto n = Model::planeNormal(plane);
@@ -78,11 +79,106 @@ QPointF Viewport::planeAt(QPointF pixel) const {
         return {};
     auto hit = o + d * ((planeOffset - QVector3D::dotProduct(o, n)) / denominator);
     double u = plane == "YZ" ? hit.y() : hit.x(), v = plane == "XY" ? hit.y() : hit.z();
-    if (snap) {
+    if (snap && grid) {
         u = std::round(u);
         v = std::round(v);
     }
     return {u, v};
+}
+QPointF Viewport::sketchPoint(QPointF pixel) {
+    const auto previous = magnetPoint;
+    const bool held = !magnetLabel.isEmpty();
+    magnetLabel.clear();
+    magnetGuides.clear();
+    auto raw = planeAt(pixel, false), result = planeAt(pixel);
+    if (!smartSnap)
+        return result;
+    QVector<QPair<QPointF, QString>> targets = {{{0, 0}, "Origem"}};
+    QVector<QLineF> segments;
+    auto screen = [&](QPointF p) { return project(Model::planePoint(plane, p.x(), p.y(), planeOffset)); };
+    auto local = [&](const gp_Pnt &p) {
+        return QPointF(plane == "YZ" ? p.Y() : p.X(), plane == "XY" ? p.Y() : p.Z());
+    };
+    for (const auto &f : model->features) {
+        if (f.type != "sketch" || !(f.id == selected || (f.visible && !model->consumed(f.id))) ||
+            f.p["plane"].toString("XY") != plane || std::abs(f.p["offset"].toDouble() - planeOffset) > 1e-5)
+            continue;
+        for (TopExp_Explorer it(f.shape, TopAbs_EDGE); it.More(); it.Next()) {
+            BRepAdaptor_Curve edge(TopoDS::Edge(it.Current()));
+            double first = edge.FirstParameter(), last = edge.LastParameter();
+            if (edge.GetType() == GeomAbs_Circle && std::abs(last - first - 2 * M_PI) < 1e-7) {
+                targets.append({local(edge.Circle().Location()), "Centro"});
+                for (int quadrant = 0; quadrant < 4; ++quadrant)
+                    targets.append({local(edge.Value(first + (last - first) * quadrant / 4)), "Quadrante"});
+                continue;
+            }
+            auto a = local(edge.Value(first)), b = local(edge.Value(last));
+            targets.append({a, "Extremidade"});
+            targets.append({b, "Extremidade"});
+            targets.append({local(edge.Value((first + last) / 2)), "Ponto médio"});
+            if (edge.GetType() == GeomAbs_Line)
+                segments.append(QLineF(a, b));
+            if (edge.GetType() == GeomAbs_Circle)
+                targets.append({local(edge.Circle().Location()), "Centro"});
+        }
+    }
+    for (auto point : draft)
+        targets.append({point, "Extremidade"});
+    for (int i = 0; i < segments.size(); ++i) {
+        if (!QRectF(screen(segments[i].p1()), screen(segments[i].p2()))
+                 .normalized()
+                 .adjusted(-12, -12, 12, 12)
+                 .contains(pixel))
+            continue;
+        for (int j = i + 1; j < segments.size(); ++j) {
+            QPointF intersection;
+            if (segments[i].intersects(segments[j], &intersection) == QLineF::BoundedIntersection)
+                targets.append({intersection, "Interseção"});
+        }
+    }
+    double best = 1e10;
+    for (const auto &target : targets) {
+        double distance = QLineF(pixel, screen(target.first)).length();
+        double radius = held && QLineF(previous, target.first).length() < 1e-6 ? 15 : 10;
+        if (distance <= radius && distance < best) {
+            best = distance;
+            result = target.first;
+            magnetLabel = target.second;
+        }
+    }
+    if (!magnetLabel.isEmpty()) {
+        magnetPoint = result;
+        return result;
+    }
+    double bestU = 7, bestV = 7;
+    QPointF uAnchor, vAnchor;
+    bool alignU = false, alignV = false;
+    for (const auto &target : targets) {
+        double du = QLineF(pixel, screen({target.first.x(), raw.y()})).length();
+        double dv = QLineF(pixel, screen({raw.x(), target.first.y()})).length();
+        if (du < bestU) {
+            bestU = du;
+            result.setX(target.first.x());
+            uAnchor = target.first;
+            alignU = true;
+        }
+        if (dv < bestV) {
+            bestV = dv;
+            result.setY(target.first.y());
+            vAnchor = target.first;
+            alignV = true;
+        }
+    }
+    if (alignU) {
+        magnetLabel = "Vertical";
+        magnetGuides.append(QLineF(uAnchor, result));
+    }
+    if (alignV) {
+        magnetLabel = alignU ? "Horizontal + vertical" : "Horizontal";
+        magnetGuides.append(QLineF(vAnchor, result));
+    }
+    magnetPoint = result;
+    return result;
 }
 void Viewport::initializeGL() {
     initializeOpenGLFunctions();
@@ -217,6 +313,8 @@ void Viewport::viewDirection(QVector3D direction, bool animated) {
     cameraAnimation.start();
 }
 void Viewport::setTool(QString name) {
+    magnetLabel.clear();
+    magnetGuides.clear();
     sketchPressCandidate = sketchDragging = false;
     tool = name;
     navigationMode.clear();
@@ -391,6 +489,28 @@ void Viewport::paintOverlay(QPainter &p) {
         p.setPen(light ? QColor("#576a7e") : QColor("#90a2b7"));
         p.setFont(QFont("Helvetica Neue", 12));
         p.drawText(QRect(290, 18, width() - 420, 28), Qt::AlignCenter, "Create Sketch para começar");
+    }
+    if (smartSnap && sketchMode && !tool.isEmpty() && !magnetLabel.isEmpty()) {
+        p.save();
+        auto snapPixel = [&](QPointF q) {
+            return project(Model::planePoint(plane, q.x(), q.y(), planeOffset));
+        };
+        auto marker = snapPixel(magnetPoint);
+        p.setPen(QPen(QColor("#8bdfb1"), 1, Qt::DashLine));
+        for (const auto &guide : magnetGuides)
+            p.drawLine(snapPixel(guide.p1()), snapPixel(guide.p2()));
+        p.setPen(QPen(QColor("#a7f3c4"), 1.7));
+        p.setBrush(QColor("#243d36"));
+        p.drawRect(QRectF(marker - QPointF(4, 4), QSizeF(8, 8)));
+        p.setFont(QFont("Helvetica Neue", 10));
+        QRectF label(marker + QPointF(14, 12),
+                     QSizeF(p.fontMetrics().horizontalAdvance(magnetLabel) + 14, 23));
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor("#223b33"));
+        p.drawRoundedRect(label, 4, 4);
+        p.setPen(QColor("#b8f4d0"));
+        p.drawText(label, Qt::AlignCenter, magnetLabel);
+        p.restore();
     }
     cubeFaces.clear();
     cubeTargets.clear();
@@ -660,6 +780,8 @@ QString Viewport::pick(QPointF pixel) const {
     return result;
 }
 void Viewport::submit(QJsonObject p) {
+    magnetLabel.clear();
+    magnetGuides.clear();
     p["plane"] = plane;
     p["offset"] = planeOffset;
     draft.clear();
@@ -685,6 +807,8 @@ void Viewport::mousePressEvent(QMouseEvent *e) {
     cubePressed = e->button() == Qt::LeftButton && !cubeDirectionAt(e->position()).isNull();
     cubeDragging = false;
     if (cubePressed) {
+        magnetLabel.clear();
+        magnetGuides.clear();
         cameraAnimation.stop();
         cubeStartYaw = yaw;
         cubeStartPitch = pitch;
@@ -704,6 +828,8 @@ void Viewport::mousePressEvent(QMouseEvent *e) {
                            cubeDirectionAt(e->position()).isNull() &&
                            !QRect(width() - 84, 100, 50, 20).contains(e->position().toPoint());
     last = pressed = e->position();
+    if (sketchPressCandidate)
+        sketchPressPoint = sketchPoint(pressed);
     draggingHandle = handleActive && e->button() == Qt::LeftButton &&
                      QLineF(e->position(), project(handleOrigin + handleAxis * handleDistance)).length() < 18;
     if (moveHandleActive && e->button() == Qt::LeftButton) {
@@ -751,7 +877,14 @@ void Viewport::mouseMoveEvent(QMouseEvent *e) {
                                                     : Qt::CrossCursor);
     auto delta = e->position() - last;
     last = e->position();
-    cursor = planeAt(e->position());
+    const bool drawing = !overCube && sketchMode && !tool.isEmpty() && navigationMode.isEmpty() &&
+                         !e->buttons().testFlag(Qt::MiddleButton) &&
+                         !e->modifiers().testFlag(Qt::AltModifier);
+    cursor = drawing ? sketchPoint(e->position()) : planeAt(e->position());
+    if (!drawing) {
+        magnetLabel.clear();
+        magnetGuides.clear();
+    }
     if (draggingHandle) {
         auto a = project(handleOrigin), b = project(handleOrigin + handleAxis);
         auto dir = b - a;
@@ -780,7 +913,7 @@ void Viewport::mouseMoveEvent(QMouseEvent *e) {
         sketchPressCandidate = sketchDragging = false;
     }
     if (sketchPressCandidate && !sketchDragging && QLineF(pressed, e->position()).length() > 4) {
-        draft.append(planeAt(pressed));
+        draft.append(sketchPressPoint);
         sketchDragging = true;
     }
     if (middle || alternative || toolbarNavigation) {
@@ -814,7 +947,7 @@ void Viewport::mouseReleaseEvent(QMouseEvent *e) {
                       !e->modifiers().testFlag(Qt::AltModifier) &&
                       QLineF(pressed, e->position()).length() > 4;
     if (sketchDrag && !sketchDragging)
-        draft.append(planeAt(pressed));
+        draft.append(sketchPressPoint);
     if (!sketchDrag && sketchDragging)
         draft.clear();
     sketchPressCandidate = sketchDragging = false;
@@ -881,7 +1014,7 @@ void Viewport::mouseReleaseEvent(QMouseEvent *e) {
         return;
     }
     if (sketchMode && !tool.isEmpty()) {
-        cursor = planeAt(s);
+        cursor = sketchPoint(s);
         if (tool == "polyline" && draft.size() >= 3 &&
             QLineF(project(Model::planePoint(plane, draft.front().x(), draft.front().y(), planeOffset)), s)
                     .length() < 12) {

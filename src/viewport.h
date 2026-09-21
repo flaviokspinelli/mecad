@@ -1,5 +1,6 @@
 #pragma once
 #include "model.h"
+#include <QLineF>
 #include <QMatrix4x4>
 #include <QOpenGLBuffer>
 #include <QOpenGLFunctions>
@@ -18,6 +19,7 @@ class Viewport : public QOpenGLWidget, protected QOpenGLFunctions {
     QString selected, plane = "XY", tool;
     bool sketchMode = false, snap = true, light = false;
     bool showEdges = true;
+    bool smartSnap = true;
     QString navigationMode;
     bool choosingPlane = false, handleActive = false;
     QVector3D handleOrigin, handleAxis;
@@ -46,7 +48,7 @@ class Viewport : public QOpenGLWidget, protected QOpenGLFunctions {
     bool isViewAnimating() const;
     void setTool(QString name);
     QPointF project(QVector3D p) const;
-    QPointF planeAt(QPointF pixel) const;
+    QPointF planeAt(QPointF pixel, bool grid = true) const;
     void finishPolyline(bool close);
     void paintOverlay(QPainter &p);
     void zoomBy(float factor);
@@ -89,6 +91,10 @@ class Viewport : public QOpenGLWidget, protected QOpenGLFunctions {
     bool cubePressed = false, cubeDragging = false;
     float cubeStartYaw = 0, cubeStartPitch = 0;
     bool sketchPressCandidate = false, sketchDragging = false;
+    QPointF sketchPressPoint, magnetPoint;
+    QString magnetLabel;
+    QVector<QLineF> magnetGuides;
+    QPointF sketchPoint(QPointF pixel);
     QMatrix4x4 matrix() const;
     void ray(QPointF p, QVector3D &origin, QVector3D &direction) const;
     QString pick(QPointF p) const;
