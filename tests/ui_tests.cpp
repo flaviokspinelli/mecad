@@ -20,6 +20,25 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void suppressionFromHistory() {
+        QTemporaryDir dir;Model source;auto base=source.add("box",{{"w",10},{"h",10},{"d",10}});
+        auto moved=source.add("transform",{{"source",base},{"x",10}});source.save(dir.filePath("source.mcad"));
+        Window window(dir.filePath("recovery"),false);window.openPath(source.filePath);window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));auto *v=window.findChild<Viewport *>();v->onSelect(moved);
+        window.findChild<QAction *>("suppress")->trigger();
+        QVERIFY(window.model.get(moved).suppressed);QVERIFY(!window.model.consumed(base));
+        auto *timeline=window.findChild<QListWidget *>("timeline");
+        QVERIFY(timeline->item(1)->toolTip().contains("suprimida"));
+        QVERIFY(timeline->item(1)->font().strikeOut());
+        window.grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("suppression-history.png"));
+        QVERIFY(!v->mesh.empty());
+        for(const auto &triangle:v->mesh)QCOMPARE(window.model.features[triangle.feature].id,base);
+        window.findChild<QAction *>("suppress")->trigger();QCOMPARE(window.model.json(),source.json());
+        QVERIFY(!window.model.dirty);
+        window.findChild<QAction *>("undo")->trigger();QVERIFY(window.model.get(moved).suppressed);
+        window.findChild<QAction *>("redo")->trigger();QCOMPARE(window.model.json(),source.json());
+        QVERIFY(window.close());
+    }
     void expressionBoundExtrusionEditIsNoOp() {
         QTemporaryDir dir;Model source;
         auto sketch=source.add("sketch",{{"profile","rectangle"},{"w",10},{"h",10}});
@@ -672,7 +691,7 @@ class UiTests : public QObject {
             v->onHandleDistance(15);
             QTest::qWait(100);
             live = !v->mesh.empty() && window.model.json() == original;
-            v->grab().save(QDir::currentPath() + "/extrude-grid-test.png");
+            v->grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("extrude-grid-test.png"));
             v->onHandleDistance(0);
             QTest::qWait(100);
             returnedToZero = v->mesh.empty() && v->handleActive;

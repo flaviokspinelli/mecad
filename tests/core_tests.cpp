@@ -17,6 +17,42 @@
 class CoreTests : public QObject {
     Q_OBJECT
   private slots:
+    void suppressionPreservesHistoryAndDependencies() {
+        Model m;const auto base=m.add("box",{{"w",20},{"h",10},{"d",5}});
+        const auto moved=m.add("transform",{{"source",base},{"x",4}});
+        const auto copied=m.add("copy",{{"source",moved},{"x",30}});
+        const auto independent=m.add("sphere",{{"r",2}});
+        QTemporaryDir dir;m.save(dir.filePath("original.mcad"));const auto original=m.json();
+        m.suppress(moved,true);QVERIFY(m.get(moved).suppressed);QVERIFY(m.get(copied).inactive);
+        QVERIFY(!m.get(copied).suppressed);QVERIFY(m.get(copied).shape.IsNull());
+        QVERIFY(!m.get(base).inactive);QVERIFY(!m.consumed(base));QVERIFY(!m.get(independent).inactive);
+        QCOMPARE(m.bodies().size(),size_t(2));QCOMPARE(m.features.size(),size_t(4));
+        QCOMPARE(m.json()["version"].toInt(),4);const auto suppressed=m.json();
+        m.suppress(moved,true);QCOMPARE(m.json(),suppressed);
+        QVERIFY(m.undo());QCOMPARE(m.json(),original);QVERIFY(!m.dirty);
+        QVERIFY(m.redo());QCOMPARE(m.json(),suppressed);
+        m.save(dir.filePath("suppressed.mcad"));Model loaded;loaded.load(m.filePath);QCOMPARE(loaded.json(),suppressed);
+        QVERIFY(loaded.get(copied).inactive);QCOMPARE(loaded.bodies().size(),size_t(2));
+        QVERIFY_THROWS_EXCEPTION(std::exception,loaded.exportStep(dir.filePath("invalid.step"),copied));
+        QVERIFY(!QFile::exists(dir.filePath("invalid.step")));
+        loaded.suppress(moved,false);QCOMPARE(loaded.json(),original);QVERIFY(!loaded.get(copied).inactive);
+        QVERIFY(std::abs(Model::volume(loaded.get(copied).shape)-1000)<1e-7);
+        m.setParameters({{"size","3 mm"}});m.setExpression(independent,"r","size");QCOMPARE(m.json()["version"].toInt(),4);
+        m.suppress(base,true);m.suppress(moved,false);QVERIFY(m.get(moved).inactive);
+        m.suppress(base,false);QVERIFY(!m.get(copied).inactive);
+    }
+    void failedReactivationIsAtomic() {
+        Model m;auto sk=m.add("sketch",{{"profile","rectangle"},{"w",10},{"h",10}});
+        auto solid=m.add("extrude",{{"source",sk},{"d",5}});m.suppress(solid,true);
+        auto invalid=m.get(solid).p;invalid["d"]=0;m.edit(solid,invalid,"Temporarily invalid");
+        const auto before=m.json();QVERIFY_THROWS_EXCEPTION(std::exception,m.suppress(solid,false));
+        QCOMPARE(m.json(),before);QVERIFY(m.get(solid).inactive);QVERIFY(m.get(solid).suppressed);
+        invalid["d"]=8;m.edit(solid,invalid,"Fixed");m.suppress(solid,false);
+        QVERIFY(std::abs(Model::volume(m.get(solid).shape)-800)<1e-7);
+        auto malformed=m.json();auto list=malformed["features"].toArray();auto item=list[0].toObject();
+        item["suppressed"]="yes";list[0]=item;malformed["features"]=list;malformed["version"]=4;
+        const auto good=m.json();QVERIFY_THROWS_EXCEPTION(std::exception,m.loadJson(malformed));QCOMPARE(m.json(),good);
+    }
     void expressionsDriveSketchAndAngles() {
         Model m;m.setParameters({{"width","20 mm"},{"turn","90 deg"}});
         auto sk=m.add("sketch",{{"profile","rectangle"},{"w",20},{"h",10}});
@@ -42,8 +78,8 @@ class CoreTests : public QObject {
         QVERIFY_THROWS_EXCEPTION(std::exception,m.setExpression(circle,"w","1 mm"));
     }
     void nativeVersionFixtures() {
-        const QStringList paths{QFINDTESTDATA("fixtures/v1-basic.mcad"),QFINDTESTDATA("fixtures/v2-constrained.mcad"),QFINDTESTDATA("fixtures/v3-parameters.mcad")};
-        const QVector<double> volumes{6000,500,2000};
+        const QStringList paths{QFINDTESTDATA("fixtures/v1-basic.mcad"),QFINDTESTDATA("fixtures/v2-constrained.mcad"),QFINDTESTDATA("fixtures/v3-parameters.mcad"),QFINDTESTDATA("fixtures/v4-suppressed.mcad")};
+        const QVector<double> volumes{6000,500,2000,6};
         for(int i=0;i<paths.size();++i) {
             QVERIFY(!paths[i].isEmpty());QFile fixture(paths[i]);QVERIFY(fixture.open(QIODevice::ReadOnly));
             const auto expected=QJsonDocument::fromJson(fixture.readAll()).object();Model m;m.load(paths[i]);
@@ -354,7 +390,7 @@ class CoreTests : public QObject {
         const bool dirty = m.dirty;
         QList<QJsonObject> invalid;
         auto wrongVersion = original; wrongVersion["version"] = 1.5; invalid.append(wrongVersion);
-        auto future = original; future["version"] = 4; invalid.append(future);
+        auto future = original; future["version"] = 999; invalid.append(future);
         auto units = original; units["units"] = "in"; invalid.append(units);
         auto extra = original; extra["unrecognizedData"] = true; invalid.append(extra);
         const auto feature = original["features"].toArray().first().toObject();

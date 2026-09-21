@@ -65,11 +65,11 @@ double positive(const QJsonObject &p, const char *k, double fallback = 1) {
 }
 void validateDocument(const QJsonObject &root) {
     require(root["format"] == "MecaCAD" && root["version"].isDouble() &&
-                (root["version"].toDouble() == 1 || root["version"].toDouble() == 2 || root["version"].toDouble() == 3) && root["units"] == "mm",
+                (root["version"].toDouble() == 1 || root["version"].toDouble() == 2 || root["version"].toDouble() == 3 || root["version"].toDouble() == 4) && root["units"] == "mm",
             "Formato, versão ou unidade de projeto não suportado.");
     const QSet<QString> rootKeys = {"format", "version", "units", "features", "namedParameters"};
     if(root.contains("namedParameters")) {
-        require(root["version"].toInt()==3 && root["namedParameters"].isObject(), "Parâmetros nomeados exigem documento v3.");
+        require(root["version"].toInt()>=3 && root["namedParameters"].isObject(), "Parâmetros nomeados exigem documento v3 ou posterior.");
         const auto definitions=root["namedParameters"].toObject();
         for(auto it=definitions.begin();it!=definitions.end();++it)
             require(it.value().isString(),"A fórmula do parâmetro deve ser texto.");
@@ -80,7 +80,7 @@ void validateDocument(const QJsonObject &root) {
             "Lista de operações inválida.");
     const QSet<QString> types = {"box", "cylinder", "sphere", "sketch", "extrude", "revolve", "boolean",
                                 "hole", "transform", "copy", "remove", "fillet", "chamfer", "mesh", "import"};
-    const QSet<QString> featureKeys = {"id", "name", "type", "parameters", "visible"};
+    const QSet<QString> featureKeys = {"id", "name", "type", "parameters", "visible", "suppressed"};
     QSet<QString> previous;
     for (const auto &value : root["features"].toArray()) {
         require(value.isObject(), "Operação inválida: esperado um objeto.");
@@ -93,13 +93,15 @@ void validateDocument(const QJsonObject &root) {
         require(types.contains(type), "Tipo de operação não suportado: " + type);
         require(f["name"].isUndefined() || f["name"].isString(), "Nome de operação inválido.");
         require(f["visible"].isUndefined() || f["visible"].isBool(), "Visibilidade de operação inválida.");
+        require(f["suppressed"].isUndefined() || (root["version"].toInt()>=4 && f["suppressed"].isBool()),
+                "Supressão exige documento v4 e um valor booleano.");
         require(f["parameters"].isObject(), "Parâmetros de operação inválidos.");
         const auto p = f["parameters"].toObject();
         if (p.contains("constraintSystem"))
             require(root["version"].toInt() >= 2 && type == "sketch" && p["constraintSystem"].isObject() &&
                     p["profile"] == "polyline", "Restrições de sketch exigem documento v2 e perfil poligonal.");
         if(p.contains("expressions")) {
-            require(root["version"].toInt()==3 && p["expressions"].isObject(),"Expressões exigem documento v3.");
+            require(root["version"].toInt()>=3 && p["expressions"].isObject(),"Expressões exigem documento v3 ou posterior.");
             const auto expressions=p["expressions"].toObject();
             for(auto it=expressions.begin();it!=expressions.end();++it)
                 require(Model::expressionFields(type,p).contains(it.key()) && it.value().isString(),
@@ -210,7 +212,9 @@ TopoDS_Shape profile(const QJsonObject &p) {
 }
 } // namespace
 QJsonObject Feature::json() const {
-    return {{"id", id}, {"name", name}, {"type", type}, {"parameters", p}, {"visible", visible}};
+    QJsonObject result{{"id", id}, {"name", name}, {"type", type}, {"parameters", p}, {"visible", visible}};
+    if(suppressed)result["suppressed"]=true;
+    return result;
 }
 Model::Model() : savedDocument(json()) {}
 void Model::markUnsaved() {
@@ -280,13 +284,14 @@ QJsonObject Model::json() const {
     {
         a.append(f.json());
         if (f.p.contains("constraintSystem")) version = std::max(version,2);
-        if (f.p.contains("expressions")) version = 3;
+        if (f.p.contains("expressions")) version = std::max(version,3);
+        if (f.suppressed) version = 4;
     }
     QJsonObject root{{"format", "MecaCAD"}, {"version", version}, {"units", "mm"}, {"features", a}};
     if(!namedParameters.isEmpty()) {
         QJsonObject definitions;
         for(auto it=namedParameters.begin();it!=namedParameters.end();++it) definitions[it.key()]=it.value();
-        root["version"]=3;root["namedParameters"]=definitions;
+        root["version"]=std::max(version,3);root["namedParameters"]=definitions;
     }
     return root;
 }
@@ -299,6 +304,7 @@ void Model::restore(const QJsonObject &root) {
         auto o = v.toObject();
         Feature f{o["id"].toString(),         o["name"].toString(),      o["type"].toString(),
                   o["parameters"].toObject(), o["visible"].toBool(true), {}};
+        f.suppressed=o["suppressed"].toBool();
         require(!f.id.isEmpty(), "Operação sem identificador.");
         candidate.features.push_back(f);
     }
@@ -410,7 +416,7 @@ bool Model::undo() {
 }
 void Model::deleteBody(const QString &id) {
     const auto &feature = get(id);
-    require(feature.type != "sketch" && feature.type != "remove" && !consumed(id),
+    require(!feature.inactive && feature.type != "sketch" && feature.type != "remove" && !consumed(id),
             "Selecione a peça final no desenho ou em Bodies para apagar.");
     add("remove", {{"source", id}}, "Apagar " + feature.name);
 }
@@ -457,12 +463,29 @@ void Model::moveFeature(const QString &id, int destination) {
     document["features"] = list;
     commit(document); // Validation rejects moving inputs after their consumers.
 }
+void Model::suppress(const QString &id,bool suppressed) {
+    get(id);
+    auto document=json();auto entries=document["features"].toArray();
+    for(int i=0;i<entries.size();++i) {
+        auto entry=entries[i].toObject();if(entry["id"]!=id)continue;
+        if(suppressed)entry["suppressed"]=true;else entry.remove("suppressed");
+        entries[i]=entry;break;
+    }
+    document["features"]=entries;document["version"]=4;
+    commit(document);
+}
 void Model::rebuildGeometry() {
     const auto values=parameters::resolve(namedParameters);
-    for (auto &f : features)
+    const auto graph=dependencyGraph();
+    for (auto &f : features) {
         f.shape.Nullify();
-    for (const auto &id : dependencyGraph().order()) {
+        f.inactive=false;
+    }
+    for (const auto &id : graph.order()) {
         auto &f = get(id);
+        f.inactive=f.suppressed;
+        for(const auto &input:graph.dependencies(id))f.inactive=f.inactive || get(input).inactive;
+        if(f.inactive)continue;
         try {
             const auto expressions=f.p.value("expressions").toObject();
             for(auto it=expressions.begin();it!=expressions.end();++it) {
@@ -650,6 +673,7 @@ void Model::rebuildGeometry() {
 }
 bool Model::consumed(const QString &id) const {
     for (auto &f : features) {
+        if(f.inactive)continue;
         if (f.p["target"] == id || f.p["tool"] == id)
             return true;
         if (f.p["source"] == id && f.type != "copy")
@@ -673,7 +697,7 @@ std::vector<int> Model::bodies(bool visibleOnly) const {
     std::vector<int> result;
     for (int i = 0; i < int(features.size()); ++i) {
         const auto &f = features[i];
-        if (f.type != "sketch" && f.type != "remove" && !consumed(f.id) && (!visibleOnly || f.visible))
+        if (!f.inactive && f.type != "sketch" && f.type != "remove" && !consumed(f.id) && (!visibleOnly || f.visible))
             result.push_back(i);
     }
     return result;
@@ -736,7 +760,7 @@ void Model::load(const QString &path) {
 TopoDS_Shape Model::exportShape(const QString &id) const {
     if (!id.isEmpty()) {
         const auto &f = get(id);
-        require(f.type != "sketch" && f.type != "remove",
+        require(!f.inactive && f.type != "sketch" && f.type != "remove",
                 "Selecione um corpo, não uma operação de remoção, para exportar.");
         return f.shape;
     }
@@ -788,7 +812,7 @@ QString Model::importStl(const QString &path) {
 }
 void Model::exportDxf(const QString &path, const QString &id) const {
     const auto &sk = get(id);
-    require(sk.type == "sketch", "Selecione um sketch na árvore para exportar DXF.");
+    require(!sk.inactive && sk.type == "sketch", "Selecione um sketch ativo na árvore para exportar DXF.");
     const auto &p = sk.p;
     QSaveFile f(path);
     require(f.open(QIODevice::WriteOnly | QIODevice::Text), f.errorString());

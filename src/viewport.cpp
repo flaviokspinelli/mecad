@@ -102,7 +102,7 @@ QPointF Viewport::sketchPoint(QPointF pixel) {
         return Model::planeCoordinates(plane, {float(p.X()),float(p.Y()),float(p.Z())});
     };
     for (const auto &f : model->features) {
-        if (f.type != "sketch" || !(f.id == selected || (f.visible && !model->consumed(f.id))) ||
+        if (f.inactive || f.type != "sketch" || !(f.id == selected || (f.visible && !model->consumed(f.id))) ||
             f.p["plane"].toString("XY") != plane || std::abs(f.p["offset"].toDouble() - planeOffset) > 1e-5)
             continue;
         for (TopExp_Explorer it(f.shape, TopAbs_EDGE); it.More(); it.Next()) {
@@ -238,7 +238,7 @@ void Viewport::fit() {
         BRepBndLib::Add(model->features[i].shape, box);
     if (box.IsVoid())
         for (auto &f : model->features)
-            if (f.type == "sketch" && f.visible)
+            if (!f.inactive && f.type == "sketch" && f.visible)
                 BRepBndLib::Add(f.shape, box);
     if (box.IsVoid()) {
         center = {20, 15, 0};
@@ -461,7 +461,7 @@ void Viewport::paintOverlay(QPainter &p) {
         p.setBrush(Qt::NoBrush);
     }
     for (auto &f : model->features)
-        if (f.type == "sketch" && (f.id == selected || (f.visible && !model->consumed(f.id)))) {
+        if (!f.inactive && f.type == "sketch" && (f.id == selected || (f.visible && !model->consumed(f.id)))) {
             bool chosen = objectSelected(f.id);
             bool hovered = hoveredDetail.feature == f.id && hoveredDetail.kind == "object";
             p.setPen(QPen(chosen    ? QColor("#65ceff")
@@ -519,7 +519,7 @@ void Viewport::paintOverlay(QPainter &p) {
     if (sketchMode && !selected.isEmpty()) {
         const auto &f = model->get(selected);
         const auto &params = f.p;
-        if (f.type == "sketch") {
+        if (!f.inactive && f.type == "sketch") {
             auto point = [&](double u, double v) {
                 return project(
                     Model::planePoint(params["plane"].toString("XY"), u, v, params["offset"].toDouble()));

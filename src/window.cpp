@@ -473,6 +473,9 @@ QAction *Window::command(QString key, QString label, QString shortcut, std::func
             const QStringList bodyCommands = {"delete", "rollback", "transform", "copy",
                                               "fillet", "hole",     "boolean",   "cut",
                                               "common", "extrude",  "revolve",   "dimension"};
+            if(!selected.isEmpty() && model.get(selected).inactive &&
+               (bodyCommands.contains(key) || key=="chamfer" || key=="sketch" || key=="measure"))
+                throw std::runtime_error("Reative a etapa e suas dependências antes de operar sobre sua geometria.");
             if (key != "delete" && key != "transform" && key != "fillet" && key != "chamfer" &&
                 (canvas->hasSubselection() || canvas->selectedDetails.size() > 1) && bodyCommands.contains(key))
                 throw std::runtime_error(
@@ -671,6 +674,14 @@ Window::Window(QString recoveryDirectory, bool promptRecovery) {
             refresh();
         }));
     }
+    edit->addAction(command("suppress", "Suprimir / reativar etapa", "", [this] {
+        if(canvas->sketchMode)throw std::runtime_error("Finalize o sketch antes de suprimir uma etapa.");
+        if(selected.isEmpty())return;
+        const auto &feature=model.get(selected);
+        if(feature.inactive && !feature.suppressed)
+            throw std::runtime_error("Esta etapa depende de uma etapa suprimida. Reative a origem primeiro; consulte Dependências da etapa.");
+        model.suppress(selected,!feature.suppressed);refresh();
+    }));
     command("sketch", "Create Sketch", "", [this] { startSketch(); });
     command("finish", "Finish Sketch", "", [this] { finishSketch(); });
     command("rectangle", "2-Point Rectangle", "R", [this] { sketchTool("rectangle"); });
@@ -1221,6 +1232,7 @@ Window::Window(QString recoveryDirectory, bool promptRecovery) {
         menu.addAction("Edit Feature", this, [this] { properties->show(); });
         if (model.get(selected).type == "sketch") {
             menu.addAction("Edit Sketch", this, [this] {
+                if(model.get(selected).inactive)return;
                 const auto &p = model.get(selected).p;
                 canvas->plane = p["plane"].toString("XY");
                 canvas->planeOffset = p["offset"].toDouble();
@@ -1244,6 +1256,7 @@ Window::Window(QString recoveryDirectory, bool promptRecovery) {
         menu.addAction(commands["dependencies"]);
         menu.addAction(commands["historyEarlier"]);
         menu.addAction(commands["historyLater"]);
+        menu.addAction(commands["suppress"]);
         menu.exec(tree->viewport()->mapToGlobal(pos));
     });
     timeline->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -1256,6 +1269,7 @@ Window::Window(QString recoveryDirectory, bool promptRecovery) {
         menu.addAction(commands["dependencies"]);
         menu.addAction(commands["historyEarlier"]);
         menu.addAction(commands["historyLater"]);
+        menu.addAction(commands["suppress"]);
         menu.exec(timeline->viewport()->mapToGlobal(position));
     });
     connect(timeline, &QListWidget::itemClicked, this,
@@ -1464,19 +1478,21 @@ void Window::refresh(bool fit) {
     history->setIcon(1, icon("folder"));
     for (auto &f : model.features) {
         bool consumed = model.consumed(f.id);
-        auto *parent = f.type == "sketch" ? sketches : ((consumed || f.type == "remove") ? history : bodies);
-        auto *item = new QTreeWidgetItem(parent, {"", f.name});
-        item->setIcon(0, icon(f.visible ? "eye" : "hidden"));
+        auto *parent = f.type == "sketch" ? sketches : ((f.inactive || consumed || f.type == "remove") ? history : bodies);
+        const QString state=f.suppressed?" [suprimida]":(f.inactive?" [dependência suprimida]":"");
+        auto *item = new QTreeWidgetItem(parent, {"", f.name+state});
+        item->setIcon(0, icon(f.visible && !f.inactive ? "eye" : "hidden"));
         item->setIcon(1, icon(f.type));
         item->setData(0, Qt::UserRole, f.id);
-        item->setToolTip(0, "Click to toggle visibility");
-        if (consumed)
+        item->setToolTip(0, f.inactive?"Geometria inativa por supressão; reative a etapa de origem.":"Click to toggle visibility");
+        if (consumed || f.inactive)
             item->setForeground(1, QColor("#9baab9"));
         if (f.id == selected)
             tree->setCurrentItem(item);
         auto *step = new QListWidgetItem(icon(f.type), "", timeline);
         step->setData(Qt::UserRole, f.id);
-        step->setToolTip(f.name + " — " + displayType(f.type) + "\nDouble-click to edit");
+        step->setToolTip(f.name + state + " — " + displayType(f.type) + "\nDouble-click to edit");
+        if(f.inactive){auto font=step->font();font.setStrikeOut(true);step->setFont(font);step->setText("−");}
         step->setSizeHint({25, 27});
         if (f.id == selected)
             timeline->setCurrentItem(step);
@@ -1530,6 +1546,13 @@ void Window::buildProperties() {
         return;
     }
     const auto &f = model.get(selected);
+    if(f.inactive) {
+        auto *note=new QLabel(f.suppressed?"Etapa suprimida. Reative para editar sua geometria.":"Etapa inativa por dependência suprimida. Reative a etapa de origem.");
+        note->setWordWrap(true);propertyForm->addRow(note);
+        auto *resume=new QPushButton("Suprimir / reativar etapa");propertyForm->addRow(resume);
+        connect(resume,&QPushButton::clicked,commands["suppress"],&QAction::trigger);
+        return;
+    }
     properties->setWindowTitle(f.type == "sketch" ? "SKETCH DIMENSIONS" : "EDIT FEATURE");
     featureName = new QLineEdit(f.name);
     propertyForm->addRow("Name", featureName);
@@ -1730,7 +1753,7 @@ void Window::extrude(bool revolve) {
     const QString originalName = editing.isEmpty() ? QString() : model.get(editing).name;
     QList<QPair<QString, QString>> sketches, bodies = {{"New Body", ""}};
     for (auto &feature : model.features)
-        if (feature.type == "sketch")
+        if (!feature.inactive && feature.type == "sketch")
             sketches.append({feature.name, feature.id});
     for (auto i : model.bodies())
         if (model.features[i].id != editing && !model.isMesh(model.features[i].id))

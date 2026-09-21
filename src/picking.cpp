@@ -30,7 +30,7 @@ QVector<Viewport::SelectionTarget> Viewport::pickArea(QRectF area, bool crossing
         return inside || (crossing && (path.intersects(region) || path.contains(area.center())));
     };
     for (const auto &feature : model->features) {
-        if (!feature.visible || feature.type == "remove" || model->consumed(feature.id))
+        if (feature.inactive || !feature.visible || feature.type == "remove" || model->consumed(feature.id))
             continue;
         if (selectionFilter == "face") {
             if (model->isMesh(feature.id)) continue;
@@ -139,7 +139,7 @@ Viewport::SelectionTarget Viewport::pickDetail(QPointF pixel, bool objectOnly) c
         objectOnly || selectionFilter == "object" || selectionFilter == "auto" || selectionFilter == "edge";
     for (const auto &feature : model->features) {
         bool sketch = feature.type == "sketch";
-        bool eligible = feature.type != "remove" && feature.visible &&
+        bool eligible = !feature.inactive && feature.type != "remove" && feature.visible &&
                         (!model->consumed(feature.id) || (sketch && sketchMode && feature.id == selected));
         if (!eligible || (!sketch && model->isMesh(feature.id)))
             continue;

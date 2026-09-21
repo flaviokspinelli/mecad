@@ -46,7 +46,8 @@ altera o estado anterior. Aceitar gera uma etapa de undo, cancelar não altera o
 documento. Exclusão de parâmetro utilizado é recusada; remover vínculo é explícito.
 Fórmulas são a fonte de verdade, valores numéricos são cache reconstruído.
 
-Documentos com parâmetros/vínculos usam .mcad v3; os demais continuam v1/v2.
+Documentos com parâmetros/vínculos usam .mcad v3, ou v4 quando há etapas
+suprimidas; os demais continuam v1/v2.
 Versões antigas recusam v3 em vez de descartar fórmulas silenciosamente.
 Nenhum novo pacote do aplicativo é criado para mudar a versão do documento.
 

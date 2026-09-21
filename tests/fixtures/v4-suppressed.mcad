@@ -1,0 +1,10 @@
+{
+  "format": "MecaCAD",
+  "version": 4,
+  "units": "mm",
+  "features": [
+    {"id":"base","name":"Base","type":"box","visible":true,"parameters":{"w":20,"h":10,"d":5}},
+    {"id":"move","name":"Move","type":"transform","visible":true,"suppressed":true,"parameters":{"source":"base","x":4}},
+    {"id":"independent","name":"Independent","type":"box","visible":true,"parameters":{"w":1,"h":2,"d":3,"x":100}}
+  ]
+}

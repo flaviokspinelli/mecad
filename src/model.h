@@ -15,6 +15,8 @@ struct Feature {
     QJsonObject p;
     bool visible = true;
     TopoDS_Shape shape;
+    bool suppressed = false;
+    bool inactive = false; // Derived: suppressed directly or through a dependency.
     QJsonObject json() const;
 };
 struct Triangle {
@@ -40,6 +42,7 @@ class Model {
     void rebuild();
     DependencyGraph dependencyGraph() const;
     void moveFeature(const QString &id, int destination);
+    void suppress(const QString &id, bool suppressed);
     sketch::System sketchSystem(const QString &id) const;
     QString sketchEntityId(const QString &id, const QString &kind, int index) const;
     QString constrainSketch(const QString &id, sketch::Relation relation, const QString &first,

@@ -24,7 +24,7 @@ void Model::setParameters(const QMap<QString,QString> &definitions) {
     parameters::resolve(definitions); // Validate all definitions before changing the document.
     auto document=json();QJsonObject object;
     for(auto it=definitions.begin();it!=definitions.end();++it) object[it.key()]=it.value();
-    document["version"]=3;document["namedParameters"]=object;
+    document["version"]=std::max(document["version"].toInt(),3);document["namedParameters"]=object;
     commit(document);
 }
 void Model::setExpression(const QString &id,const QString &field,const QString &expression) {
@@ -40,5 +40,5 @@ void Model::setExpression(const QString &id,const QString &field,const QString &
         auto entry=features[i].toObject();
         if(entry["id"]==id) {entry["parameters"]=p;features[i]=entry;break;}
     }
-    document["features"]=features;document["version"]=3;commit(document);
+    document["features"]=features;document["version"]=std::max(document["version"].toInt(),3);commit(document);
 }

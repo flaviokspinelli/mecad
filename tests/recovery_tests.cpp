@@ -12,14 +12,15 @@ class RecoveryTests : public QObject {
     Q_OBJECT
   private slots:
     void everyNativeVersionRestores() {
-        for(int version=1;version<=3;++version) {
+        for(int version=1;version<=4;++version) {
             QTemporaryDir directory;QString id;QJsonObject expected;
             {
                 RecoveryStore writer(directory.path());id=writer.sessionId();Model m;
                 auto sketch=m.add("sketch",{{"profile","rectangle"},{"w",10},{"h",10}});
                 if(version>=2)m.constrainSketch(sketch,sketch::Relation::Fixed,"p0",{},{0,0});
                 auto solid=m.add("extrude",{{"source",sketch},{"d",2}});
-                if(version==3){m.setParameters({{"depth","3 mm"}});m.setExpression(solid,"d","depth");}
+                if(version>=3){m.setParameters({{"depth","3 mm"}});m.setExpression(solid,"d","depth");}
+                if(version==4)m.suppress(solid,true);
                 QCOMPARE(m.json()["version"].toInt(),version);expected=m.json();writer.write(m);
             }
             RecoveryStore reader(directory.path());Model restored;reader.recover(id,restored);

@@ -1,5 +1,26 @@
 # Execução do backlog
 
+## 21/09/2026 — supressão e reativação de etapas (PAR-05)
+
+- Supressão explícita e propagação pelo grafo sem apagar histórico. Corpos de
+  entrada voltam a aparecer; ramos independentes permanecem ativos.
+- Reativação transacional: uma falha não substitui o último documento válido.
+  Salvar/reabrir, undo/redo e parâmetros nomeados preservam o estado.
+- A interface diferencia suprimida de inativa por dependência; seleção no canvas
+  e exportação não incluem geometria inativa. Comando no menu Edit e contextos.
+- `.mcad` v4 registra somente a intenção de supressão, não o cache derivado.
+  v1/v2/v3 continuam aceitos. Não é uma nova distribuição do aplicativo.
+- Suíte core completa: 38 resultados (36 testes e setup/cleanup), zero falhas.
+  Suíte recovery: 9 resultados, zero falhas, incluindo recuperação v4.
+  UI suppressionFromHistory e historyDependenciesAndReorder: zero falhas.
+  Captura build/suppression-history.png inspecionada: etapa identificada no
+  Browser/histórico e corpo anterior visível. Fixture v4-suppressed.mcad passou
+  no teste conjunto de leitura/regravação das quatro versões nativas.
+
+O aceite funcional de PAR-05 está verificado em desenvolvimento. A linha não é
+declarada entregue: falta a porta global de verificação do pacote consolidado,
+cuja geração/substituição permanece restringida. Não há ampliação dos 38 itens.
+
 ## 21/09/2026 — fórmulas em sketches/ângulos e reedição de extrusão
 
 Escopo congelado nos 38 parciais. Nenhum pacote gerado ou distribuição alterada.
