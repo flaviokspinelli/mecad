@@ -38,6 +38,7 @@ class Viewport : public QOpenGLWidget, protected QOpenGLFunctions {
     std::function<void()> onAcceptCommand;
     void setModel(Model *m);
     double planeOffset = 0;
+    int polygonSides = 6;
     std::function<void(QString)> onSelect;
     std::function<void(QString)> onEditSketch;
     std::function<QString(QString, QString, double)> onDimensionEdit;
@@ -54,6 +55,7 @@ class Viewport : public QOpenGLWidget, protected QOpenGLFunctions {
     QPointF project(QVector3D p) const;
     QPointF planeAt(QPointF pixel, bool grid = true) const;
     void finishPolyline(bool close);
+    QPolygonF regularPolygon(QPointF center, QPointF vertex) const;
     void paintOverlay(QPainter &p);
     void zoomBy(float factor);
 

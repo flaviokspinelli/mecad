@@ -11,6 +11,69 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void regularPolygons() {
+        Model model;
+        Viewport v(&model);
+        v.resize(900, 600);
+        v.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&v));
+        v.sketchMode = true;
+        v.snap = false;
+        v.smartSnap = false;
+        QString id;
+        v.onProfile = [&](QJsonObject p) { id = model.add("sketch", p); };
+        for (auto plane : {"XY", "XZ", "YZ"}) {
+            for (int sides : {3, 5, 6, 8}) {
+                model.clear();
+                v.plane = plane;
+                v.planeOffset = 7;
+                v.view("top");
+                v.setTool("polygon");
+                v.polygonSides = sides;
+                QPoint center(430, 340), vertex(530, 310);
+                QTest::mouseClick(&v, Qt::LeftButton, Qt::NoModifier, center);
+                QMouseEvent move(QEvent::MouseMove, QPointF(vertex), QPointF(v.mapToGlobal(vertex)),
+                                 Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+                QApplication::sendEvent(&v, &move);
+                if (sides == 6 && QString(plane) == "XY")
+                    v.grab().save(QDir::currentPath() + "/polygon-preview-test.png");
+                QTest::mouseClick(&v, Qt::LeftButton, Qt::NoModifier, vertex);
+                QCOMPARE(model.features.size(), size_t(1));
+                auto p = model.get(id).p;
+                QCOMPARE(p["points"].toArray().size(), sides);
+                QVERIFY(p["closed"].toBool());
+                QCOMPARE(p["offset"].toDouble(), 7.);
+                auto points = p["points"].toArray();
+                double edge = 0;
+                for (int i = 0; i < sides; ++i) {
+                    auto a = points[i].toArray(), b = points[(i + 1) % sides].toArray();
+                    double length =
+                        QLineF({a[0].toDouble(), a[1].toDouble()}, {b[0].toDouble(), b[1].toDouble()})
+                            .length();
+                    if (i == 0)
+                        edge = length;
+                    QVERIFY(std::abs(length - edge) < 1e-8);
+                }
+                auto solid = model.add("extrude", {{"source", id}, {"d", 10}});
+                double area = sides * edge * edge / (4 * std::tan(M_PI / sides));
+                QVERIFY(std::abs(Model::volume(model.get(solid).shape) - area * 10) < .001);
+            }
+        }
+        model.clear();
+        v.setTool("polygon");
+        v.polygonSides = 5;
+        QTest::mousePress(&v, Qt::LeftButton, Qt::NoModifier, {430, 340});
+        QPoint vertex(530, 310);
+        QMouseEvent move(QEvent::MouseMove, QPointF(vertex), QPointF(v.mapToGlobal(vertex)), Qt::NoButton,
+                         Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(&v, &move);
+        QTest::keyClick(&v, Qt::Key_Up);
+        QTest::mouseRelease(&v, Qt::LeftButton, Qt::NoModifier, vertex);
+        QCOMPARE(model.get(id).p["points"].toArray().size(), 6);
+        QTest::mouseClick(&v, Qt::LeftButton, Qt::NoModifier, {430, 340});
+        QTest::keyClick(&v, Qt::Key_Escape);
+        QCOMPARE(model.features.size(), size_t(1));
+    }
     void inlineDimensions() {
         Window window;
         window.show();

@@ -161,6 +161,12 @@ QIcon icon(const QString &kind) {
             p.setBrush(top);
             p.drawRect(QRectF(q - QPointF(3, 3), QSizeF(6, 6)));
         }
+    } else if (kind == "polygon") {
+        p.setPen(QPen(blue, 3));
+        p.setBrush(Qt::NoBrush);
+        p.drawPolygon(QPolygonF{{10, 20}, {32, 8}, {54, 20}, {54, 44}, {32, 56}, {10, 44}});
+        p.setBrush(top);
+        p.drawEllipse(QPointF(32, 32), 3, 3);
     } else if (kind == "polyline" || kind == "trim") {
         p.setPen(QPen(blue, 3));
         line({9, 49}, {25, 15});
@@ -527,6 +533,15 @@ Window::Window() {
     command("rectangle", "2-Point Rectangle", "R", [this] { sketchTool("rectangle"); });
     command("circle", "Center Diameter Circle", "C", [this] { sketchTool("circle"); });
     command("polyline", "Line", "L", [this] { sketchTool("polyline"); });
+    command("polygon", "Polygon — Polígono regular", "", [this] {
+        bool ok = false;
+        int sides = QInputDialog::getInt(this, "Polígono regular",
+                                         "Número de lados (3 a 64):", canvas->polygonSides, 3, 64, 1, &ok);
+        if (!ok)
+            return;
+        canvas->polygonSides = sides;
+        sketchTool("polygon");
+    });
     command("arc", "3-Point Arc", "", [this] { sketchTool("arc"); });
     command("dimension", "Sketch Dimension", "D", [this] {
         canvas->setTool({});
@@ -867,7 +882,7 @@ Window::Window() {
     connect(canvas, &QWidget::customContextMenuRequested, this, [this](QPoint position) {
         QMenu menu;
         if (canvas->sketchMode) {
-            for (auto key : {"polyline", "rectangle", "circle", "dimension", "finish"})
+            for (auto key : {"polyline", "rectangle", "circle", "polygon", "dimension", "finish"})
                 menu.addAction(commands[key]);
         } else {
             for (auto key : {"sketch", "extrude", "hole", "transform", "measure"})
@@ -1059,8 +1074,8 @@ void Window::buildRibbon() {
     };
     if (canvas->sketchMode) {
         tabs->setTabText(0, "SKETCH");
-        group("CREATE", {"polyline", "rectangle", "circle", "arc", "exact"},
-              {"polyline", "rectangle", "circle", "arc", "exact"}, {"Spline", "Polygon", "Slot", "Text"});
+        group("CREATE", {"polyline", "rectangle", "circle", "polygon", "arc", "exact"},
+              {"polyline", "rectangle", "circle", "polygon", "arc", "exact"}, {"Spline", "Slot", "Text"});
         group("MODIFY", {"dimension"}, {"dimension"}, {"Trim", "Extend", "Offset", "Mirror"},
               {"trim", "offset"});
         group("CONSTRAINTS", {}, {},

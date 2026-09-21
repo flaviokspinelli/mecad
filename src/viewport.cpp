@@ -469,6 +469,13 @@ void Viewport::paintOverlay(QPainter &p) {
         if (tool == "rectangle") {
             auto origin = draft.front();
             p.drawPolygon(QPolygonF{a, pixel({cursor.x(), origin.y()}), b, pixel({origin.x(), cursor.y()})});
+        } else if (tool == "polygon") {
+            QPolygonF outline;
+            for (auto point : regularPolygon(draft.front(), cursor))
+                outline << pixel(point);
+            p.drawPolygon(outline);
+            p.drawLine(a, b);
+            p.drawText(b + QPointF(14, 18), QString("%1 lados · ↑/↓ altera").arg(polygonSides));
         } else if (tool == "circle") {
             double r = QLineF(draft.front(), cursor).length();
             QPolygonF circle;
@@ -804,6 +811,17 @@ void Viewport::finishPolyline(bool close) {
         a.append(QJsonArray{p.x(), p.y()});
     submit({{"profile", "polyline"}, {"points", a}, {"closed", close}});
 }
+QPolygonF Viewport::regularPolygon(QPointF center, QPointF vertex) const {
+    QPolygonF points;
+    const int sides = std::clamp(polygonSides, 3, 64);
+    const double radius = QLineF(center, vertex).length();
+    const double angle = std::atan2(vertex.y() - center.y(), vertex.x() - center.x());
+    for (int i = 0; i < sides; ++i) {
+        double theta = angle + 2 * M_PI * i / sides;
+        points << center + QPointF(radius * std::cos(theta), radius * std::sin(theta));
+    }
+    return points;
+}
 QVector3D Viewport::moveHandleTip(int axis) const {
     QVector3D direction;
     direction[axis] = moveHandleLength;
@@ -922,12 +940,13 @@ void Viewport::mousePressEvent(QMouseEvent *e) {
     if (sketchDragging)
         draft.clear();
     sketchDragging = false;
-    sketchPressCandidate = sketchMode && draft.empty() &&
-                           (tool == "rectangle" || tool == "circle" || tool == "polyline") &&
-                           e->button() == Qt::LeftButton && !e->modifiers().testFlag(Qt::AltModifier) &&
-                           navigationMode.isEmpty() && !handleActive && !moveHandleActive &&
-                           cubeDirectionAt(e->position()).isNull() &&
-                           !QRect(width() - 84, 100, 50, 20).contains(e->position().toPoint());
+    sketchPressCandidate =
+        sketchMode && draft.empty() &&
+        (tool == "rectangle" || tool == "circle" || tool == "polyline" || tool == "polygon") &&
+        e->button() == Qt::LeftButton && !e->modifiers().testFlag(Qt::AltModifier) &&
+        navigationMode.isEmpty() && !handleActive && !moveHandleActive &&
+        cubeDirectionAt(e->position()).isNull() &&
+        !QRect(width() - 84, 100, 50, 20).contains(e->position().toPoint());
     last = pressed = e->position();
     if (sketchPressCandidate)
         sketchPressPoint = sketchPoint(pressed);
@@ -1155,6 +1174,11 @@ void Viewport::mouseReleaseEvent(QMouseEvent *e) {
                     {"y", std::min(a.y(), b.y())},
                     {"w", std::abs(b.x() - a.x())},
                     {"h", std::abs(b.y() - a.y())}});
+        } else if (draft.size() == 2 && tool == "polygon") {
+            QJsonArray points;
+            for (auto point : regularPolygon(draft[0], draft[1]))
+                points.append(QJsonArray{point.x(), point.y()});
+            submit({{"profile", "polyline"}, {"points", points}, {"closed", true}});
         } else if (draft.size() == 2 && tool == "circle") {
             auto a = draft[0];
             submit({{"profile", "circle"}, {"x", a.x()}, {"y", a.y()}, {"r", QLineF(a, draft[1]).length()}});
@@ -1206,6 +1230,11 @@ bool Viewport::event(QEvent *event) {
     return QOpenGLWidget::event(event);
 }
 void Viewport::keyPressEvent(QKeyEvent *e) {
+    if (sketchMode && tool == "polygon" && (e->key() == Qt::Key_Up || e->key() == Qt::Key_Down)) {
+        polygonSides = std::clamp(polygonSides + (e->key() == Qt::Key_Up ? 1 : -1), 3, 64);
+        update();
+        return;
+    }
     if (e->key() == Qt::Key_Escape) {
         if (cubePressed) {
             cubePressed = false;
