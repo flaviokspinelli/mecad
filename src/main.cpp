@@ -15,8 +15,8 @@ int main(int argc, char **argv) {
     format.setSamples(4);
     QSurfaceFormat::setDefaultFormat(format);
     QApplication app(argc, argv);
-    app.setOrganizationName("MecaCAD");
-    app.setApplicationName("MecaCAD");
+    app.setOrganizationName("Mecad");
+    app.setApplicationName("Mecad");
     app.setApplicationVersion("0.2.25");
     Window window;
     window.show();

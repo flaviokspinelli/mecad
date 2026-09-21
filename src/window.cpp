@@ -505,11 +505,11 @@ Window::Window(QString recoveryDirectory, bool promptRecovery, QString preferenc
         const auto value=preferences->value(key).toString().toLower();
         return value=="true"?true:value=="false"?false:fallback;
     };
-    setObjectName("MecaCAD");
+    setObjectName("Mecad");
     resize(1440, 920);
     setMinimumSize(1100, 720);
     setDockOptions(QMainWindow::AnimatedDocks);
-    setWindowTitle("MecaCAD");
+    setWindowTitle("Mecad");
     qApp->setStyle("Fusion");
     QPalette palette;
     palette.setColor(QPalette::Window, QColor("#364353"));
@@ -1006,7 +1006,7 @@ Window::Window(QString recoveryDirectory, bool promptRecovery, QString preferenc
     auto *space = new QWidget;
     space->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     bar->addWidget(space);
-    auto *local = new QLabel("MecaCAD   ·   Local   ");
+    auto *local = new QLabel("Mecad   ·   Local   ");
     local->setStyleSheet("color:#9badbf;font-size:10px;");
     bar->addWidget(local);
     auto *helpButton = new QToolButton;
@@ -1453,7 +1453,7 @@ void Window::run(const std::function<void()> &fn) {
     } catch (const Standard_Failure &e) {
         QMessageBox::warning(this, "Geometry", QString::fromUtf8(e.GetMessageString()));
     } catch (const std::exception &e) {
-        QMessageBox::warning(this, "MecaCAD", QString::fromUtf8(e.what()));
+        QMessageBox::warning(this, "Mecad", QString::fromUtf8(e.what()));
     }
 }
 void Window::buildRibbon() {
@@ -1569,7 +1569,7 @@ void Window::refresh(bool fit) {
         selected.clear();
     QString title = model.filePath.isEmpty() ? "Untitled" : QFileInfo(model.filePath).completeBaseName();
     documentTitle->setText(title + (model.dirty ? " *" : ""));
-    setWindowTitle(title + (model.dirty ? " *" : "") + " — MecaCAD");
+    setWindowTitle(title + (model.dirty ? " *" : "") + " — Mecad");
     auto *root = new QTreeWidgetItem(tree, {"", title});
     root->setIcon(0, icon("eye"));
     root->setIcon(1, icon("component"));
@@ -2640,7 +2640,7 @@ void Window::save(bool as) {
     QString path = model.filePath;
     if (as || path.isEmpty())
         path = QFileDialog::getSaveFileName(this, "Save Design", path.isEmpty() ? "Untitled.mcad" : path,
-                                            "MecaCAD (*.mcad)");
+                                            "Mecad (*.mcad)");
     if (path.isEmpty())
         return;
     model.save(withExtension(path, "mcad"));
@@ -2673,7 +2673,7 @@ void Window::open() {
     if (!canLeave())
         return;
     auto path = QFileDialog::getOpenFileName(
-        this, "Open Design", {}, "MecaCAD / STL (*.mcad *.stl *.STL);;MecaCAD (*.mcad);;STL (*.stl *.STL)");
+        this, "Open Design", {}, "Mecad / STL (*.mcad *.stl *.STL);;Mecad (*.mcad);;STL (*.stl *.STL)");
     if (!path.isEmpty())
         openPath(path);
 }
@@ -2808,7 +2808,7 @@ void Window::configureShortcuts() {
     buildRibbon();
 }
 void Window::showHelp() {
-    QDialog dialog(this);dialog.setObjectName("usageGuide");dialog.setWindowTitle("MecaCAD — Guia de uso");
+    QDialog dialog(this);dialog.setObjectName("usageGuide");dialog.setWindowTitle("Mecad — Guia de uso");
     auto *layout=new QVBoxLayout(&dialog);auto *tabs=new QTabWidget;tabs->setObjectName("guideTabs");layout->addWidget(tabs);
     auto page=[&](QString title,QString html) {
         auto *text=new QTextBrowser;text->setOpenExternalLinks(false);text->setOpenLinks(false);
