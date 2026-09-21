@@ -1453,7 +1453,7 @@ void Window::extrude(bool revolve) {
         panel.number("angle", "Angle", initial["angle"].toDouble(360), .01, 360, " °");
         panel.number("axis", "Axis position", initial["axis"].toDouble());
     } else
-        panel.number("d", "Distance", initial["d"].toDouble(10));
+        panel.number("d", "Distance", initial["d"].toDouble(0));
     panel.choice("target", "Target body", bodies, originalTarget);
     panel.choice("mode", "Operation", {{"New Body / Join", "join"}, {"Cut", "cut"}},
                  initial["mode"].toString("join"));
@@ -1486,12 +1486,6 @@ void Window::extrude(bool revolve) {
             }
             if (parameters["mode"] == "cut" && parameters["target"].toString().isEmpty())
                 throw std::runtime_error("Selecione o corpo a cortar.");
-            preview = model;
-            QString id = editing;
-            if (editing.isEmpty())
-                id = preview.add(operation, parameters, "Preview");
-            else
-                preview.edit(editing, parameters, originalName);
             const auto &sketch = model.get(parameters["source"].toString());
             Bnd_Box box;
             BRepBndLib::AddOptimal(sketch.shape, box);
@@ -1499,8 +1493,20 @@ void Window::extrude(bool revolve) {
             box.Get(x, y, z, X, Y, Z);
             canvas->handleOrigin = QVector3D((x + X) / 2, (y + Y) / 2, (z + Z) / 2);
             canvas->handleAxis = Model::planeNormal(sketch.p["plane"].toString("XY"));
-            canvas->handleDistance = parameters["d"].toDouble(10);
+            canvas->handleDistance = parameters["d"].toDouble();
             canvas->handleActive = !revolve;
+            if (!revolve && std::abs(canvas->handleDistance) < 1e-7) {
+                canvas->selected = sketch.id;
+                canvas->setModel(&model);
+                feedback->setText("Arraste a seta ou digite uma distância para iniciar a extrusão.");
+                return;
+            }
+            preview = model;
+            QString id = editing;
+            if (editing.isEmpty())
+                id = preview.add(operation, parameters, "Preview");
+            else
+                preview.edit(editing, parameters, originalName);
             canvas->selected = id;
             canvas->setModel(&preview);
             feedback->clear();
@@ -1545,7 +1551,7 @@ void Window::extrude(bool revolve) {
     canvas->setModel(&model);
     if (accepted) {
         auto p = panel.values();
-        if (p["source"].toString().isEmpty()) {
+        if (p["source"].toString().isEmpty() || (!revolve && std::abs(p["d"].toDouble()) < 1e-7)) {
             selected = previousSelection;
             refresh();
             return;

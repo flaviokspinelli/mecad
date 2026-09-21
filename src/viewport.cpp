@@ -45,6 +45,7 @@ void Viewport::resizeEvent(QResizeEvent *event) {
 Viewport::~Viewport() {
     makeCurrent();
     buffer.destroy();
+    gridBuffer.destroy();
     vao.destroy();
     doneCurrent();
 }
@@ -193,6 +194,7 @@ void Viewport::initializeGL() {
             "4))));frag=vec4(color*light,1);}") &&
         shader.link();
     buffer.create();
+    gridBuffer.create();
     vao.create();
     if (!ready && onHint)
         onHint("Falha ao iniciar a visualização OpenGL: " + shader.log());
@@ -346,6 +348,10 @@ void Viewport::paintGL() {
     }
     glDisable(GL_SCISSOR_TEST);
 
+    // Draw orientation aids behind the solids, never over their faces.
+    paintGrid();
+    glClear(GL_DEPTH_BUFFER_BIT);
+
     if (ready && !vertices.empty()) {
         glEnable(GL_DEPTH_TEST);
         glDisable(GL_CULL_FACE);
@@ -389,29 +395,52 @@ void Viewport::paintGL() {
     }
     overlay->update();
 }
+void Viewport::paintGrid() {
+    if (!ready || choosingPlane)
+        return;
+    double step = span > 500 ? 100 : (span > 150 ? 10 : (span > 40 ? 5 : 1));
+    QPointF local = planeAt({width() / 2., height() / 2.});
+    double half = span * 1.5;
+    QVector<QVector3D> lines;
+    auto point = [&](double u, double v) {
+        lines.append(Model::planePoint(plane, u, v, planeOffset));
+        lines.append(QVector3D(0, 0, 1));
+    };
+    for (double i = std::floor((local.x() - half) / step) * step; i < local.x() + half; i += step) {
+        point(i, local.y() - half);
+        point(i, local.y() + half);
+    }
+    for (double i = std::floor((local.y() - half) / step) * step; i < local.y() + half; i += step) {
+        point(local.x() - half, i);
+        point(local.x() + half, i);
+    }
+    int gridCount = lines.size() / 2;
+    point(-50000, 0);
+    point(50000, 0);
+    point(0, -50000);
+    point(0, 50000);
+    shader.bind();
+    vao.bind();
+    gridBuffer.bind();
+    gridBuffer.allocate(lines.constData(), lines.size() * sizeof(QVector3D));
+    shader.enableAttributeArray("position");
+    shader.setAttributeBuffer("position", GL_FLOAT, 0, 3, 2 * sizeof(QVector3D));
+    shader.enableAttributeArray("normal");
+    shader.setAttributeBuffer("normal", GL_FLOAT, sizeof(QVector3D), 3, 2 * sizeof(QVector3D));
+    shader.setUniformValue("mvp", matrix());
+    shader.setUniformValue("color", light ? QVector3D(.70, .75, .80) : QVector3D(.30, .39, .46));
+    glDisable(GL_DEPTH_TEST);
+    glDrawArrays(GL_LINES, 0, gridCount);
+    shader.setUniformValue("color", QVector3D(.72, .39, .44));
+    glDrawArrays(GL_LINES, gridCount, 2);
+    shader.setUniformValue("color", QVector3D(.37, .67, .55));
+    glDrawArrays(GL_LINES, gridCount + 2, 2);
+    gridBuffer.release();
+    vao.release();
+    shader.release();
+}
 void Viewport::paintOverlay(QPainter &p) {
     p.setRenderHint(QPainter::Antialiasing);
-    // Ground grid is an orientation aid, kept subtle when solids are present.
-    if ((mesh.empty() || sketchMode) && !choosingPlane) {
-        double step = span > 500 ? 100 : (span > 150 ? 10 : (span > 40 ? 5 : 1));
-        QPointF local = planeAt({width() / 2., height() / 2.});
-        double half = span * 1.5;
-        p.setPen(QPen(light ? QColor(150, 165, 182, 85) : QColor(113, 140, 169, 45), 1));
-        for (double i = std::floor((local.x() - half) / step) * step; i < local.x() + half; i += step)
-            p.drawLine(project(Model::planePoint(plane, i, local.y() - half, planeOffset)),
-                       project(Model::planePoint(plane, i, local.y() + half, planeOffset)));
-        for (double i = std::floor((local.y() - half) / step) * step; i < local.y() + half; i += step)
-            p.drawLine(project(Model::planePoint(plane, local.x() - half, i, planeOffset)),
-                       project(Model::planePoint(plane, local.x() + half, i, planeOffset)));
-    }
-    if ((mesh.empty() || sketchMode) && !choosingPlane) {
-        p.setPen(QPen(QColor("#b76370"), 1));
-        p.drawLine(project(Model::planePoint(plane, -50000, 0, planeOffset)),
-                   project(Model::planePoint(plane, 50000, 0, planeOffset)));
-        p.setPen(QPen(QColor("#5eaa8c"), 1));
-        p.drawLine(project(Model::planePoint(plane, 0, -50000, planeOffset)),
-                   project(Model::planePoint(plane, 0, 50000, planeOffset)));
-    }
     for (auto &f : model->features)
         if (f.type == "sketch" && (f.id == selected || (f.visible && !model->consumed(f.id)))) {
             bool chosen = f.id == selected && !hasSubselection();

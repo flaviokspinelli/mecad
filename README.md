@@ -8,7 +8,12 @@ desenvolvida e testada em macOS 14, Apple Silicon.
 
 ## Abrir
 
-Abra `dist/MecaCAD-0.2.18.app`. O pacote local reúne o executável e suas bibliotecas.
+Abra `dist/MecaCAD-0.2.19.app`. O pacote local reúne o executável e suas bibliotecas.
+
+Na 0.2.19, novas extrusões começam em zero, sem sólido automático. Arraste a seta
+ou digite a distância para ver a prévia; Enter/OK confirma. Confirmar em zero não
+cria uma operação. Ao editar uma extrusão existente, sua distância é preservada.
+A grade e os eixos permanecem visíveis atrás das peças durante e após a extrusão.
 O código-fonte não depende da pasta `dist`, que é gerada e ignorada pelo Git.
 
 Para começar: **File → Open example — mounting bracket**. Também existem os

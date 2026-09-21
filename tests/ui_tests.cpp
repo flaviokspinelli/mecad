@@ -12,6 +12,36 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void extrusionStartsAtZero() {
+        Window window;
+        auto sketch = window.model.add("sketch", {{"profile", "rectangle"}, {"plane", "XY"},
+                                                  {"w", 40}, {"h", 30}});
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto *v = window.findChild<Viewport *>();
+        v->refresh();
+        v->fit();
+        v->onSelect(sketch);
+        auto original = window.model.json();
+        bool zero = false, live = false, returnedToZero = false;
+        QTimer::singleShot(180, [&] {
+            zero = v->handleActive && v->handleDistance == 0 && v->mesh.empty() &&
+                   v->model->json() == original;
+            v->onHandleDistance(15);
+            QTest::qWait(100);
+            live = !v->mesh.empty() && window.model.json() == original;
+            v->grab().save(QDir::currentPath() + "/extrude-grid-test.png");
+            v->onHandleDistance(0);
+            QTest::qWait(100);
+            returnedToZero = v->mesh.empty() && v->handleActive;
+            QTest::keyClick(v, Qt::Key_Return);
+        });
+        window.findChild<QAction *>("extrude")->trigger();
+        QVERIFY(zero);
+        QVERIFY(live);
+        QVERIFY(returnedToZero);
+        QCOMPARE(window.model.json(), original);
+    }
     void preciseSubelementSelection() {
         Model model;
         Viewport v(&model);

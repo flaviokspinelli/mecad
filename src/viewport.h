@@ -91,12 +91,14 @@ class Viewport : public QOpenGLWidget, protected QOpenGLFunctions {
   private:
     friend class UiTests;
     Model *model;
+    void paintGrid();
     SelectionTarget pickDetail(QPointF pixel, bool objectOnly = false) const;
     QWidget *overlay;
     std::vector<Triangle> mesh;
     std::vector<QVector3D> vertices;
     QOpenGLShaderProgram shader;
     QOpenGLBuffer buffer;
+    QOpenGLBuffer gridBuffer;
     QOpenGLVertexArrayObject vao;
     bool upload = true, ready = false;
     QVector3D center{20, 15, 0};
