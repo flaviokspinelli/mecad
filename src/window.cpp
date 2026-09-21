@@ -1546,6 +1546,18 @@ void Window::transform(bool copy) {
     for (auto *spin : panel.nums)
         panel.layout->setRowVisible(spin, false);
     panel.layout->setRowVisible(panel.combos["axis"], false);
+    auto *rotate = new QPushButton("Girar pelo mouse");
+    rotate->setObjectName("rotateMode");
+    rotate->setCheckable(true);
+    panel.layout->addRow(rotate);
+    connect(rotate, &QPushButton::toggled, &panel, [&](bool enabled) {
+        canvas->rotationMode = enabled;
+        panel.layout->setRowVisible(panel.combos["axis"], enabled);
+        panel.layout->setRowVisible(panel.nums["angle"], enabled);
+        rotate->setText(enabled ? "Voltar a mover" : "Girar pelo mouse");
+        canvas->update();
+        panel.adjustSize();
+    });
     auto *precision = new QPushButton("Precise values / rotation ▸");
     precision->setCheckable(true);
     panel.layout->addRow(precision);
@@ -1567,9 +1579,20 @@ void Window::transform(bool copy) {
     properties->hide();
     canvas->setTool({});
     activeCommand = &panel;
+    auto moveParameters = [&] {
+        auto parameters = panel.values();
+        Bnd_Box sourceBox;
+        BRepBndLib::Add(model.get(parameters["source"].toString()).shape, sourceBox);
+        double x, y, z, X, Y, Z;
+        sourceBox.Get(x, y, z, X, Y, Z);
+        parameters["px"] = (x + X) / 2;
+        parameters["py"] = (y + Y) / 2;
+        parameters["pz"] = (z + Z) / 2;
+        return parameters;
+    };
     auto updatePreview = [&] {
         try {
-            auto parameters = panel.values();
+            auto parameters = moveParameters();
             preview = model;
             QString id = preview.add(copy ? "copy" : "transform", parameters, "Preview");
             Bnd_Box box;
@@ -1581,6 +1604,10 @@ void Window::transform(bool copy) {
             canvas->handleOrigin = QVector3D((x + X) / 2, (y + Y) / 2, (z + Z) / 2) - canvas->moveDistances;
             canvas->moveHandleLength = std::max(10., std::max({X - x, Y - y, Z - z}) * .6);
             canvas->moveHandleActive = true;
+            canvas->rotationAngle = parameters["angle"].toDouble();
+            canvas->rotationAxis = parameters["axis"].toString();
+            canvas->handleOrigin = QVector3D(parameters["px"].toDouble(), parameters["py"].toDouble(),
+                                             parameters["pz"].toDouble());
             canvas->selected = id;
             canvas->setModel(&preview);
             feedback->clear();
@@ -1616,6 +1643,7 @@ void Window::transform(bool copy) {
         for (int axis = 0; axis < 3; ++axis)
             panel.nums[QString("xyz")[axis]]->setValue(distances[axis]);
     };
+    canvas->onRotateAngle = [&](double angle) { panel.nums["angle"]->setValue(angle); };
     canvas->onCancelCommand = [&] { panel.reject(); };
     canvas->onAcceptCommand = [&] { panel.accept(); };
     QTimer::singleShot(0, &panel, updatePreview);
@@ -1628,10 +1656,12 @@ void Window::transform(bool copy) {
     canvas->onCancelCommand = {};
     canvas->onAcceptCommand = {};
     canvas->moveHandleActive = false;
+    canvas->rotationMode = false;
+    canvas->onRotateAngle = {};
     canvas->selected = previousSelection;
     canvas->setModel(&model);
     if (accepted)
-        selected = model.add(copy ? "copy" : "transform", panel.values(), copy ? "Copy" : "Move");
+        selected = model.add(copy ? "copy" : "transform", moveParameters(), copy ? "Copy" : "Move");
     else
         selected = previousSelection;
     refresh();

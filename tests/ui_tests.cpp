@@ -1,5 +1,6 @@
 #include "window.h"
 #include <QApplication>
+#include <QComboBox>
 #include <QDialog>
 #include <QFile>
 #include <QMouseEvent>
@@ -11,6 +12,73 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void rotationRing() {
+        QTemporaryDir dir;
+        for (bool stl : {false, true}) {
+            Window window;
+            window.model.add("box", {{"x", 100}, {"y", 50}, {"z", 20}, {"w", 40}, {"h", 30}, {"d", 20}});
+            if (stl) {
+                window.model.exportStl(dir.filePath("rotation.stl"));
+                window.model.clear();
+                window.model.importStl(dir.filePath("rotation.stl"));
+            }
+            window.model.save(dir.filePath("rotation.mcad"));
+            window.openPath(dir.filePath("rotation.mcad"));
+            window.show();
+            QVERIFY(QTest::qWaitForWindowExposed(&window));
+            auto *v = window.findChild<Viewport *>();
+            const auto original = window.model.json();
+            for (QString axis : {"X", "Y", "Z"}) {
+                bool started = false, previewChanged = false;
+                QTimer::singleShot(180, [&] {
+                    auto *button = window.findChild<QPushButton *>("rotateMode");
+                    if (!button) {
+                        QTest::keyClick(v, Qt::Key_Escape);
+                        return;
+                    }
+                    button->click();
+                    for (auto *combo : button->parentWidget()->findChildren<QComboBox *>())
+                        if (combo->findData("X") >= 0)
+                            combo->setCurrentIndex(combo->findData(axis));
+                    QTest::qWait(70);
+                    auto center = v->project(v->handleOrigin + v->moveDistances);
+                    auto start = (center + QPointF(85, 0)).toPoint();
+                    QTest::mousePress(v, Qt::LeftButton, Qt::NoModifier, start);
+                    started = v->draggingRotation;
+                    auto before = v->mesh.front().a;
+                    for (int step = 1; step <= 20; ++step) {
+                        double angle = -M_PI / 2 * step / 20;
+                        QPoint point =
+                            (center + QPointF(85 * std::cos(angle), 85 * std::sin(angle))).toPoint();
+                        QMouseEvent move(QEvent::MouseMove, QPointF(point), QPointF(v->mapToGlobal(point)),
+                                         Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+                        QApplication::sendEvent(v, &move);
+                        QTest::qWait(10);
+                    }
+                    previewChanged = (v->mesh.front().a - before).length() > 1;
+                    window.grab().save(QDir::currentPath() + "/rotation-ring-test.png");
+                    QTest::mouseRelease(v, Qt::LeftButton, Qt::NoModifier,
+                                        (center + QPointF(0, -85)).toPoint());
+                    QTest::keyClick(v, Qt::Key_Return);
+                });
+                window.findChild<QAction *>("transform")->trigger();
+                QVERIFY(started);
+                QVERIFY(previewChanged);
+                QCOMPARE(window.model.features.size(), size_t(2));
+                auto params = window.model.features.back().p;
+                QVERIFY(std::abs(params["angle"].toDouble() - 90) < 2);
+                QCOMPARE(params["axis"].toString(), axis);
+                QVector3D center;
+                auto triangles = window.model.triangles();
+                for (auto triangle : triangles)
+                    center += triangle.a + triangle.b + triangle.c;
+                center /= triangles.size() * 3;
+                QVERIFY((center - QVector3D(120, 65, 30)).length() < .01);
+                window.findChild<QAction *>("undo")->trigger();
+                QCOMPARE(window.model.json(), original);
+            }
+        }
+    }
     void repeatExtrudeEditsExistingBody() {
         QTemporaryDir dir;
         Window window;

@@ -128,10 +128,13 @@ e Intersect conserva a região comum. Os corpos usados aparecem nas operações
 anteriores e o resultado passa a ser o corpo final. **Fillet** atua em todas as
 arestas; diminua o raio se a geometria não comportar o valor escolhido.
 
-Mover/copy usa rotação em torno da origem global, seguida da translação. A opção
+Novas operações Mover/copy giram em torno do centro da caixa envolvente da peça,
+seguido da translação. Operações antigas preservam seu pivô. A opção
 **Create Copy** preserva o corpo original. A visibilidade é controlada no Browser.
 Pressione **M** e arraste as setas coloridas para transladar. O botão **Precise
 values / rotation** expande as medidas e os controles numéricos de rotação.
+Para girar pelo mouse: **M → Girar pelo mouse**, escolha X, Y ou Z e arraste
+o anel azul. Também é possível digitar o ângulo. Funciona em sólidos e STL.
 Durante a prévia você pode continuar orbitando, aproximando e deslocando a vista.
 A operação só entra no histórico ao confirmar; Escape descarta a prévia.
 

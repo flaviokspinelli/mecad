@@ -313,6 +313,7 @@ void Viewport::viewDirection(QVector3D direction, bool animated) {
     cameraAnimation.start();
 }
 void Viewport::setTool(QString name) {
+    draggingRotation = false;
     draggingMoveFree = draggingHandle = false;
     magnetLabel.clear();
     magnetGuides.clear();
@@ -674,7 +675,17 @@ void Viewport::paintOverlay(QPainter &p) {
         p.drawText(QRect(290, 20, width() - 420, 30), Qt::AlignCenter,
                    "Escolha um plano para o sketch   ·   Esc para cancelar");
     }
-    if (moveHandleActive) {
+    if (moveHandleActive && rotationMode) {
+        auto base = project(handleOrigin + moveDistances);
+        p.setBrush(Qt::NoBrush);
+        p.setPen(QPen(QColor("#72cffa"), 3));
+        p.drawEllipse(base, 85, 85);
+        p.setBrush(QColor("#72cffa"));
+        p.drawEllipse(base + QPointF(85, 0), 6, 6);
+        p.drawText(base + QPointF(-75, -100),
+                   QString("Girar %1 · %2°").arg(rotationAxis).arg(rotationAngle, 0, 'f', 1));
+    }
+    if (moveHandleActive && !rotationMode) {
         const QColor colors[] = {QColor("#ee8886"), QColor("#88da9a"), QColor("#72cffa")};
         auto base = project(handleOrigin + moveDistances);
         for (int axis = 0; axis < 3; ++axis) {
@@ -957,6 +968,18 @@ void Viewport::mousePressEvent(QMouseEvent *e) {
     draggingHandle = handleActive && e->button() == Qt::LeftButton &&
                      QLineF(e->position(), project(handleOrigin + handleAxis * handleDistance)).length() < 18;
     draggingMoveFree = false;
+    if (moveHandleActive && rotationMode && e->button() == Qt::LeftButton &&
+        !e->modifiers().testFlag(Qt::AltModifier) && navigationMode.isEmpty()) {
+        rotationCenter = project(handleOrigin + moveDistances);
+        double radius = QLineF(e->position(), rotationCenter).length();
+        if (std::abs(radius - 85) < 12) {
+            draggingRotation = true;
+            rotationMouseAngle =
+                std::atan2(e->position().y() - rotationCenter.y(), e->position().x() - rotationCenter.x());
+            setCursor(Qt::ClosedHandCursor);
+        }
+        return;
+    }
     if (moveHandleActive && e->button() == Qt::LeftButton && navigationMode.isEmpty() &&
         !e->modifiers().testFlag(Qt::AltModifier)) {
         bool overCenter = QLineF(e->position(), project(handleOrigin + moveDistances)).length() < 12;
@@ -982,6 +1005,16 @@ void Viewport::mousePressEvent(QMouseEvent *e) {
     }
 }
 void Viewport::mouseMoveEvent(QMouseEvent *e) {
+    if (draggingRotation) {
+        double angle =
+            std::atan2(e->position().y() - rotationCenter.y(), e->position().x() - rotationCenter.x());
+        rotationAngle -= std::remainder(angle - rotationMouseAngle, 2 * M_PI) * 180 / M_PI;
+        rotationMouseAngle = angle;
+        if (onRotateAngle)
+            onRotateAngle(rotationAngle);
+        update();
+        return;
+    }
     planeHover = e->position();
     if (dimensionPressed) {
         update();
@@ -1009,6 +1042,12 @@ void Viewport::mouseMoveEvent(QMouseEvent *e) {
         }
         last = e->position();
         setCursor(Qt::ClosedHandCursor);
+        return;
+    }
+    if (moveHandleActive && rotationMode && e->buttons() == Qt::NoButton &&
+        std::abs(QLineF(planeHover, project(handleOrigin + moveDistances)).length() - 85) < 12) {
+        setCursor(Qt::OpenHandCursor);
+        setToolTip("Arraste o anel para girar a peça no eixo " + rotationAxis);
         return;
     }
     setToolTip(QRect(width() - 84, 100, 50, 20).contains(planeHover.toPoint()) ? "Vista inicial"
@@ -1095,6 +1134,11 @@ void Viewport::mouseMoveEvent(QMouseEvent *e) {
     update();
 }
 void Viewport::mouseReleaseEvent(QMouseEvent *e) {
+    if (draggingRotation) {
+        draggingRotation = false;
+        setCursor(Qt::OpenHandCursor);
+        return;
+    }
     if (draggingMoveFree) {
         draggingMoveFree = false;
         setCursor(Qt::OpenHandCursor);
@@ -1271,6 +1315,7 @@ void Viewport::keyPressEvent(QKeyEvent *e) {
         return;
     }
     if (e->key() == Qt::Key_Escape) {
+        draggingRotation = false;
         draggingMoveFree = draggingHandle = false;
         if (cubePressed) {
             cubePressed = false;
@@ -1283,6 +1328,7 @@ void Viewport::keyPressEvent(QKeyEvent *e) {
             onCancelCommand();
         setTool({});
     } else if (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter) {
+        draggingRotation = false;
         draggingMoveFree = draggingHandle = false;
         if (onAcceptCommand) {
             onAcceptCommand();

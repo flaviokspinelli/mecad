@@ -8,7 +8,7 @@ desenvolvida e testada em macOS 14, Apple Silicon.
 
 ## Abrir
 
-Abra `dist/MecaCAD-0.2.15.app`. O pacote local reúne o executável e suas bibliotecas.
+Abra `dist/MecaCAD-0.2.16.app`. O pacote local reúne o executável e suas bibliotecas.
 O código-fonte não depende da pasta `dist`, que é gerada e ignorada pelo Git.
 
 Para começar: **File → Open example — mounting bracket**. Também existem os
@@ -17,6 +17,11 @@ arquivos `examples/Mounting-bracket.mcad`, `.step`, `.stl` e `Base-profile.dxf`.
 Leia o [guia de uso](docs/GUIA.md) e o [estado da entrega](docs/ENTREGA-0.2.md).
 
 ## Novidades de interação
+
+Na 0.2.16, Move / Copy → Girar pelo mouse mostra um anel de arraste para girar
+a peça no eixo X, Y ou Z selecionado, com prévia e ângulo editável. Novas operações
+giram em torno do centro da caixa envolvente da peça; operações antigas preservam
+seu pivô original. Funciona para sólidos e STL. Enter confirma; Esc cancela.
 
 Na 0.2.15, abrir Extrude com uma operação de extrusão selecionada edita essa
 operação, em vez de criar um corpo duplicado. O mesmo vale para Revolve.

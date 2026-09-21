@@ -341,7 +341,8 @@ void Model::rebuild() {
                 QString axis = p["axis"].toString("Z");
                 gp_Dir dir = axis == "X" ? gp::DX() : (axis == "Y" ? gp::DY() : gp::DZ());
                 gp_Trsf rotation;
-                rotation.SetRotation(gp_Ax1(gp::Origin(), dir), angle * M_PI / 180);
+                rotation.SetRotation(gp_Ax1(gp_Pnt(value(p, "px"), value(p, "py"), value(p, "pz")), dir),
+                                     angle * M_PI / 180);
                 gp_Trsf translation;
                 translation.SetTranslation(gp_Vec(value(p, "x"), value(p, "y"), value(p, "z")));
                 f.shape = BRepBuilderAPI_Transform(source("source"), translation * rotation,

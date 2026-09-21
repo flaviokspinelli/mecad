@@ -27,6 +27,10 @@ class Viewport : public QOpenGLWidget, protected QOpenGLFunctions {
     QVector3D handleOrigin, handleAxis;
     double handleDistance = 10;
     bool moveHandleActive = false;
+    bool rotationMode = false;
+    double rotationAngle = 0;
+    QString rotationAxis = "Z";
+    std::function<void(double)> onRotateAngle;
     int moveAxis = 0;
     double moveHandleLength = 25;
     QVector3D moveDistances;
@@ -97,6 +101,9 @@ class Viewport : public QOpenGLWidget, protected QOpenGLFunctions {
     QVector<QPair<QString, QPolygonF>> planeRegions;
     QPointF planeHover{-1, -1};
     bool draggingHandle = false;
+    bool draggingRotation = false;
+    QPointF rotationCenter;
+    double rotationMouseAngle = 0;
     bool draggingMoveFree = false;
     QVector3D moveStartDistances;
     QMatrix4x4 moveDragInverse;
