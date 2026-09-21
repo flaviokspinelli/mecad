@@ -815,6 +815,15 @@ void Viewport::paintOverlay(QPainter &p) {
     if (moveHandleActive && !rotationMode) {
         const QColor colors[] = {QColor("#ee8886"), QColor("#88da9a"), QColor("#72cffa")};
         auto base = project(handleOrigin + moveDistances);
+        QVector3D rayOrigin, rayDirection; ray(base, rayOrigin, rayDirection);
+        for (int normal = 0; normal < 3; ++normal) {
+            if (std::abs(rayDirection[normal]) <= .05) continue;
+            const auto polygon = movePlanePolygon(normal);
+            QColor fill = colors[normal];
+            fill.setAlpha((draggingMoveFree ? movePlaneNormal : movePlaneAt(planeHover)) == normal ? 180 : 60);
+            p.setPen(QPen(colors[normal], 1)); p.setBrush(fill);
+            p.drawPolygon(polygon);
+        }
         for (int axis = 0; axis < 3; ++axis) {
             auto tip = project(moveHandleTip(axis));
             auto d = tip - base;
@@ -833,6 +842,8 @@ void Viewport::paintOverlay(QPainter &p) {
         p.setPen(QPen(QColor("#bceaff"), 2));
         p.setBrush(draggingMoveFree ? QColor("#68ccef") : QColor("#314e63"));
         p.drawRoundedRect(QRectF(base - QPointF(7, 7), QSizeF(14, 14)), 3, 3);
+        if (draggingMoveFree && movePlaneNormal >= 0)
+            p.drawText(base + QPointF(10, 20), QStringList{"YZ", "XZ", "XY"}[movePlaneNormal]);
     }
     if (handleActive) {
         auto base = project(handleOrigin), tip = project(handleOrigin + handleAxis * handleDistance);
@@ -886,6 +897,24 @@ QPolygonF Viewport::regularPolygon(QPointF center, QPointF vertex) const {
         points << center + QPointF(radius * std::cos(theta), radius * std::sin(theta));
     }
     return points;
+}
+int Viewport::movePlaneAt(QPointF pixel) const {
+    if (QLineF(pixel, project(handleOrigin + moveDistances)).length() < 12) return -1;
+    QVector3D origin, direction; ray(pixel, origin, direction);
+    for (int normal = 0; normal < 3; ++normal)
+        if (std::abs(direction[normal]) > .05 &&
+            movePlanePolygon(normal).containsPoint(pixel, Qt::OddEvenFill)) return normal;
+    return -1;
+}
+QPolygonF Viewport::movePlanePolygon(int normalAxis) const {
+    const int a = (normalAxis + 1) % 3, b = (normalAxis + 2) % 3;
+    QPolygonF polygon;
+    for (const QPointF corner : {QPointF(.18,.18), QPointF(.38,.18), QPointF(.38,.38), QPointF(.18,.38)}) {
+        auto point = handleOrigin + moveDistances;
+        point[a] += moveHandleLength * corner.x(); point[b] += moveHandleLength * corner.y();
+        polygon.append(project(point));
+    }
+    return polygon;
 }
 QVector3D Viewport::moveHandleTip(int axis) const {
     QVector3D direction;
@@ -1045,6 +1074,7 @@ void Viewport::mousePressEvent(QMouseEvent *e) {
     }
     if (moveHandleActive && e->button() == Qt::LeftButton && navigationMode.isEmpty() &&
         !e->modifiers().testFlag(Qt::AltModifier)) {
+        movePlaneNormal = movePlaneAt(e->position());
         bool overCenter = QLineF(e->position(), project(handleOrigin + moveDistances)).length() < 12;
         double nearest = 18;
         for (int axis = 0; axis < 3; ++axis) {
@@ -1058,7 +1088,7 @@ void Viewport::mousePressEvent(QMouseEvent *e) {
                 handleDistance = moveDistances[axis];
             }
         }
-        if (overCenter || (!draggingHandle && !selected.isEmpty() && objectSelected(pick(e->position())))) {
+        if (movePlaneNormal >= 0 || overCenter || (!draggingHandle && !selected.isEmpty() && objectSelected(pick(e->position())))) {
             draggingHandle = false;
             draggingMoveFree = true;
             moveStartDistances = moveDistances;
@@ -1126,6 +1156,12 @@ void Viewport::mouseMoveEvent(QMouseEvent *e) {
         setToolTip("Arraste o anel para girar a peça no eixo " + rotationAxis);
         return;
     }
+    if (moveHandleActive && !rotationMode && e->buttons() == Qt::NoButton && movePlaneAt(planeHover) >= 0) {
+        setCursor(Qt::OpenHandCursor);
+        setToolTip("Arraste para mover no plano " + QStringList{"YZ", "XZ", "XY"}[movePlaneAt(planeHover)]);
+        update();
+        return;
+    }
     setToolTip(QRect(width() - 84, 100, 50, 20).contains(planeHover.toPoint()) ? "Vista inicial"
                : !cubeDirectionAt(planeHover).isNull()
                    ? "Arraste para orbitar; clique para escolher uma vista"
@@ -1151,10 +1187,18 @@ void Viewport::mouseMoveEvent(QMouseEvent *e) {
         auto deltaWorld =
             moveDragInverse.map(QVector3D(2 * movement.x() / width(), -2 * movement.y() / height(), 0)) -
             moveDragInverse.map(QVector3D());
+        if (movePlaneNormal >= 0) {
+            const auto direction = (moveDragInverse.map(QVector3D(0,0,1)) -
+                                    moveDragInverse.map(QVector3D(0,0,-1))).normalized();
+            if (std::abs(direction[movePlaneNormal]) <= .05) return;
+            deltaWorld -= direction * (deltaWorld[movePlaneNormal] / direction[movePlaneNormal]);
+            deltaWorld[movePlaneNormal] = 0;
+        }
         moveDistances = moveStartDistances + deltaWorld;
         if (snap)
             for (int axis = 0; axis < 3; ++axis)
-                moveDistances[axis] = std::round(moveDistances[axis] * 10) / 10;
+                if (axis != movePlaneNormal)
+                    moveDistances[axis] = std::round(moveDistances[axis] * 10) / 10;
         if (onMoveTranslation)
             onMoveTranslation(moveDistances);
         setCursor(Qt::ClosedHandCursor);

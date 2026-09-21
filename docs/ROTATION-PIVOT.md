@@ -17,3 +17,15 @@ translação. Desativar o pivô personalizado volta ao centro automático.
 STL aceita pivô numérico ou referência em um corpo CAD, mas não seleção dos nós
 da malha. Não há eixo arbitrário por dois pontos nem arraste livre do pivô nesta
 implementação. A precisão dos campos é 0,001 mm.
+
+## Translação por plano
+
+Os quadrados entre as setas restringem o arraste a XY, XZ ou YZ. Passe o mouse
+para realçar a alça e identificar o plano. A terceira coordenada é preservada,
+inclusive com encaixe ligado e deslocamento anterior não arredondado.
+Arrastar o centro ou a peça fora dessas alças continua usando o plano da tela;
+as pontas das setas continuam restringindo a um único eixo.
+
+As alças usam os planos globais e funcionam em sólidos CAD e malhas STL. Planos
+quase de lado em relação à câmera não exibem alça: orbite para acessá-los. Isso
+evita amplificação excessiva do deslocamento. Não são planos locais arbitrários.

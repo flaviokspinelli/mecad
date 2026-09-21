@@ -58,6 +58,8 @@ class Viewport : public QOpenGLWidget, protected QOpenGLFunctions {
     std::function<void(int, double)> onMoveDistance;
     std::function<void(QVector3D)> onMoveTranslation;
     QVector3D moveHandleTip(int axis) const;
+    QPolygonF movePlanePolygon(int normalAxis) const;
+    int movePlaneAt(QPointF pixel) const;
     std::function<void(QString, double)> onPlaneChosen;
     std::function<void(double)> onHandleDistance;
     std::function<void()> onCancelCommand;
@@ -135,6 +137,7 @@ class Viewport : public QOpenGLWidget, protected QOpenGLFunctions {
     QPointF rotationCenter;
     double rotationMouseAngle = 0;
     bool draggingMoveFree = false;
+    int movePlaneNormal = -1; // -1: screen plane; 0/1/2: YZ/XZ/XY
     QVector3D moveStartDistances;
     QMatrix4x4 moveDragInverse;
     bool cubePressed = false, cubeDragging = false;

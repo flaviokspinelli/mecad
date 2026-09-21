@@ -2090,7 +2090,8 @@ void Window::transform(bool copy) {
         panel.combos["axis"]->setEnabled(false);
     }
     panel.note("Arraste a peça ou o centro das hastes para mover no plano da tela.\n"
-               "Use as setas para restringir a X, Y ou Z. Enter confirma; Esc cancela.");
+               "Setas: X, Y ou Z. Quadrados entre as setas: XY, XZ ou YZ.\n"
+               "Enter confirma; Esc cancela.");
     auto *feedback = new QLabel;
     feedback->setWordWrap(true);
     feedback->setStyleSheet("color:#edc17e;font-size:11px;");

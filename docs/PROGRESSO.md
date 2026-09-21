@@ -1,5 +1,25 @@
 # Execução do backlog
 
+## 21/09/2026 — alças de translação nos planos globais
+
+UX-05: manipulador Move / Copy agora oferece quadrados XY/XZ/YZ, com hover,
+tooltip e realce do plano ativo. Arraste faz interseção com o plano escolhido,
+mantendo a coordenada normal, em vez de apenas projetar o deslocamento da tela.
+Encaixe não arredonda a coordenada bloqueada. Alças quase de lado são ocultadas
+e rejeitadas para evitar deslocamentos exagerados. Setas por eixo e centro livre
+continuam disponíveis; vale também para STL.
+
+Validação: planarMoveHandles percorreu os três planos em CAD/STL com mouse,
+prévia e undo; planarDragPreservesNormalCoordinate verificou encaixe com valores
+não arredondados e plano de lado. Regressões freeMoveLivePreview, rotationRing,
+customRotationPivot e pickRotationPivotVertex passaram: seis casos funcionais,
+oito resultados Qt incluindo setup/cleanup, zero falhas. Captura build/planar-move.png
+inspecionada visualmente. MecaCAD e ui_tests recompilados em build existente.
+
+Limites: planos globais, não planos locais arbitrários; vértices STL ainda não
+são alvos de pivô. UX-05 permanece parcial até o aceite consolidado, sem aumentar
+contagem de itens concluídos. dist e desenho do usuário preservados.
+
 ## 21/09/2026 — centro de giro configurável
 
 UX-05: Move / Copy permite ativar um pivô personalizado por coordenadas globais

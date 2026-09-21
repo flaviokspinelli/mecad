@@ -20,6 +20,60 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void planarMoveHandles() {
+        QTemporaryDir dir;
+        for (bool stl : {false,true}) {
+            Model source;source.add("box",{{"w",40},{"h",30},{"d",20}});
+            if(stl){source.exportStl(dir.filePath("plane.stl"));source.clear();source.importStl(dir.filePath("plane.stl"));}
+            source.save(dir.filePath("plane.mcad"));
+            Window window(dir.filePath("recovery"),false);window.openPath(source.filePath);window.show();
+            QVERIFY(QTest::qWaitForWindowExposed(&window));auto *v=window.findChild<Viewport *>();
+            const auto before=window.model.json();
+            for(int normal=0;normal<3;++normal) {
+                bool started=false, live=false, locked=false;
+                QTimer::singleShot(150,[&] {
+                    v->snap=false;
+                    const auto start=v->movePlanePolygon(normal).boundingRect().center().toPoint();
+                    QTest::mousePress(v,Qt::LeftButton,Qt::NoModifier,start);
+                    started=v->draggingMoveFree && v->movePlaneNormal==normal;
+                    const auto previous=v->mesh.front().a;
+                    const auto end=start+QPoint(45,-35);
+                    QMouseEvent move(QEvent::MouseMove,end,v->mapToGlobal(end),Qt::NoButton,Qt::LeftButton,Qt::NoModifier);
+                    QApplication::sendEvent(v,&move);QTest::qWait(90);
+                    live=(v->mesh.front().a-previous).length()>1;
+                    locked=std::abs(v->moveDistances[normal])<1e-6;
+                    QTest::mouseRelease(v,Qt::LeftButton,Qt::NoModifier,end);
+                    if(normal==2)window.grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("planar-move.png"));
+                    v->onAcceptCommand();
+                });
+                window.findChild<QAction *>("transform")->trigger();
+                QVERIFY(started);QVERIFY(live);QVERIFY(locked);
+                QCOMPARE(window.model.features.size(),size_t(2));
+                QCOMPARE(window.model.features.back().p[QString("xyz")[normal]].toDouble(),0.);
+                window.findChild<QAction *>("undo")->trigger();QCOMPARE(window.model.json(),before);
+            }
+        }
+    }
+    void planarDragPreservesNormalCoordinate() {
+        Model model;Viewport v(&model);v.resize(1000,700);v.view("iso");
+        v.moveHandleActive=true;v.snap=true;
+        for(int normal=0;normal<3;++normal) {
+            v.draggingMoveFree=true;v.movePlaneNormal=normal;
+            v.moveStartDistances={1.234f,2.345f,3.456f};v.moveDragInverse=v.matrix().inverted();
+            const QPoint p(100,100);
+            QMouseEvent event(QEvent::MouseMove,p,p,Qt::NoButton,Qt::LeftButton,Qt::NoModifier);
+            QApplication::sendEvent(&v,&event);
+            QCOMPARE(v.moveDistances[normal],v.moveStartDistances[normal]);
+            QVERIFY((v.moveDistances-v.moveStartDistances).length()>1);
+        }
+        v.draggingMoveFree=false;v.moveDistances={};v.view("top");
+        for(int normal : {0,1})
+            QVERIFY(v.movePlaneAt(v.movePlanePolygon(normal).boundingRect().center())!=normal);
+        v.movePlaneNormal=0;v.draggingMoveFree=true;v.moveDragInverse=v.matrix().inverted();
+        const auto before=v.moveDistances;
+        QMouseEvent edgeOn(QEvent::MouseMove,QPointF(300,200),QPointF(300,200),Qt::NoButton,Qt::LeftButton,Qt::NoModifier);
+        QApplication::sendEvent(&v,&edgeOn);QCOMPARE(v.moveDistances,before);
+    }
     void pickRotationPivotVertex() {
         QTemporaryDir dir;Model source;
         source.add("box",{{"w",40},{"h",30},{"d",20}});source.save(dir.filePath("pick.mcad"));
