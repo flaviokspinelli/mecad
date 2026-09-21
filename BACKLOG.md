@@ -6,6 +6,14 @@ Progresso após essa versão: [registro de execução](docs/PROGRESSO.md).
 Política de testes: grupos direcionados e sem janelas durante o desenvolvimento;
 interface somente quando necessária, com aviso; suíte completa antes da entrega consolidada.
 
+**Restrição de armazenamento (21/09/2026):** não gerar novos arquivos de versões,
+pacotes .app versionados, ZIP/DMG/PKG ou cópias temporárias de empacotamento.
+Reutilizar apenas build/ para desenvolvimento e testes. Preservar a distribuição
+atual dist/MecaCAD-0.2.25.app. O empacotador está desativado; nova geração ou
+substituição da distribuição depende de autorização explícita do usuário,
+inclusive na entrega consolidada. Esta restrição prevalece sobre as instruções
+de empacotamento anteriores deste documento.
+
 ## Objetivo e compromisso de qualidade
 
 Desenvolver um CAD/CAM/CAE paramétrico completo para uso interno em mecatrônica,

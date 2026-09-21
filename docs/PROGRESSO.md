@@ -1,5 +1,17 @@
 # Execução do backlog
 
+## Política de disco — 21/09/2026
+
+Por solicitação do usuário, não gerar novos pacotes ou arquivos versionados do
+aplicativo. Desenvolvimento e testes reutilizam build/. A distribuição atual
+dist/MecaCAD-0.2.25.app, os desenhos e o histórico Git ficam preservados.
+scripts/package-macos.sh recusa execução antes de criar arquivos; a retomada
+automática recebeu a mesma restrição. Empacotamento futuro requer nova autorização.
+
+Limpeza autorizada: 14 diretórios temporários build/package-0.2.*, inspecionados
+individualmente e contendo somente bundles gerados e metadados do Finder,
+aproximadamente 1,3 GiB. Remoção definitiva, não enviada à Lixeira.
+
 ## 21/09/2026 — integridade de documento e testes direcionados
 
 Responsável: Codex. Base publicada: 0.2.25. Alterações somente em desenvolvimento;
