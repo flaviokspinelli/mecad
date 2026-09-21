@@ -1,0 +1,101 @@
+{
+    "features": [
+        {
+            "id": "8bb9b701-5a3a-45ba-8e93-61762a553394",
+            "name": "Base profile",
+            "parameters": {
+                "h": 50,
+                "plane": "XY",
+                "profile": "rectangle",
+                "w": 80,
+                "x": 0,
+                "y": 0
+            },
+            "type": "sketch",
+            "visible": true
+        },
+        {
+            "id": "d60f9ee0-a1ac-427d-bfce-0abd887602ac",
+            "name": "Base · 8 mm",
+            "parameters": {
+                "d": 8,
+                "source": "8bb9b701-5a3a-45ba-8e93-61762a553394"
+            },
+            "type": "extrude",
+            "visible": true
+        },
+        {
+            "id": "08d9c377-ab67-421b-95a2-a734fbcce647",
+            "name": "Vertical plate",
+            "parameters": {
+                "d": 42,
+                "h": 8,
+                "w": 80,
+                "x": 0,
+                "y": 42,
+                "z": 8
+            },
+            "type": "box",
+            "visible": true
+        },
+        {
+            "id": "147a621a-3d07-4c44-a00c-f89b87608123",
+            "name": "Bracket",
+            "parameters": {
+                "mode": "join",
+                "target": "d60f9ee0-a1ac-427d-bfce-0abd887602ac",
+                "tool": "08d9c377-ab67-421b-95a2-a734fbcce647"
+            },
+            "type": "boolean",
+            "visible": true
+        },
+        {
+            "id": "1f885a79-4483-4dae-b846-73296f714c50",
+            "name": "Mounting hole Ø6.4",
+            "parameters": {
+                "d": 10,
+                "offset": -1,
+                "plane": "XY",
+                "r": 3.2,
+                "target": "147a621a-3d07-4c44-a00c-f89b87608123",
+                "u": 12,
+                "v": 15
+            },
+            "type": "hole",
+            "visible": true
+        },
+        {
+            "id": "04ace818-3a58-4582-b50a-8647f87a6437",
+            "name": "Mounting hole Ø6.4",
+            "parameters": {
+                "d": 10,
+                "offset": -1,
+                "plane": "XY",
+                "r": 3.2,
+                "target": "1f885a79-4483-4dae-b846-73296f714c50",
+                "u": 68,
+                "v": 15
+            },
+            "type": "hole",
+            "visible": true
+        },
+        {
+            "id": "6d44f733-c72a-450b-96d7-eadad2e0902e",
+            "name": "Motor opening Ø20",
+            "parameters": {
+                "d": 12,
+                "offset": -51,
+                "plane": "XZ",
+                "r": 10,
+                "target": "04ace818-3a58-4582-b50a-8647f87a6437",
+                "u": 40,
+                "v": 30
+            },
+            "type": "hole",
+            "visible": true
+        }
+    ],
+    "format": "MecaCAD",
+    "units": "mm",
+    "version": 1
+}
