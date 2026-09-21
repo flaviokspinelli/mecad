@@ -12,6 +12,28 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void separateDeleteAndRollback() {
+        QTemporaryDir dir;
+        Window window;
+        auto box = window.model.add("box", {{"w", 40}, {"h", 30}, {"d", 20}});
+        auto move = window.model.add("transform", {{"source", box}, {"x", 15}});
+        window.model.save(dir.filePath("delete.mcad"));
+        window.openPath(dir.filePath("delete.mcad"));
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto *v = window.findChild<Viewport *>();
+        v->onSelect(move);
+        window.findChild<QAction *>("delete")->trigger();
+        QVERIFY(window.model.bodies().empty());
+        QVERIFY(v->mesh.empty());
+        window.findChild<QAction *>("undo")->trigger();
+        QCOMPARE(window.model.bodies().size(), size_t(1));
+        v->onSelect(move);
+        window.findChild<QAction *>("rollback")->trigger();
+        QCOMPARE(window.model.features.size(), size_t(1));
+        QCOMPARE(window.model.features[0].id, box);
+        QVERIFY(!v->mesh.empty());
+    }
     void rotationRing() {
         QTemporaryDir dir;
         for (bool stl : {false, true}) {

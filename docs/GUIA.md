@@ -145,6 +145,12 @@ Browser, mude seus parâmetros e clique em Apply. As operações seguintes são 
 o documento anterior. Não é possível excluir uma operação ainda referenciada:
 remova primeiro suas dependentes.
 
+**Apagar peça** (Delete/Backspace) remove o corpo final da cena, sem revelar as
+versões anteriores. A remoção fica registrada no histórico e pode ser desfeita.
+Para desfazer somente a operação selecionada, use **Edit → Voltar uma etapa da
+peça**, também disponível no menu de contexto do Browser. Essa ação continua
+protegida quando existem operações dependentes.
+
 O projeto `.mcad` contém parâmetros e histórico. O aplicativo oferece salvar ao
 fechar um documento alterado. A recuperação automática é gravada a cada 30 segundos
 na pasta de dados do MecaCAD e oferecida na próxima abertura após interrupção.

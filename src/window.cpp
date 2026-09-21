@@ -527,9 +527,12 @@ Window::Window() {
         model.redo();
         refresh();
     }));
-    edit->addAction(command("delete", "Delete", "Backspace", [this] {
+    edit->addAction(command("delete", "Apagar peça", "Backspace", [this] {
         if (!selected.isEmpty()) {
-            model.remove(selected);
+            if (model.get(selected).type == "sketch")
+                model.remove(selected);
+            else
+                model.deleteBody(selected);
             selected.clear();
             refresh();
         }
@@ -538,6 +541,20 @@ Window::Window() {
     deleteKey->setShortcut(QKeySequence(Qt::Key_Delete));
     connect(deleteKey, &QAction::triggered, commands["delete"], &QAction::trigger);
     addAction(deleteKey);
+    edit->addAction(command("rollback", "Voltar uma etapa da peça", "", [this] {
+        if (selected.isEmpty())
+            return;
+        const auto parameters = model.get(selected).p;
+        QString previous = parameters["target"].toString();
+        if (previous.isEmpty())
+            previous = parameters["source"].toString();
+        if (previous.isEmpty())
+            throw std::runtime_error(
+                "Esta operação não possui uma etapa anterior. Use Apagar para remover a peça.");
+        model.remove(selected);
+        selected = previous;
+        refresh();
+    }));
     command("sketch", "Create Sketch", "", [this] { startSketch(); });
     command("finish", "Finish Sketch", "", [this] { finishSketch(); });
     command("rectangle", "2-Point Rectangle", "R", [this] { sketchTool("rectangle"); });
@@ -958,6 +975,7 @@ Window::Window() {
         }
         menu.addSeparator();
         menu.addAction(commands["delete"]);
+        menu.addAction(commands["rollback"]);
         menu.exec(tree->viewport()->mapToGlobal(pos));
     });
     connect(timeline, &QListWidget::itemClicked, this,
@@ -1152,7 +1170,7 @@ void Window::refresh(bool fit) {
     history->setIcon(1, icon("folder"));
     for (auto &f : model.features) {
         bool consumed = model.consumed(f.id);
-        auto *parent = f.type == "sketch" ? sketches : (consumed ? history : bodies);
+        auto *parent = f.type == "sketch" ? sketches : ((consumed || f.type == "remove") ? history : bodies);
         auto *item = new QTreeWidgetItem(parent, {"", f.name});
         item->setIcon(0, icon(f.visible ? "eye" : "hidden"));
         item->setIcon(1, icon(f.type));

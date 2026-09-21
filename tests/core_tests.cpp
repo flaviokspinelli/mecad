@@ -11,6 +11,33 @@
 class CoreTests : public QObject {
     Q_OBJECT
   private slots:
+    void deleteBodyVersusRollback() {
+        Model model;
+        auto sketch = model.add("sketch", {{"profile", "rectangle"}, {"plane", "XY"}, {"w", 20}, {"h", 30}});
+        auto extrude = model.add("extrude", {{"source", sketch}, {"d", 10}});
+        auto move = model.add("transform", {{"source", extrude}, {"x", 10}});
+        auto copy = model.add("copy", {{"source", extrude}, {"x", 50}});
+        auto before = model.json();
+        model.deleteBody(move);
+        QCOMPARE(model.bodies().size(), size_t(1));
+        QCOMPARE(model.features[model.bodies()[0]].id, copy);
+        QVERIFY(model.consumed(extrude));
+        QTemporaryDir dir;
+        model.save(dir.filePath("deleted.mcad"));
+        Model loaded;
+        loaded.load(dir.filePath("deleted.mcad"));
+        QCOMPARE(loaded.bodies().size(), size_t(1));
+        QVERIFY(model.undo());
+        QCOMPARE(model.json(), before);
+        model.remove(move);
+        QCOMPARE(model.bodies().size(), size_t(2));
+        QVERIFY(!model.consumed(extrude));
+        QVERIFY(model.undo());
+        model.deleteBody(move);
+        model.deleteBody(copy);
+        QVERIFY(model.bodies().empty());
+        QVERIFY(model.triangles().empty());
+    }
     void importStlMeshes() {
         QTemporaryDir dir;
         QVERIFY(dir.isValid());
@@ -50,6 +77,11 @@ class CoreTests : public QObject {
             QVERIFY(reopened.isMesh(moved));
             QCOMPARE(reopened.triangles().front().a, loaded.triangles().front().a);
             QVERIFY_THROWS_EXCEPTION(std::runtime_error, loaded.exportStep(dir.filePath("mesh.step")));
+            loaded.deleteBody(moved);
+            QVERIFY(loaded.bodies().empty());
+            QVERIFY(loaded.triangles().empty());
+            QVERIFY(loaded.undo());
+            QCOMPARE(loaded.bodies().size(), size_t(1));
         }
         QFile invalid(dir.filePath("invalid.stl"));
         QVERIFY(invalid.open(QIODevice::WriteOnly));

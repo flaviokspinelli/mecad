@@ -25,6 +25,7 @@ class Model {
     QString add(QString type, QJsonObject p, QString name = {});
     void edit(const QString &id, QJsonObject p, const QString &name);
     void remove(const QString &id);
+    void deleteBody(const QString &id);
     void toggle(const QString &id);
     void rebuild();
     Feature &get(const QString &id);

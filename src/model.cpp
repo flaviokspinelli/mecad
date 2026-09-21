@@ -237,6 +237,12 @@ bool Model::undo() {
     dirty = true;
     return true;
 }
+void Model::deleteBody(const QString &id) {
+    const auto &feature = get(id);
+    require(feature.type != "sketch" && feature.type != "remove" && !consumed(id),
+            "Selecione a peça final no desenho ou em Bodies para apagar.");
+    add("remove", {{"source", id}}, "Apagar " + feature.name);
+}
 bool Model::redo() {
     if (future.empty())
         return false;
@@ -261,7 +267,8 @@ void Model::rebuild() {
         try {
             const auto &p = f.p;
             auto source = [&](const char *key) {
-                require(!isMesh(p[key].toString()) || f.type == "transform" || f.type == "copy",
+                require(!isMesh(p[key].toString()) || f.type == "transform" || f.type == "copy" ||
+                            f.type == "remove",
                         "Esta operação requer um sólido CAD. Conversão de malha STL ainda não disponível.");
                 auto s = get(p[key].toString()).shape;
                 require(!s.IsNull(), "A operação depende de uma etapa futura ou inválida.");
@@ -348,6 +355,8 @@ void Model::rebuild() {
                 f.shape = BRepBuilderAPI_Transform(source("source"), translation * rotation,
                                                    !isMesh(p["source"].toString()))
                               .Shape();
+            } else if (f.type == "remove") {
+                f.shape = source("source");
             } else if (f.type == "fillet") {
                 auto s = source("source");
                 BRepFilletAPI_MakeFillet fillet(s);
@@ -411,7 +420,7 @@ bool Model::isMesh(const QString &id) const {
         const auto &feature = get(current);
         if (feature.type == "mesh")
             return true;
-        if (feature.type != "transform" && feature.type != "copy")
+        if (feature.type != "transform" && feature.type != "copy" && feature.type != "remove")
             return false;
         current = feature.p["source"].toString();
     }
@@ -421,7 +430,7 @@ std::vector<int> Model::bodies(bool visibleOnly) const {
     std::vector<int> result;
     for (int i = 0; i < int(features.size()); ++i) {
         const auto &f = features[i];
-        if (f.type != "sketch" && !consumed(f.id) && (!visibleOnly || f.visible))
+        if (f.type != "sketch" && f.type != "remove" && !consumed(f.id) && (!visibleOnly || f.visible))
             result.push_back(i);
     }
     return result;
@@ -480,7 +489,8 @@ void Model::load(const QString &path) {
 TopoDS_Shape Model::exportShape(const QString &id) const {
     if (!id.isEmpty()) {
         const auto &f = get(id);
-        require(f.type != "sketch", "Selecione um sólido para exportar.");
+        require(f.type != "sketch" && f.type != "remove",
+                "Selecione um corpo, não uma operação de remoção, para exportar.");
         return f.shape;
     }
     TopoDS_Compound compound;
