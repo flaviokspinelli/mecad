@@ -109,6 +109,15 @@ class UiTests : public QObject {
             QVERIFY((v->cameraDirection() - target.normalized()).length() < .001);
             QCOMPARE(model.json(), original);
         }
+        v->view("iso");
+        const auto homeDirection = v->cameraDirection();
+        v->view("top");
+        v->grab();
+        QTest::mouseClick(v, Qt::LeftButton, Qt::NoModifier, QPoint(v->width() - 59, 110));
+        QVERIFY(v->isViewAnimating());
+        QTRY_VERIFY(!v->isViewAnimating());
+        QVERIFY((v->cameraDirection() - homeDirection).length() < .001);
+        viewport.grab().save(QDir::currentPath() + "/cube-home-icon.png");
         v->view("front", true);
         QTest::qWait(60);
         v->view("right", true);

@@ -454,8 +454,31 @@ void Viewport::paintOverlay(QPainter &p) {
             p.drawPolygon(it->region);
             break;
         }
-    p.setPen(QColor("#96abbe"));
-    p.drawText(QRect(width() - 84, 102, 50, 16), Qt::AlignCenter, "HOME");
+    const bool homeHovered = QRect(width() - 84, 100, 50, 20).contains(planeHover.toPoint());
+    p.save();
+    p.translate(width() - 59, 110);
+    if (homeHovered) {
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(104, 179, 221, 35));
+        p.drawRoundedRect(QRectF(-13, -11, 26, 22), 4, 4);
+    }
+    p.setPen(QPen(homeHovered ? QColor("#c3eaff") : QColor("#a5b8c9"), 1.5, Qt::SolidLine, Qt::RoundCap,
+                  Qt::RoundJoin));
+    p.setBrush(Qt::NoBrush);
+    QPainterPath home;
+    home.moveTo(-9, -1);
+    home.lineTo(0, -8);
+    home.lineTo(9, -1);
+    home.moveTo(-6, -2);
+    home.lineTo(-6, 7);
+    home.lineTo(-2, 7);
+    home.lineTo(-2, 2);
+    home.lineTo(2, 2);
+    home.lineTo(2, 7);
+    home.lineTo(6, 7);
+    home.lineTo(6, -2);
+    p.drawPath(home);
+    p.restore();
     p.setPen(QPen(QColor("#5bc087"), 1.5));
     p.drawLine(cubePoint({-1, -1, -1}), cubePoint({-1, 1.6, -1}));
     p.setPen(QPen(QColor("#61a7e3"), 1.5));
@@ -680,6 +703,7 @@ void Viewport::mousePressEvent(QMouseEvent *e) {
 }
 void Viewport::mouseMoveEvent(QMouseEvent *e) {
     planeHover = e->position();
+    setToolTip(QRect(width() - 84, 100, 50, 20).contains(planeHover.toPoint()) ? "Vista inicial" : QString());
     bool overCube = !cubeDirectionAt(planeHover).isNull() ||
                     QRect(width() - 84, 100, 50, 20).contains(planeHover.toPoint());
     setCursor(overCube ? Qt::PointingHandCursor : tool.isEmpty() ? Qt::ArrowCursor : Qt::CrossCursor);
