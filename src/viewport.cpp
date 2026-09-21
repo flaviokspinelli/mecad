@@ -619,26 +619,24 @@ void Viewport::paintOverlay(QPainter &p) {
     p.drawLine(cubePoint({-1, -1, -1}), cubePoint({-1, -1, 1.6}));
     if (choosingPlane) {
         QString hovered;
-        for (const auto &region : planeRegions)
-            if (region.second.containsPoint(planeHover, Qt::OddEvenFill)) {
-                hovered = region.first;
+        for (auto region = planeRegions.crbegin(); region != planeRegions.crend(); ++region)
+            if (region->second.containsPoint(planeHover, Qt::OddEvenFill)) {
+                hovered = region->first;
                 break;
             }
         planeRegions.clear();
         int i = 0;
-        for (auto planeName : {"XY", "XZ", "YZ"}) {
+        for (auto planeName : {"XY", "YZ", "XZ"}) {
             QPolygonF polygon;
             // Three adjacent faces sharing the origin; all still lie on the
             // real zero-offset planes. No plane passes through another face.
-            // Open corner: XY is the floor, YZ the left wall, XZ the right.
-            const double u0 = QString(planeName) == "YZ" ? -40 : 0;
-            const double u1 = QString(planeName) == "YZ" ? 0 : 40;
-            const double v0 = QString(planeName) == "XY" ? -40 : 0;
-            const double v1 = QString(planeName) == "XY" ? 0 : 40;
+            // Positive octant: XZ borders the front (Y=0) of the XY floor.
+            // Draw XZ last and keep translucent faces, like the origin selector.
+            const double u0 = 0, u1 = 40, v0 = 0, v1 = 40;
             for (auto q : {QPointF(u0, v0), QPointF(u1, v0), QPointF(u1, v1), QPointF(u0, v1)})
                 polygon << project(Model::planePoint(planeName, q.x(), q.y()));
             QColor c = i == 0   ? QColor(102, 172, 214, 30)
-                       : i == 1 ? QColor(211, 172, 105, 30)
+                       : i == 2 ? QColor(211, 172, 105, 30)
                                 : QColor(98, 184, 156, 30);
             if (hovered == planeName)
                 c.setAlpha(100);
@@ -649,9 +647,9 @@ void Viewport::paintOverlay(QPainter &p) {
             planeRegions.append({planeName, polygon});
             ++i;
         }
-        const QPointF labelPoints[] = {planeRegions[0].second.boundingRect().center(),
-                                       planeRegions[1].second.boundingRect().center(),
-                                       planeRegions[2].second.boundingRect().center()};
+        const QPointF labelPoints[] = {project(Model::planePoint("XY", 28, 28)),
+                                       project(Model::planePoint("YZ", 28, 34)),
+                                       project(Model::planePoint("XZ", 22, 16))};
         p.setFont(QFont("Helvetica Neue", 10, QFont::Medium));
         for (int index = 0; index < 3; ++index) {
             auto region = planeRegions[index];
@@ -1123,9 +1121,9 @@ void Viewport::mouseReleaseEvent(QMouseEvent *e) {
             nearest = dist;
         }
         if (name.isEmpty())
-            for (auto &region : planeRegions)
-                if (region.second.containsPoint(s, Qt::OddEvenFill)) {
-                    name = region.first;
+            for (auto region = planeRegions.crbegin(); region != planeRegions.crend(); ++region)
+                if (region->second.containsPoint(s, Qt::OddEvenFill)) {
+                    name = region->first;
                     break;
                 }
         if (!name.isEmpty() && onPlaneChosen) {

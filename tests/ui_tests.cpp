@@ -195,17 +195,18 @@ class UiTests : public QObject {
             v.grab();
             QCOMPARE(v.planeRegions.size(), 6);
             auto xy = v.planeRegions[0].second.boundingRect().center();
-            auto xz = v.planeRegions[1].second.boundingRect().center();
-            auto yz = v.planeRegions[2].second.boundingRect().center();
+            auto xz = v.planeRegions[2].second.boundingRect().center();
+            auto yz = v.planeRegions[1].second.boundingRect().center();
             QVERIFY(xy.y() > xz.y());
             QVERIFY(xy.y() > yz.y());
             QVERIFY(yz.x() < xz.x());
             v.grab().save(QDir::currentPath() + "/plane-layout-test.png");
-            const auto face = v.planeRegions[i];
+            const auto face = v.planeRegions[i + 3];
             auto position = face.second.boundingRect().center();
-            for (int other = 0; other < 3; ++other)
-                if (other != i)
-                    QVERIFY(!v.planeRegions[other].second.containsPoint(position, Qt::OddEvenFill));
+            // Labels stay selectable even where translucent planes overlap.
+            QVERIFY(v.planeRegions[i].second.containsPoint(position, Qt::OddEvenFill));
+            QVERIFY(v.planeRegions[2].second.contains(v.project(Model::planePoint("XZ", 40, 0))));
+            QVERIFY(v.planeRegions[0].second.contains(v.project(Model::planePoint("XY", 40, 0))));
             QTest::mouseClick(&v, Qt::LeftButton, Qt::NoModifier, position.toPoint());
             QCOMPARE(chosen, face.first);
             QCOMPARE(offset, 0.);
@@ -373,7 +374,7 @@ class UiTests : public QObject {
         QTest::qWait(100);
         window.grab().save(QDir::currentPath() + "/plane-selection-test.png");
         QTest::mouseClick(v, Qt::LeftButton, Qt::NoModifier,
-                          v->project(Model::planePoint("XY", 10, -10)).toPoint());
+                          v->planeRegions[3].second.boundingRect().center().toPoint());
         QVERIFY(v->sketchMode);
         QCOMPARE(v->tool, QString("rectangle"));
         QTest::qWait(100);
