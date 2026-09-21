@@ -49,7 +49,7 @@ QString displayType(const QString &s) {
         {"sketch", "Sketch"}, {"extrude", "Extrude"},      {"revolve", "Revolve"},
         {"hole", "Hole"},     {"boolean", "Combine"},      {"transform", "Move"},
         {"copy", "Copy"},     {"import", "Imported body"}, {"fillet", "Fillet"},
-        {"mesh", "STL mesh"}};
+        {"mesh", "STL mesh"}, {"chamfer", "Chamfer"}};
     return names.value(s, s);
 }
 QString symbol(const QString &s) {
@@ -202,6 +202,10 @@ QIcon icon(const QString &kind) {
         p.setPen(QPen(muted, 2));
         line({7, 18}, {7, 52});
         line({57, 18}, {57, 52});
+    } else if(kind=="chamfer") {
+        p.setPen(Qt::NoPen);p.setBrush(top);
+        p.drawPolygon(QPolygonF{{8,53},{8,28},{28,9},{53,9},{53,53}});
+        p.setPen(QPen(blue,5));p.drawLine(8,28,28,9);
     } else if (kind == "fillet") {
         p.setPen(Qt::NoPen);
         p.setBrush(top);
@@ -469,7 +473,7 @@ QAction *Window::command(QString key, QString label, QString shortcut, std::func
             const QStringList bodyCommands = {"delete", "rollback", "transform", "copy",
                                               "fillet", "hole",     "boolean",   "cut",
                                               "common", "extrude",  "revolve",   "dimension"};
-            if (key != "delete" && key != "transform" && key != "fillet" &&
+            if (key != "delete" && key != "transform" && key != "fillet" && key != "chamfer" &&
                 (canvas->hasSubselection() || canvas->selectedDetails.size() > 1) && bodyCommands.contains(key))
                 throw std::runtime_error(
                     "Há subelementos ou vários itens selecionados. Esta ferramenta ainda atua em um objeto inteiro; "
@@ -743,6 +747,7 @@ Window::Window(QString recoveryDirectory, bool promptRecovery) {
     command("cut", "Combine — Cut", "", [this] { booleanOp("cut"); });
     command("common", "Combine — Intersect", "", [this] { booleanOp("common"); });
     command("fillet", "Fillet", "", [this] { fillet(); });
+    command("chamfer", "Chamfer", "", [this] { fillet(true); });
     command("measure", "Measure", "I", [this] { measure(); });
     command("parameters", "Change Parameters", "", [this] {
         QDialog dialog(this); dialog.setObjectName("parameterEditor");dialog.setWindowTitle("Parâmetros do projeto");dialog.resize(650,420);
@@ -1370,8 +1375,8 @@ void Window::buildRibbon() {
               {"sketch", "extrude", "revolve", "hole", "box", "cylinder", "sphere"},
               {"Sweep", "Loft", "Pattern", "Mirror"});
         group("MODIFY", {"fillet", "boolean", "cut", "copy", "transform"},
-              {"fillet", "transform", "copy", "boolean", "cut", "common", "parameters", "expression"},
-              {"Chamfer", "Shell", "Draft", "Scale", "Split Body"});
+              {"fillet", "chamfer", "transform", "copy", "boolean", "cut", "common", "parameters", "expression"},
+              {"Shell", "Draft", "Scale", "Split Body"});
         group("ASSEMBLE", {}, {}, {"New Component", "Joint", "As-Built Joint"}, {"joint", "component"});
         group("CONFIGURE", {}, {}, {"Configuration Table"}, {"configure"});
         group("CONSTRUCT", {}, {}, {"Offset Plane", "Midplane", "Axis"}, {"plane"});
@@ -1490,14 +1495,14 @@ void Window::buildProperties() {
     propertyForm->addRow("Name", featureName);
     static QMap<QString, QString> labels = {{"x", "X"},         {"y", "Y"},
                                             {"z", "Z"},         {"w", "Width"},
-                                            {"h", "Height"},    {"d", "Distance"},
+                                            {"h", "Height"},    {"d", "Distance"}, {"d2", "Distance 2"},
                                             {"r", "Radius"},    {"offset", "Plane offset"},
                                             {"angle", "Angle"}, {"axis", "Axis position"},
                                             {"u", "Center U"},  {"v", "Center V"},
                                             {"x1", "Start X"},  {"y1", "Start Y"},
                                             {"xm", "Mid X"},    {"ym", "Mid Y"},
                                             {"x2", "End X"},    {"y2", "End Y"}};
-    for (auto key : {"x", "y", "z", "w", "h", "r", "d", "angle", "axis", "u", "v", "offset", "x1", "y1", "xm",
+    for (auto key : {"x", "y", "z", "w", "h", "r", "d", "d2", "angle", "axis", "u", "v", "offset", "x1", "y1", "xm",
                      "ym", "x2", "y2"})
         if (f.p[key].isDouble()) {
             auto *spin = new QDoubleSpinBox;
@@ -2107,27 +2112,51 @@ void Window::hole() {
         refresh();
     }
 }
-void Window::fillet() {
+void Window::fillet(bool chamfer) {
     if (selected.isEmpty() || model.get(selected).type == "sketch" || model.isMesh(selected))
         throw std::runtime_error("Selecione arestas de um sólido CAD ou um corpo CAD inteiro.");
     QJsonArray edges;
+    const auto previousSelection=selected;
+    bool editing=chamfer && model.get(selected).type=="chamfer";
+    for(const auto &item:canvas->selectedDetails)if(item.kind!="object")editing=false;
+    const auto initial=editing?model.get(selected).p:QJsonObject{};
     for (const auto &item : canvas->selectedDetails) {
         if (item.feature != selected || (item.kind != "edge" && item.kind != "object"))
             throw std::runtime_error("Selecione arestas de um único corpo para aplicar o filete.");
         if (item.kind == "edge") edges.append(item.index);
     }
-    const QString source = selected;
-    Form f(this, "Fillet");
-    f.number("r", "Radius", 1, .001);
-    f.nums["r"]->setObjectName("filletRadius");
+    if(editing)edges=initial["edges"].toArray();
+    const QString source = editing?initial["source"].toString():selected;
+    if(chamfer && edges.empty())throw std::runtime_error("Selecione as arestas do chanfro; use Shift para selecionar várias.");
+    const QString operation=chamfer?"chamfer":"fillet", title=chamfer?"Chamfer":"Fillet";
+    Form f(this, title);
+    if(chamfer) {
+        f.choice("mode","Type",{{"Equal distance","equal"},{"Two distances","two"},{"Distance and angle","angle"}},initial["mode"].toString("equal"));
+        f.combos["mode"]->setObjectName("chamferMode");
+        f.number("d","Distance",initial["d"].toDouble(1),.001);f.nums["d"]->setObjectName("chamferDistance");
+        f.number("d2","Distance 2",initial["d2"].toDouble(1),.001);
+        f.nums["d2"]->setObjectName("chamferDistance2");
+        f.number("angle","Angle",initial["angle"].toDouble(45),.001,89.999," °");
+        f.choice("side","Reference side",{{"First","first"},{"Second","second"}},initial["side"].toString("first"));
+        auto fields=[&]{auto mode=f.combos["mode"]->currentData();f.nums["d2"]->setEnabled(mode=="two");
+            f.nums["angle"]->setEnabled(mode=="angle");f.combos["side"]->setEnabled(mode!="equal");};
+        connect(f.combos["mode"],qOverload<int>(&QComboBox::currentIndexChanged),&f,fields);fields();
+    } else {f.number("r", "Radius", 1, .001);f.nums["r"]->setObjectName("filletRadius");}
+    const auto bindings=initial["expressions"].toObject();
+    for(auto it=f.nums.begin();it!=f.nums.end();++it)if(bindings.contains(it.key())) {
+        it.value()->setReadOnly(true);it.value()->setToolTip("Controlado por: "+bindings[it.key()].toString());
+    }
     f.note(edges.empty() ? "Todas as arestas do corpo. Para escolher arestas, cancele e selecione-as com Shift."
-                        : QString("%1 aresta(s) selecionada(s). Altere o raio para visualizar o resultado.").arg(edges.size()));
+                        : QString("%1 aresta(s) selecionada(s). Altere as medidas para visualizar o resultado.").arg(edges.size()));
     auto *feedback = new QLabel;
     feedback->setWordWrap(true);
     f.layout->addRow(feedback);
     auto parameters = [&] {
-        auto p = f.values(); p["source"] = source;
+        auto p = initial;const auto values=f.values();
+        for(auto it=values.begin();it!=values.end();++it)if(!bindings.contains(it.key()))p[it.key()]=it.value();
+        p["source"] = source;
         if (!edges.empty()) p["edges"] = edges;
+        if(chamfer) {TopTools_IndexedMapOfShape topology;TopExp::MapShapes(model.get(source).shape,TopAbs_EDGE,topology);p["sourceEdgeCount"]=topology.Extent();}
         return p;
     };
     Model preview = model;
@@ -2136,7 +2165,9 @@ void Window::fillet() {
         valid = false;
         try {
             preview = model;
-            auto id = preview.add("fillet", parameters(), "Fillet preview");
+            QString id=previousSelection;
+            if(editing)preview.edit(id,parameters(),model.get(id).name);
+            else id=preview.add(operation, parameters(), title+" preview");
             canvas->selected = id;
             canvas->setModel(&preview);
             feedback->clear(); valid = true;
@@ -2145,12 +2176,13 @@ void Window::fillet() {
             feedback->setText(QString::fromUtf8(error.what()));
         } catch (const Standard_Failure &) {
             canvas->selected = source; canvas->setModel(&model);
-            feedback->setText("Não foi possível aplicar o filete. Reduza o raio.");
+            feedback->setText("Não foi possível aplicar a operação. Reduza as medidas.");
         }
     };
     QTimer debounce;
     debounce.setSingleShot(true); debounce.setInterval(80);
-    connect(f.nums["r"], qOverload<double>(&QDoubleSpinBox::valueChanged), &f, [&] { debounce.start(); });
+    for(auto *input:f.nums)connect(input,qOverload<double>(&QDoubleSpinBox::valueChanged),&f,[&]{debounce.start();});
+    for(auto *combo:f.combos)connect(combo,qOverload<int>(&QComboBox::currentIndexChanged),&f,[&]{debounce.start();});
     connect(&debounce, &QTimer::timeout, &f, updatePreview);
     f.validate = [&] { debounce.stop(); updatePreview(); return valid; };
     activeCommand = &f;
@@ -2160,8 +2192,11 @@ void Window::fillet() {
     bool accepted = f.acceptForm();
     debounce.stop(); activeCommand.clear();
     canvas->onCancelCommand = {}; canvas->onAcceptCommand = {};
-    canvas->selected = source; canvas->setModel(&model);
-    if (accepted) selected = model.add("fillet", parameters(), "Fillet");
+    canvas->selected = previousSelection; canvas->setModel(&model);
+    if (accepted) {
+        if(editing)model.edit(previousSelection,parameters(),model.get(previousSelection).name);
+        else selected = model.add(operation, parameters(), title);
+    }
     refresh();
 }
 void Window::measure() {

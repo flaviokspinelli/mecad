@@ -18,6 +18,44 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void chamferPreviewEditAndCancel() {
+        QTemporaryDir dir;Model source;source.add("box",{{"w",30},{"h",30},{"d",10}});
+        source.save(dir.filePath("box.mcad"));Window window(dir.filePath("recovery"),false);window.openPath(source.filePath);
+        window.show();QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto *v=window.findChild<Viewport *>();v->refresh();v->fit();v->view("iso");v->selectionFilter="edge";
+        QTest::mouseClick(v,Qt::LeftButton,Qt::NoModifier,v->project({30,0,5}).toPoint());
+        QCOMPARE(v->selectedDetail.kind,QString("edge"));
+        const auto before=window.model.json();bool preview=false,blocked=false;
+        QTimer watchdog;watchdog.setInterval(4000);connect(&watchdog,&QTimer::timeout,[&]{if(v->onCancelCommand)v->onCancelCommand();});watchdog.start();
+        QTimer::singleShot(200,[&]{
+            preview=v->model!=&window.model && window.model.json()==before && v->model->features.size()==2;
+            auto *distance=window.findChild<QDoubleSpinBox *>("chamferDistance");if(!distance)return;
+            distance->setValue(100);if(v->onAcceptCommand)v->onAcceptCommand();
+            blocked=bool(v->onCancelCommand) && window.model.json()==before;
+            distance->setValue(2);window.findChild<QComboBox *>("chamferMode")->setCurrentIndex(1);
+            window.findChild<QDoubleSpinBox *>("chamferDistance2")->setValue(3);
+            if(v->onAcceptCommand)v->onAcceptCommand();
+        });
+        window.findChild<QAction *>("chamfer")->trigger();QVERIFY(preview);QVERIFY(blocked);
+        QCOMPARE(window.model.features.size(),size_t(2));QCOMPARE(window.model.features.back().p["mode"].toString(),QString("two"));
+        const auto id=window.model.features.back().id;const auto good=window.model.json();
+        v->onSelect(id); // Reopen the existing operation instead of adding another one.
+        QTimer::singleShot(200,[&]{
+            auto *distance=window.findChild<QDoubleSpinBox *>("chamferDistance");if(distance)distance->setValue(1);
+            if(v->onAcceptCommand)v->onAcceptCommand();
+        });
+        window.findChild<QAction *>("chamfer")->trigger();QCOMPARE(window.model.features.size(),size_t(2));
+        QCOMPARE(window.model.get(id).p["d"].toDouble(),1.);
+        window.findChild<QAction *>("undo")->trigger();QCOMPARE(window.model.json(),good);
+        window.findChild<QAction *>("redo")->trigger();const auto edited=window.model.json();v->onSelect(id);
+        QTimer::singleShot(200,[&]{
+            window.grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("chamfer-preview.png"));
+            if(v->onCancelCommand)v->onCancelCommand();
+        });
+        window.findChild<QAction *>("chamfer")->trigger();QCOMPARE(window.model.json(),edited);
+        window.model.save(dir.filePath("chamfer.mcad"));Model loaded;loaded.load(window.model.filePath);
+        QCOMPARE(loaded.json(),edited);QVERIFY(window.close());
+    }
     void namedParametersEditing() {
         QTemporaryDir dir;Model source;
         const auto id=source.add("box",{{"w",10},{"h",10},{"d",10}});

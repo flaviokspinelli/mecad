@@ -81,5 +81,6 @@ class Model {
     void restore(const QJsonObject &root);
     void rebuildGeometry();
     static void resolveSketch(Feature &feature);
+    static TopoDS_Shape chamferShape(const TopoDS_Shape &source, const QJsonObject &parameters);
     TopoDS_Shape exportShape(const QString &id) const;
 };

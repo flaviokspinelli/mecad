@@ -243,3 +243,38 @@ Nenhum item inteiro foi encerrado. Sem pacote, alteração em dist ou projeto do
 usuário; uso de build/ único. A verificação adicional expressionsOnSupportedFeatures
 e namedParametersDriveGeometry passou (4 resultados com setup/cleanup), cobrindo
 cada tipo de recurso compatível e mistura de restrições v2 com parâmetros v3.
+
+## 21/09/2026 — segundo lote de 30, chanfro e corpus sintético
+
+Novo pedido de mais 30 itens: escopo agora de 95 IDs distintos dos 101 do backlog,
+contagem conferida automaticamente, sem IDs inexistentes ou repetidos. A lista do
+segundo lote e os seis itens fora do escopo estão no início de BACKLOG.md. Retomada
+automática atualizada, preservando a cadência e todas as restrições anteriores.
+Isso amplia o escopo, não a contagem de itens aceitos.
+
+Responsável: Codex. Trabalho realizado em GEO-04 e QA-05, ambos parciais. Dependências
+de implementação: kernel OCCT já instalado, seleção por aresta, prévia transacional,
+persistência e histórico. Risco principal: troca silenciosa de referência topológica;
+guarda por contagem é apenas proteção parcial, não substitui PAR-01.
+
+- Chanfro em três modos: igual distância, duas distâncias e distância/ângulo;
+  troca de face de referência, seleção por arestas, validação de distâncias/ângulo.
+- Prévia sem alteração do documento; falha impede confirmação. Reabrir o recurso
+  pelo comando edita a mesma etapa, sem duplicar o corpo. Undo/redo e arquivo nativo.
+- Distâncias vinculáveis a fórmulas, protegidas contra arredondamento/sobrescrita
+  no painel. Implementação geométrica separada em src/chamfer.cpp.
+- Corpus sintético de suporte, caixa de sensor e espaçador; sólidos válidos,
+  volume analítico, reconstrução, salvar/reabrir e STEP. Sem copiar projetos privados.
+
+Validação: suíte core completa (33 resultados incluindo setup/cleanup), UI
+chamferPreviewEditAndCancel + selectedEdgeFilletAndMeasurement (4), corpus (5).
+Todos passaram. O teste de UI percorre seleção com mouse, prévia, valor impossível,
+edição sem duplicação, cancelar, undo/redo e persistência. A captura
+build/chamfer-preview.png foi inspecionada: prévia geométrica e controles legíveis.
+Documentação e limites em CHAMFER.md e QA-CORPUS.md; troca STEP usa o próprio OCCT,
+não é validação por aplicativo independente.
+
+Não foram concluídos 30 itens nesta execução. Nenhum item inteiro foi marcado
+aceito. Nenhum pacote ou nova versão .app foi produzido; dist e arquivos do usuário
+foram preservados. Próximos trabalhos continuam por dependência, não para inflar
+contagem com botões ou núcleos isolados.

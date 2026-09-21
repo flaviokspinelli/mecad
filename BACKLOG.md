@@ -3,8 +3,8 @@
 Atualização: 21/09/2026. Base: MecaCAD 0.2.25, macOS Apple Silicon.
 
 Progresso após essa versão: [registro de execução](docs/PROGRESSO.md).
-Escopo ampliado pelo usuário em 21/09/2026: **65 itens**, sendo os 35 parciais
-originais e mais 30 selecionados por dependência e uso diário de CAD. Inclusão
+Escopo ampliado pelo usuário em 21/09/2026: **95 itens**, sendo os 35 parciais
+originais e dois lotes adicionais de 30. Inclusão
 no escopo não significa conclusão. Lista dos 35 originais:
 
 - PROD-03, PROD-05;
@@ -28,7 +28,21 @@ Os 30 adicionais, sem duplicação dos anteriores:
 
 Sequência interna: integridade e parâmetros; seleção/sketch/referências;
 modelagem; componentes/montagens; desenhos e malhas. Dependências indispensáveis
-continuam autorizadas. Os demais 36 itens não entram automaticamente nesta entrega.
+continuam autorizadas.
+
+Segundo lote de 30 adicionais (novo pedido em 21/09/2026):
+
+- SK-13; GEO-11, GEO-14;
+- ASM-02, ASM-04, ASM-06, ASM-07;
+- FAB-06, FAB-07, FAB-08;
+- CAM-01, CAM-02, CAM-03, CAM-04, CAM-05, CAM-06;
+- SIM-01, SIM-02, SIM-03, SIM-04, SIM-05;
+- ELE-01, ELE-02; VIS-01, VIS-02; API-01;
+- QA-03, QA-04, QA-05, QA-06.
+
+Ficam fora deste escopo PROD-06, CAM-07, CAM-08, SIM-06, SIM-07 e DATA-01.
+Os módulos avançados aguardam suas dependências e validações; esta ampliação não
+autoriza compra de licenças, serviços externos ou execução de máquinas físicas.
 
 Fechar significa cumprir o aceite integral de cada linha abaixo, não apenas
 implementar parte dela. Restrições de disco e de testes permanecem em vigor.
@@ -175,7 +189,7 @@ PAR-01/02 sustentam projeções, recursos avançados e montagens associativas.
 | GEO-01 | P0 · Parcial | Extrusão/corte completos | Múltiplas regiões, duas direções/simetria, até face e passante; alvo explícito; prévia coincide com resultado; zero não gera operação. |
 | GEO-02 | P1 · Parcial | Furo por clique | Centro cotado sobre face, profundidade/passante, rebaixo/escareado e padrões; edição preserva referência. |
 | GEO-03 | P1 · Parcial | Filete completo | Seleção dinâmica, cadeias tangentes, edição de raio e diagnóstico de arestas problemáticas; raios variáveis como extensão explicitamente testada. |
-| GEO-04 | P1 · Pendente | Chanfro | Igual distância, duas distâncias e distância/ângulo; prévia, seleção e edição paramétrica. |
+| GEO-04 | P1 · Parcial | Chanfro | Igual distância, duas distâncias e distância/ângulo; prévia, seleção e edição paramétrica. Três modos e edição integrados; seleção dinâmica no painel e referências topológicas robustas ainda pendentes. |
 | GEO-05 | P1 · Pendente | Casca e inclinação | Faces removidas, espessura, plano neutro e direção; diagnosticar geometrias inviáveis sem perder o corpo original. |
 | GEO-06 | P1 · Pendente | Espelho e padrões 3D | Corpos/recursos, padrões lineares/circulares e por caminho; quantidades editáveis e instâncias inválidas identificadas. |
 | GEO-07 | P1 · Pendente | Loft e sweep | Perfis, guias, caminhos e continuidade; detectar auto-interseção; reconstruir após editar entradas. |
@@ -262,7 +276,7 @@ Resultados precisam de validação numérica, não apenas mapas coloridos.
 | QA-02 | P0 · Parcial | Teste real de interface | Exercitar mouse/teclado e painéis, não apenas API geométrica; inspecionar prévia, alvo selecionado e resultado final. |
 | QA-03 | P0 · Pendente | Desempenho e longa duração | Medir abertura/seleção/reconstrução e memória em tamanhos definidos; executar sessões prolongadas e investigar degradação. |
 | QA-04 | P0 · Pendente | Injeção de falhas | Cancelar, simular falha de gravação, importar arquivos inválidos e interromper processo; recuperar sem corrupção silenciosa. |
-| QA-05 | P1 · Pendente | Corpus de mecatrônica | Peças sintéticas desde o início; projetos reais somente quando disponibilizados/autorizados; registrar cobertura e defeitos. |
+| QA-05 | P1 · Parcial | Corpus de mecatrônica | Peças sintéticas desde o início; projetos reais somente quando disponibilizados/autorizados; registrar cobertura e defeitos. Suporte, caixa e espaçador sintéticos com volumes analíticos; ampliar diversidade e fluxos. |
 | QA-06 | P1 · Pendente | Comparação de produtividade | Repetir tarefas de PROD-01 em ambos os produtos; divulgar resultados, metodologia e limites, sem alegar paridade universal. |
 
 ## Sequência e dependências de execução

@@ -79,7 +79,7 @@ void validateDocument(const QJsonObject &root) {
     require(root["features"].isArray() && root["features"].toArray().size() <= 2000,
             "Lista de operações inválida.");
     const QSet<QString> types = {"box", "cylinder", "sphere", "sketch", "extrude", "revolve", "boolean",
-                                "hole", "transform", "copy", "remove", "fillet", "mesh", "import"};
+                                "hole", "transform", "copy", "remove", "fillet", "chamfer", "mesh", "import"};
     const QSet<QString> featureKeys = {"id", "name", "type", "parameters", "visible"};
     QSet<QString> previous;
     for (const auto &value : root["features"].toArray()) {
@@ -112,6 +112,7 @@ void validateDocument(const QJsonObject &root) {
         };
         if (type == "extrude" || type == "revolve") enumeration("mode", {"join", "cut"});
         if (type == "boolean") enumeration("mode", {"join", "cut", "common"});
+        if(type=="chamfer") {enumeration("mode",{"equal","two","angle"});enumeration("side",{"first","second"});}
         if (type == "transform" || type == "copy") enumeration("axis", {"X", "Y", "Z"});
         if (type == "sketch") {
             enumeration("profile", {"rectangle", "circle", "polyline", "arc"});
@@ -127,7 +128,7 @@ void validateDocument(const QJsonObject &root) {
             require(!p[key].toString().isEmpty(), QString("A operação %1 exige a referência %2.").arg(id, key));
         };
         if (type == "extrude" || type == "revolve" || type == "transform" || type == "copy" ||
-            type == "remove" || type == "fillet") requiredReference("source");
+            type == "remove" || type == "fillet" || type == "chamfer") requiredReference("source");
         if (type == "hole" || type == "boolean") requiredReference("target");
         if (type == "boolean") requiredReference("tool");
         if (type == "sketch" && !p["support"].toString().isEmpty()) {
@@ -601,6 +602,8 @@ void Model::rebuildGeometry() {
                 fillet.Build();
                 require(fillet.IsDone(), "Não foi possível aplicar este raio às arestas. Reduza o raio ou altere a seleção.");
                 f.shape = fillet.Shape();
+            } else if(f.type=="chamfer") {
+                f.shape=chamferShape(source("source"),p);
             } else if (f.type == "mesh") {
                 auto encoded = p["stl"].toString().toLatin1();
                 require(!encoded.isEmpty() && encoded.size() <= 70000000,

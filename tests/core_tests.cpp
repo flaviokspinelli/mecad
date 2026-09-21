@@ -1,5 +1,9 @@
 #include "model.h"
 #include <BRepCheck_Analyzer.hxx>
+#include <BRepGProp.hxx>
+#include <GProp_GProps.hxx>
+#include <TopExp.hxx>
+#include <TopTools_IndexedMapOfShape.hxx>
 #include <QFile>
 #include <QJsonDocument>
 #include <QTemporaryDir>
@@ -11,6 +15,36 @@
 class CoreTests : public QObject {
     Q_OBJECT
   private slots:
+    void chamferModesAndPersistence() {
+        for(const auto &mode:QStringList{"equal","two","angle"}) {
+            Model m;auto box=m.add("box",{{"w",30},{"h",30},{"d",10}});
+            TopTools_IndexedMapOfShape edges;TopExp::MapShapes(m.get(box).shape,TopAbs_EDGE,edges);
+            GProp_GProps length;BRepGProp::LinearProperties(edges(1),length);
+            const auto before=m.json();
+            QJsonObject p{{"source",box},{"edges",QJsonArray{0}},{"d",2},{"d2",3},{"angle",45},{"mode",mode},{"side","first"},{"sourceEdgeCount",edges.Extent()}};
+            auto id=m.add("chamfer",p);
+            const double removed=(mode=="two"?3.:2.)*length.Mass();
+            QVERIFY(std::abs(Model::volume(m.get(id).shape)-(9000-removed))<1e-5);
+            QVERIFY(BRepCheck_Analyzer(m.get(id).shape).IsValid());
+            QVERIFY(m.consumed(box));QCOMPARE(m.bodies().size(),size_t(1));
+            const auto good=m.json();QVERIFY(m.undo());QCOMPARE(m.json(),before);QVERIFY(m.redo());QCOMPARE(m.json(),good);
+            QTemporaryDir dir;m.save(dir.filePath("chamfer.mcad"));Model loaded;loaded.load(m.filePath);QCOMPARE(loaded.json(),good);
+            p["d"]=100;QVERIFY_THROWS_EXCEPTION(std::exception,m.edit(id,p,"Invalid"));QCOMPARE(m.json(),good);QVERIFY(!m.dirty);
+            p["d"]=1;p["side"]="second";m.edit(id,p,"Chamfer edited");QCOMPARE(m.features.size(),size_t(2));
+            m.setExpression(id,"d","1.5 mm");QCOMPARE(m.get(id).p["d"].toDouble(),1.5);
+        }
+    }
+    void chamferRejectsBadInputs() {
+        Model m;auto box=m.add("box",{{"w",10},{"h",10},{"d",10}});const auto before=m.json();
+        const QJsonObject base{{"source",box},{"edges",QJsonArray{0}},{"d",1}};
+        QVector<QJsonObject> invalid;
+        for(const auto &edges:QVector<QJsonArray>{{},{-1},{999},{0.5}}){auto p=base;p["edges"]=edges;invalid.append(p);}
+        for(double distance:{0.,-1.,1e8}){auto p=base;p["d"]=distance;invalid.append(p);}
+        for(double angle:{0.,90.,-1.}){auto p=base;p["mode"]="angle";p["angle"]=angle;invalid.append(p);}
+        auto p=base;p["mode"]="unknown";invalid.append(p);
+        p=base;p["sourceEdgeCount"]=13;invalid.append(p);
+        for(const auto &parameters:invalid){QVERIFY_THROWS_EXCEPTION(std::exception,m.add("chamfer",parameters));QCOMPARE(m.json(),before);}
+    }
     void expressionsOnSupportedFeatures() {
         Model m;m.setParameters({{"size","2 mm"}});
         auto cylinder=m.add("cylinder",{{"r",1},{"d",1}});

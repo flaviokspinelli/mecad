@@ -17,7 +17,7 @@ Expression**. Escolha o campo e informe a fórmula. Vazio remove o vínculo e ma
 o valor resolvido. A medida vinculada é somente leitura no painel de propriedades;
 o tooltip identifica a fórmula. Não é necessário editar o arquivo manualmente.
 
-Campos atuais: bloco w/h/d, cilindro r/d, esfera r, extrusão d e filete r.
+Campos atuais: bloco w/h/d, cilindro r/d, esfera r, extrusão d, filete r e chanfro d/d2.
 Todos exigem comprimento explícito. Uma fórmula negativa só é aceita quando a
 operação geométrica permite, por exemplo extrusão em sentido contrário.
 

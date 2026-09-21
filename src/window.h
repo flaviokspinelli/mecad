@@ -65,7 +65,7 @@ class Window : public QMainWindow {
     void booleanOp(const QString &mode);
     void transform(bool copy);
     void hole();
-    void fillet();
+    void fillet(bool chamfer = false);
     void measure();
     void exportFile(const QString &format);
     void save(bool as = false);

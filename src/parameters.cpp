@@ -6,6 +6,7 @@ QStringList Model::expressionFields(const QString &type) {
     if(type=="cylinder") return {"r","d"};
     if(type=="sphere" || type=="fillet") return {"r"};
     if(type=="extrude") return {"d"};
+    if(type=="chamfer") return {"d","d2"};
     return {};
 }
 void Model::setParameters(const QMap<QString,QString> &definitions) {
