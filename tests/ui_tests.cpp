@@ -19,6 +19,7 @@ class UiTests : public QObject {
         window.findChild<QAction *>("sketch")->trigger();
         QVERIFY(v->choosingPlane);
         QTest::qWait(100);
+        window.grab().save(QDir::currentPath() + "/plane-selection-test.png");
         QTest::mouseClick(v, Qt::LeftButton, Qt::NoModifier,
                           v->project(Model::planePoint("XY", 10, 10)).toPoint());
         QVERIFY(v->sketchMode);

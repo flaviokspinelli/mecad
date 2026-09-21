@@ -242,7 +242,7 @@ void Viewport::paintGL() {
 void Viewport::paintOverlay(QPainter &p) {
     p.setRenderHint(QPainter::Antialiasing);
     // Ground grid is an orientation aid, kept subtle when solids are present.
-    if (mesh.empty() || sketchMode) {
+    if ((mesh.empty() || sketchMode) && !choosingPlane) {
         double step = span > 500 ? 100 : (span > 150 ? 10 : (span > 40 ? 5 : 1));
         QPointF local = planeAt({width() / 2., height() / 2.});
         double half = span * 1.5;
@@ -254,7 +254,7 @@ void Viewport::paintOverlay(QPainter &p) {
             p.drawLine(project(Model::planePoint(plane, local.x() - half, i, planeOffset)),
                        project(Model::planePoint(plane, local.x() + half, i, planeOffset)));
     }
-    if (mesh.empty() || sketchMode) {
+    if ((mesh.empty() || sketchMode) && !choosingPlane) {
         p.setPen(QPen(QColor("#b76370"), 1));
         p.drawLine(project(Model::planePoint(plane, -50000, 0, planeOffset)),
                    project(Model::planePoint(plane, 50000, 0, planeOffset)));
@@ -339,13 +339,10 @@ void Viewport::paintOverlay(QPainter &p) {
     p.setFont(QFont("Helvetica Neue", 11));
     if (sketchMode)
         p.drawText(290, 24, "SKETCH  /  " + plane + "  /  mm");
-    if (mesh.empty() && model->features.empty() && !sketchMode) {
+    if (mesh.empty() && model->features.empty() && !sketchMode && !choosingPlane) {
         p.setPen(light ? QColor("#576a7e") : QColor("#90a2b7"));
-        p.setFont(QFont("Helvetica Neue", 20));
-        p.drawText(rect().adjusted(0, 0, 0, -32), Qt::AlignCenter, "Sua próxima peça começa aqui");
         p.setFont(QFont("Helvetica Neue", 12));
-        p.drawText(rect().adjusted(0, 42, 0, 0), Qt::AlignCenter,
-                   "Crie um sketch ou abra o exemplo de suporte");
+        p.drawText(QRect(290, 18, width() - 420, 28), Qt::AlignCenter, "Create Sketch para começar");
     }
     cubeFaces.clear();
     // The cube follows the camera. Each visible face is a real view target.
@@ -392,26 +389,52 @@ void Viewport::paintOverlay(QPainter &p) {
     p.setPen(QPen(QColor("#61a7e3"), 1.5));
     p.drawLine(cubePoint({-1, -1, -1}), cubePoint({-1, -1, 1.6}));
     if (choosingPlane) {
+        QString hovered;
+        for (const auto &region : planeRegions)
+            if (region.second.containsPoint(planeHover, Qt::OddEvenFill)) {
+                hovered = region.first;
+                break;
+            }
         planeRegions.clear();
+        QRectF bounds;
         int i = 0;
         for (auto planeName : {"XY", "XZ", "YZ"}) {
             QPolygonF polygon;
             for (auto q : {QPointF(-15, -15), QPointF(25, -15), QPointF(25, 25), QPointF(-15, 25)})
                 polygon << project(Model::planePoint(planeName, q.x(), q.y()));
-            QColor c = i == 0   ? QColor(80, 155, 222, 70)
-                       : i == 1 ? QColor(230, 157, 75, 70)
-                                : QColor(80, 197, 144, 70);
+            QColor c = i == 0   ? QColor(102, 172, 214, 30)
+                       : i == 1 ? QColor(211, 172, 105, 30)
+                                : QColor(98, 184, 156, 30);
+            if (hovered == planeName)
+                c.setAlpha(100);
             p.setBrush(c);
-            p.setPen(QPen(QColor("#a5ccdf"), 1));
+            p.setPen(QPen(hovered == planeName ? QColor("#b8e6ff") : QColor("#8199ab"),
+                          hovered == planeName ? 2 : 1));
             p.drawPolygon(polygon);
             planeRegions.append({planeName, polygon});
-            p.setPen(QColor("#ebf1f7"));
-            p.drawText(polygon.boundingRect(), Qt::AlignCenter, planeName);
+            bounds = bounds.united(polygon.boundingRect());
             ++i;
         }
+        const QPointF labelPoints[] = {QPointF(bounds.center().x(), bounds.bottom() + 24),
+                                       QPointF(bounds.left() - 32, bounds.center().y()),
+                                       QPointF(bounds.right() + 32, bounds.center().y())};
+        p.setFont(QFont("Helvetica Neue", 10, QFont::Medium));
+        for (int index = 0; index < 3; ++index) {
+            auto region = planeRegions[index];
+            QRectF badge(labelPoints[index] - QPointF(21, 12), QSizeF(42, 24));
+            p.setPen(QPen(QColor("#71899d"), 1));
+            p.drawLine(region.second.boundingRect().center(), labelPoints[index]);
+            p.setBrush(hovered == region.first ? QColor("#345b74") : QColor("#283746"));
+            p.setPen(QPen(hovered == region.first ? QColor("#91cee9") : QColor("#71899d"), 1));
+            p.drawRoundedRect(badge, 4, 4);
+            p.setPen(QColor("#e0e9f2"));
+            p.drawText(badge, Qt::AlignCenter, region.first);
+            planeRegions.append({region.first, QPolygonF(badge)});
+        }
+        p.setFont(QFont("Helvetica Neue", 11));
         p.setPen(QColor("#e0e9f2"));
         p.drawText(QRect(290, 20, width() - 420, 30), Qt::AlignCenter,
-                   "Select a plane or an axis-aligned planar face");
+                   "Escolha um plano para o sketch   ·   Esc para cancelar");
     }
     if (moveHandleActive) {
         const QColor colors[] = {QColor("#ee8886"), QColor("#88da9a"), QColor("#72cffa")};
@@ -575,6 +598,7 @@ void Viewport::mousePressEvent(QMouseEvent *e) {
     }
 }
 void Viewport::mouseMoveEvent(QMouseEvent *e) {
+    planeHover = e->position();
     auto delta = e->position() - last;
     last = e->position();
     cursor = planeAt(e->position());
