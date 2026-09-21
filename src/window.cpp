@@ -2196,7 +2196,10 @@ void Window::fillet(bool chamfer) {
         throw std::runtime_error("Selecione arestas de um sólido CAD ou um corpo CAD inteiro.");
     QJsonArray edges;
     const auto previousSelection=selected;
-    bool editing=chamfer && model.get(selected).type=="chamfer";
+    const auto previousDetails=canvas->selectedDetails;
+    const auto previousDetail=canvas->selectedDetail;
+    const QString operation=chamfer?"chamfer":"fillet", title=chamfer?"Chamfer":"Fillet";
+    bool editing=model.get(selected).type==operation;
     for(const auto &item:canvas->selectedDetails)if(item.kind!="object")editing=false;
     const auto initial=editing?model.get(selected).p:QJsonObject{};
     for (const auto &item : canvas->selectedDetails) {
@@ -2206,8 +2209,6 @@ void Window::fillet(bool chamfer) {
     }
     if(editing)edges=initial["edges"].toArray();
     const QString source = editing?initial["source"].toString():selected;
-    if(chamfer && edges.empty())throw std::runtime_error("Selecione as arestas do chanfro; use Shift para selecionar várias.");
-    const QString operation=chamfer?"chamfer":"fillet", title=chamfer?"Chamfer":"Fillet";
     Form f(this, title);
     if(chamfer) {
         f.choice("mode","Type",{{"Equal distance","equal"},{"Two distances","two"},{"Distance and angle","angle"}},initial["mode"].toString("equal"));
@@ -2220,28 +2221,46 @@ void Window::fillet(bool chamfer) {
         auto fields=[&]{auto mode=f.combos["mode"]->currentData();f.nums["d2"]->setEnabled(mode=="two");
             f.nums["angle"]->setEnabled(mode=="angle");f.combos["side"]->setEnabled(mode!="equal");};
         connect(f.combos["mode"],qOverload<int>(&QComboBox::currentIndexChanged),&f,fields);fields();
-    } else {f.number("r", "Radius", 1, .001);f.nums["r"]->setObjectName("filletRadius");}
+    } else {f.number("r", "Radius", initial["r"].toDouble(1), .001);f.nums["r"]->setObjectName("filletRadius");}
+    const auto initialValues=f.values();
     const auto bindings=initial["expressions"].toObject();
     for(auto it=f.nums.begin();it!=f.nums.end();++it)if(bindings.contains(it.key())) {
         it.value()->setReadOnly(true);it.value()->setToolTip("Controlado por: "+bindings[it.key()].toString());
     }
-    f.note(edges.empty() ? "Todas as arestas do corpo. Para escolher arestas, cancele e selecione-as com Shift."
-                        : QString("%1 aresta(s) selecionada(s). Altere as medidas para visualizar o resultado.").arg(edges.size()));
+    bool allEdges=!chamfer && edges.empty();
+    auto *choose=new QPushButton("Selecionar arestas");choose->setObjectName("chooseOperationEdges");choose->setCheckable(true);f.layout->addRow(choose);
+    auto *count=new QLabel;count->setObjectName("operationEdgeCount");f.layout->addRow(count);
+    f.note("Ative Selecionar arestas para ver o corpo original. Clique para substituir; Shift adiciona/remove. Desative para ver a prévia.");
     auto *feedback = new QLabel;
     feedback->setWordWrap(true);
     f.layout->addRow(feedback);
     auto parameters = [&] {
         auto p = initial;const auto values=f.values();
-        for(auto it=values.begin();it!=values.end();++it)if(!bindings.contains(it.key()))p[it.key()]=it.value();
+        for(auto it=values.begin();it!=values.end();++it) {
+            if(bindings.contains(it.key()))continue;
+            if(editing && initialValues[it.key()]==it.value())continue;
+            p[it.key()]=it.value();
+        }
         p["source"] = source;
-        if (!edges.empty()) p["edges"] = edges;
+        if(allEdges)p.remove("edges");else p["edges"] = edges;
         if(chamfer) {TopTools_IndexedMapOfShape topology;TopExp::MapShapes(model.get(source).shape,TopAbs_EDGE,topology);p["sourceEdgeCount"]=topology.Extent();}
         return p;
     };
     Model preview = model;
+    Model selectionModel=model;
+    if(editing)selectionModel.suppress(previousSelection,true);
+    const auto previousFilter=canvas->selectionFilter;
     bool valid = false;
     auto updatePreview = [&] {
         valid = false;
+        count->setText(allEdges?"Todas as arestas":QString("%1 aresta(s) selecionada(s)").arg(edges.size()));
+        if(choose->isChecked()) {
+            const auto details=canvas->selectedDetails;const auto detail=canvas->selectedDetail;
+            canvas->selected=source;canvas->setModel(&selectionModel);
+            canvas->selectedDetails=details;canvas->selectedDetail=detail;
+            feedback->setText("Selecione arestas e desative Selecionar arestas para conferir o resultado.");
+            return;
+        }
         try {
             preview = model;
             QString id=previousSelection;
@@ -2263,13 +2282,32 @@ void Window::fillet(bool chamfer) {
     for(auto *input:f.nums)connect(input,qOverload<double>(&QDoubleSpinBox::valueChanged),&f,[&]{debounce.start();});
     for(auto *combo:f.combos)connect(combo,qOverload<int>(&QComboBox::currentIndexChanged),&f,[&]{debounce.start();});
     connect(&debounce, &QTimer::timeout, &f, updatePreview);
-    f.validate = [&] { debounce.stop(); updatePreview(); return valid; };
+    connect(choose,&QPushButton::toggled,&f,[&](bool choosing){
+        canvas->commandSelectSubelements=choosing;canvas->selectionFilter=choosing?"edge":previousFilter;
+        canvas->selectedDetails.clear();canvas->selectedDetail={};canvas->hoveredDetail={};
+        if(choosing)for(auto edge:edges)canvas->selectedDetails.append({source,"edge",edge.toInt(),{}});
+        updatePreview();
+    });
+    commandSelection=[&](QString){
+        if(!choose->isChecked())return;
+        QJsonArray picked;
+        QVector<Viewport::SelectionTarget> details;
+        for(const auto &item:canvas->selectedDetails) {
+            if(item.feature!=source || item.kind!="edge")continue;
+            if(!picked.contains(item.index)){picked.append(item.index);details.append(item);}
+        }
+        canvas->selectedDetails=details;canvas->selectedDetail=details.empty()?Viewport::SelectionTarget{}:details.back();
+        edges=picked;allEdges=false;updatePreview();
+    };
+    f.validate = [&] { debounce.stop();choose->setChecked(false);updatePreview();return valid; };
     activeCommand = &f;
     canvas->onCancelCommand = [&] { f.reject(); };
     canvas->onAcceptCommand = [&] { f.accept(); };
     QTimer::singleShot(0, &f, updatePreview);
     bool accepted = f.acceptForm();
-    debounce.stop(); activeCommand.clear();
+    debounce.stop(); activeCommand.clear();commandSelection={};
+    canvas->commandSelectSubelements=false;canvas->selectionFilter=previousFilter;
+    canvas->selectedDetails.clear();canvas->selectedDetail={};canvas->hoveredDetail={};
     canvas->onCancelCommand = {}; canvas->onAcceptCommand = {};
     canvas->selected = previousSelection; canvas->setModel(&model);
     if (accepted) {
@@ -2277,6 +2315,7 @@ void Window::fillet(bool chamfer) {
         else selected = model.add(operation, parameters(), title);
     }
     refresh();
+    if(!accepted){canvas->selectedDetails=previousDetails;canvas->selectedDetail=previousDetail;canvas->update();}
 }
 void Window::measure() {
     auto shapeFor = [&](const Viewport::SelectionTarget &detail) {

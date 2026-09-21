@@ -1031,7 +1031,7 @@ void Viewport::mouseMoveEvent(QMouseEvent *e) {
         update();
         return;
     }
-    if (e->buttons() == Qt::NoButton && tool.isEmpty() && !choosingPlane && !onAcceptCommand &&
+    if (e->buttons() == Qt::NoButton && tool.isEmpty() && !choosingPlane && (!onAcceptCommand || commandSelectSubelements) &&
         cubeDirectionAt(e->position()).isNull()) {
         hoveredDetail = pickDetail(e->position());
         update();
@@ -1318,11 +1318,11 @@ void Viewport::mouseReleaseEvent(QMouseEvent *e) {
         update();
         return;
     }
-    auto target = pickDetail(s, bool(onAcceptCommand));
+    auto target = pickDetail(s, bool(onAcceptCommand) && !commandSelectSubelements);
     auto targets = selectedDetails;
     if (targets.empty() && !selectedDetail.feature.isEmpty())
         targets.append(selectedDetail);
-    if (!onAcceptCommand && e->modifiers().testFlag(Qt::ShiftModifier)) {
+    if ((!onAcceptCommand || commandSelectSubelements) && e->modifiers().testFlag(Qt::ShiftModifier)) {
         if (target.feature.isEmpty())
             return;
         auto found = std::find_if(targets.begin(), targets.end(), [&](const SelectionTarget &item) {
@@ -1337,9 +1337,12 @@ void Viewport::mouseReleaseEvent(QMouseEvent *e) {
         if (!target.feature.isEmpty())
             targets.append(target);
     }
-    if (!onAcceptCommand)
+    if (!onAcceptCommand || commandSelectSubelements)
         target = targets.empty() ? SelectionTarget{} : targets.back();
     selected = target.feature;
+    if(commandSelectSubelements) {
+        selectedDetail=target;selectedDetails=targets;
+    }
     if (onSelect)
         onSelect(selected);
     if (!onAcceptCommand) {

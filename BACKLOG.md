@@ -168,7 +168,7 @@ PAR-01/02 sustentam projeções, recursos avançados e montagens associativas.
 | GEO-01 | P0 · Parcial | Extrusão/corte completos | Múltiplas regiões, duas direções/simetria, até face e passante; alvo explícito; prévia coincide com resultado; zero não gera operação. |
 | GEO-02 | P1 · Parcial | Furo por clique | Centro cotado sobre face, profundidade/passante, rebaixo/escareado e padrões; edição preserva referência. |
 | GEO-03 | P1 · Parcial | Filete completo | Seleção dinâmica, cadeias tangentes, edição de raio e diagnóstico de arestas problemáticas; raios variáveis como extensão explicitamente testada. |
-| GEO-04 | P1 · Parcial | Chanfro | Igual distância, duas distâncias e distância/ângulo; prévia, seleção e edição paramétrica. Três modos e edição integrados; seleção dinâmica no painel e referências topológicas robustas ainda pendentes. |
+| GEO-04 | P1 · Parcial | Chanfro | Igual distância, duas distâncias e distância/ângulo; prévia, seleção e edição paramétrica. Três modos, edição e seleção dinâmica no painel integrados; referências topológicas robustas ainda pendentes. |
 | GEO-05 | P1 · Pendente | Casca e inclinação | Faces removidas, espessura, plano neutro e direção; diagnosticar geometrias inviáveis sem perder o corpo original. |
 | GEO-06 | P1 · Pendente | Espelho e padrões 3D | Corpos/recursos, padrões lineares/circulares e por caminho; quantidades editáveis e instâncias inválidas identificadas. |
 | GEO-07 | P1 · Pendente | Loft e sweep | Perfis, guias, caminhos e continuidade; detectar auto-interseção; reconstruir após editar entradas. |

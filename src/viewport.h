@@ -62,6 +62,7 @@ class Viewport : public QOpenGLWidget, protected QOpenGLFunctions {
     std::function<void(double)> onHandleDistance;
     std::function<void()> onCancelCommand;
     std::function<void()> onAcceptCommand;
+    bool commandSelectSubelements = false;
     void setModel(Model *m);
     double planeOffset = 0;
     int polygonSides = 6;

@@ -13,8 +13,12 @@ Selecione o chanfro no Browser/histórico e execute Chamfer novamente para edita
 suas medidas/modo, sem criar outro corpo. Selecionar arestas do resultado permite
 criar outro chanfro sobre ele. Distâncias podem usar vínculos de parâmetros.
 
-Limites: seleção de arestas é anterior à abertura; ainda não há edição dinâmica
-da seleção no painel ou manipulador por arraste. A referência usa índice de
+O botão Selecionar arestas permite trocar a seleção durante o comando, mostrando
+o corpo original: clique substitui, Shift adiciona/remove. Desative o botão para
+ver a prévia. Também funciona ao reeditar chanfros e filetes existentes, sem
+duplicar o recurso. Cancelar restaura documento e seleção anteriores.
+
+Limites: ainda não há manipulador por arraste. A referência usa índice de
 aresta e guarda a quantidade de arestas da origem; isso rejeita algumas mudanças
 de topologia, mas NÃO resolve renumeração mantendo a mesma contagem (PAR-01).
 Troca de lado é visualizada pela prévia, sem realce específico da face de referência.

@@ -20,6 +20,36 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void dynamicOperationEdgesAndFilletReedit() {
+        for(bool chamfer:{false,true}) {
+            QTemporaryDir dir;Model source;auto body=source.add("box",{{"w",30},{"h",30},{"d",10}});
+            source.save(dir.filePath("source.mcad"));Window window(dir.filePath("recovery"),false);window.openPath(source.filePath);
+            window.show();QVERIFY(QTest::qWaitForWindowExposed(&window));auto *v=window.findChild<Viewport *>();v->fit();v->view("iso");v->onSelect(body);
+            bool selectedTwo=false,toggledOff=false;
+            QTimer watchdog;watchdog.setInterval(4000);connect(&watchdog,&QTimer::timeout,[&]{if(v->onCancelCommand)v->onCancelCommand();});watchdog.start();
+            QTimer::singleShot(200,[&]{
+                auto *choose=window.findChild<QPushButton *>("chooseOperationEdges");if(!choose)return;
+                choose->setChecked(true);
+                QTest::mouseClick(v,Qt::LeftButton,Qt::NoModifier,v->project({30,0,5}).toPoint());
+                QTest::mouseClick(v,Qt::LeftButton,Qt::ShiftModifier,v->project({15,0,10}).toPoint());
+                selectedTwo=v->selectedDetails.size()==2;
+                QTest::mouseClick(v,Qt::LeftButton,Qt::ShiftModifier,v->project({15,0,10}).toPoint());
+                toggledOff=v->selectedDetails.size()==1;
+                choose->setChecked(false);if(v->onAcceptCommand)v->onAcceptCommand();
+            });
+            auto *action=window.findChild<QAction *>(chamfer?"chamfer":"fillet");action->trigger();
+            QVERIFY(selectedTwo);QVERIFY(toggledOff);QCOMPARE(window.model.features.size(),size_t(2));
+            auto id=window.model.features.back().id;QCOMPARE(window.model.get(id).p["edges"].toArray().size(),1);
+            const auto before=window.model.json();v->onSelect(id);
+            QTimer::singleShot(200,[&]{if(v->onAcceptCommand)v->onAcceptCommand();});action->trigger();
+            QCOMPARE(window.model.json(),before); // Same feature and unchanged parameters.
+            v->onSelect(id);QTimer::singleShot(200,[&]{
+                auto *value=window.findChild<QDoubleSpinBox *>(chamfer?"chamferDistance":"filletRadius");if(value)value->setValue(2);
+                if(v->onCancelCommand)v->onCancelCommand();
+            });action->trigger();QCOMPARE(window.model.json(),before);
+            window.model.save(dir.filePath("result.mcad"));QVERIFY(window.close());
+        }
+    }
     void suppressionFromHistory() {
         QTemporaryDir dir;Model source;auto base=source.add("box",{{"w",10},{"h",10},{"d",10}});
         auto moved=source.add("transform",{{"source",base},{"x",10}});source.save(dir.filePath("source.mcad"));

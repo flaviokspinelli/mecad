@@ -1,5 +1,18 @@
 # Execução do backlog
 
+## 21/09/2026 — seleção dinâmica de filete/chanfro
+
+GEO-03/04 e PAR-06: painel permite selecionar arestas no corpo original, com
+substituição por clique e adição/remoção com Shift, alternando para a prévia.
+Filete existente agora reabre suas medidas e arestas no mesmo recurso, assim
+como chanfro. Aceitar sem alterar preserva os parâmetros; cancelar restaura a
+seleção anterior. Seleção vazia explícita não se transforma em todas as arestas.
+
+UI dynamicOperationEdgesAndFilletReedit, chamferPreviewEditAndCancel e
+selectedEdgeFilletAndMeasurement passaram. O novo teste detectou a limpeza
+indevida da multisseleção ao atualizar o viewport; corrigida e retestada.
+Nenhuma distribuição criada. Referências topológicas persistentes seguem pendentes.
+
 ## 21/09/2026 — supressão e reativação de etapas (PAR-05)
 
 - Supressão explícita e propagação pelo grafo sem apagar histórico. Corpos de
