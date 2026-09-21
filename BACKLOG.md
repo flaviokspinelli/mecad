@@ -139,7 +139,7 @@ Não substituir o solver por correções específicas de cada figura.
 | SK-01 | P0 · Parcial | Entidades persistentes num sketch | Múltiplas linhas/curvas e relações com IDs estáveis; editar uma entidade não recria arbitrariamente as demais. |
 | SK-02 | P0 · Parcial | Solver de restrições básicas | Coincidente, horizontal, vertical e fixação com convergência/tolerância testadas; solução inválida não destrói o estado anterior. Núcleo afim interno testado; integração com documento/UI ainda pendente. |
 | SK-03 | P0 · Parcial | Cotas gerais no canvas | Comprimentos, distâncias, ângulos, raio/diâmetro; cotas controladoras e de referência; edição direta e decimal local. |
-| SK-04 | P0 · Parcial | Graus de liberdade e conflitos | Identificar sub-restrito, totalmente restrito e sobre-restrito; realçar relações conflitantes e permitir reparo. Diagnóstico afim interno testado; realce e reparo na UI ainda pendentes. |
+| SK-04 | P0 · Parcial | Graus de liberdade e conflitos | Identificar sub-restrito, totalmente restrito e sobre-restrito; realçar relações conflitantes e permitir reparo. Revisão de relações existentes com realce geométrico, identificação de redundâncias e remoção disponível; reparo visual de conflitos de uma tentativa rejeitada ainda pendente. |
 | SK-05 | P0 · Parcial | Arraste com restrições | Arrastar pontos/linhas/curvas mantendo relações; solução em tempo real e undo de um único gesto. |
 | SK-06 | P0 · Pendente | Regiões e contornos compostos | Reconhecer conectividade, ilhas, furos e sobreposições; selecionar região com prévia inequívoca para extrusão. |
 | SK-07 | P1 · Pendente | Restrições avançadas | Paralela, perpendicular, tangente, igual, concêntrica, simétrica e ponto médio; diagnosticar redundância e incompatibilidade. |

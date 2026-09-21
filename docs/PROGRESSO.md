@@ -1,5 +1,22 @@
 # Execução do backlog
 
+## 21/09/2026 — revisão visual das restrições existentes
+
+SK-04: substituída a lista simples de remoção por um painel de revisão com graus
+de liberdade, redundâncias indicadas e realce da linha/pontos correspondentes.
+Cotas X/Y mostram valores resolvidos. Consulta e cancelamento restauram a seleção
+anterior sem mutação; remoção continua transacional e reversível. Identificadores
+internos permanecem no tooltip, sem dominar a lista.
+
+Testes reviewRedundantSketchConstraints, sketchConstraintsSelectionAndPersistence
+e namedSketchDimensionFromSelection passaram. Inspeção da captura encontrou o
+rótulo incorreto Aresta 0 para realce temporário; corrigido para Geometria realçada.
+Documentação em CONSTRAINT-REVIEW.md. Build reutilizado; nenhum pacote novo.
+
+Ainda não fecha SK-04: conflitos em tentativas rejeitadas pelo solver precisam de
+fluxo próprio de reparo visual. Este painel trata relações existentes, não amplia
+o solver para curvas e não remove redundâncias automaticamente.
+
 ## 21/09/2026 — escolha de pivô diretamente no STL
 
 UX-05/UX-01: o modo de escolha de pivô aceita vértices visíveis da triangulação

@@ -20,6 +20,38 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void reviewRedundantSketchConstraints() {
+        QTemporaryDir dir;Model source;
+        const auto id=source.add("sketch",{{"profile","rectangle"},{"w",30},{"h",20}});
+        const auto redundant=source.constrainSketch(id,sketch::Relation::Horizontal,"e0");
+        source.save(dir.filePath("review.mcad"));
+        Window window(dir.filePath("recovery"),false);window.openPath(source.filePath);window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));auto *v=window.findChild<Viewport *>();v->onSelect(id);
+        const auto before=window.model.json();
+        for(bool accept : {false,true}) {
+            bool located=false,labelled=false;
+            QTimer::singleShot(100,[&] {
+                auto *dialog=window.findChild<QDialog *>("constraintReview");
+                if(!dialog)return;
+                auto *list=dialog->findChild<QListWidget *>("constraintReviewList");
+                for(int row=0;row<list->count();++row)if(list->item(row)->data(Qt::UserRole).toString()==redundant) {
+                    list->setCurrentRow(row);labelled=list->item(row)->text().contains("Redundante");
+                }
+                located=v->selectedDetails.size()==1 && v->selectedDetails.front().kind=="edge" &&
+                    v->selectedDetails.front().geometry.size()==2;
+                window.grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("constraint-review.png"));
+                dialog->grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("constraint-review-panel.png"));
+                if(accept)dialog->findChild<QPushButton *>("removeReviewedConstraint")->click();else dialog->reject();
+            });
+            window.findChild<QAction *>("constraint_remove")->trigger();
+            QVERIFY(located);QVERIFY(labelled);
+            if(!accept)QCOMPARE(window.model.json(),before);
+            else {
+                QVERIFY(!window.model.sketchSystem(id).solve().redundantConstraints.contains(redundant));
+                window.findChild<QAction *>("undo")->trigger();QCOMPARE(window.model.json(),before);
+            }
+        }
+    }
     void planarMoveHandles() {
         QTemporaryDir dir;
         for (bool stl : {false,true}) {
@@ -467,9 +499,9 @@ class UiTests : public QObject {
         window.findChild<QAction *>("redo")->trigger(); QCOMPARE(window.model.json(),constrained);
         auto *timeline=window.findChild<QListWidget *>("timeline");
         QTest::mouseClick(timeline->viewport(),Qt::LeftButton,Qt::NoModifier,timeline->visualItemRect(timeline->item(0)).center());
-        QTimer::singleShot(100,[&]{for(auto *d:window.findChildren<QInputDialog *>()) d->reject();});
+        QTimer::singleShot(100,[&]{window.findChild<QDialog *>("constraintReview")->reject();});
         window.findChild<QAction *>("constraint_remove")->trigger(); QCOMPARE(window.model.json(),constrained);
-        QTimer::singleShot(100,[&]{for(auto *d:window.findChildren<QInputDialog *>()) d->accept();});
+        QTimer::singleShot(100,[&]{window.findChild<QDialog *>("constraintReview")->accept();});
         window.findChild<QAction *>("constraint_remove")->trigger();
         QVERIFY(window.model.sketchSystem(id).constraints.empty());
         window.findChild<QAction *>("undo")->trigger(); QCOMPARE(window.model.json(),constrained);

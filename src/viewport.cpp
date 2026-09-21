@@ -532,10 +532,12 @@ void Viewport::paintOverlay(QPainter &p) {
         p.drawText(290, 45, QString("%1 itens selecionados").arg(selectedDetails.size()));
     } else if (hasSubselection()) {
         p.setPen(QColor("#cceaff"));
+        const auto &detail=selectedDetails.empty()?selectedDetail:selectedDetails.front();
         p.drawText(290, 45,
-                   (selectedDetail.kind == "face" ? QString("Face %1 selecionada") : selectedDetail.kind == "vertex" ? QString("Vértice %1 selecionado")
+                   detail.index<0 ? QString("Geometria realçada") :
+                   (detail.kind == "face" ? QString("Face %1 selecionada") : detail.kind == "vertex" ? QString("Vértice %1 selecionado")
                                                     : QString("Aresta %1 selecionada"))
-                       .arg(selectedDetail.index + 1));
+                       .arg(detail.index + 1));
     }
     dimensions.clear();
     if (sketchMode && !selected.isEmpty()) {

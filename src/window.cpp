@@ -734,17 +734,60 @@ Window::Window(QString recoveryDirectory, bool promptRecovery) {
             status->setText(QString("Restrição aplicada · %1 graus de liberdade").arg(model.sketchSystem(owner).solve().degreesOfFreedom));
         });
     }
-    command("constraint_remove","Remover restrição…","",[this] {
+    command("constraint_remove","Revisar / remover restrições…","",[this] {
         if(selected.isEmpty()) throw std::runtime_error("Selecione um sketch com restrições.");
         auto system=model.sketchSystem(selected);
         if(system.constraints.empty()) throw std::runtime_error("O sketch não tem restrições.");
         const QStringList labels{"Coincidente","Horizontal","Vertical","Ponto fixo","Distância X","Distância Y"};
-        QStringList choices;
-        for(const auto &c:system.constraints) choices.append(labels[int(c.relation)]+" · "+c.first+" "+c.second+" ["+c.id+"]");
-        bool ok=false;
-        auto choice=QInputDialog::getItem(this,"Restrições do sketch","Restrição a remover",choices,0,false,&ok);
-        if(!ok) return;
-        model.removeSketchConstraint(selected,system.constraints[choices.indexOf(choice)].id); refresh();
+        const auto owner=selected;
+        const auto previousDetails=canvas->selectedDetails;
+        const auto previousDetail=canvas->selectedDetail;
+        const auto solution=system.solve();
+        QDialog dialog(this);dialog.setWindowTitle("Revisar restrições do sketch");
+        dialog.setObjectName("constraintReview");
+        auto *layout=new QVBoxLayout(&dialog);
+        auto *summary=new QLabel(QString("%1 graus de liberdade · %2 redundantes\nSelecione uma relação para localizar sua geometria.")
+            .arg(solution.degreesOfFreedom).arg(solution.redundantConstraints.size()));
+        summary->setWordWrap(true);layout->addWidget(summary);
+        auto *list=new QListWidget;list->setObjectName("constraintReviewList");layout->addWidget(list);
+        for(const auto &c:system.constraints) {
+            QString measure;
+            if(c.relation==sketch::Relation::DistanceX || c.relation==sketch::Relation::DistanceY)
+                measure=" · "+QString::number(c.relation==sketch::Relation::DistanceX?c.value.x():c.value.y(),'g',10)+" mm";
+            auto *item=new QListWidgetItem(labels[int(c.relation)]+" · "+c.first+" "+c.second+measure+
+                (solution.redundantConstraints.contains(c.id)?" · Redundante":""),list);
+            item->setData(Qt::UserRole,c.id);item->setToolTip(c.id);
+        }
+        auto *buttons=new QDialogButtonBox(QDialogButtonBox::Cancel);layout->addWidget(buttons);
+        auto *remove=buttons->addButton("Remover selecionada",QDialogButtonBox::AcceptRole);
+        remove->setObjectName("removeReviewedConstraint");
+        connect(buttons,&QDialogButtonBox::accepted,&dialog,&QDialog::accept);
+        connect(buttons,&QDialogButtonBox::rejected,&dialog,&QDialog::reject);
+        connect(list,&QListWidget::currentRowChanged,&dialog,[&](int row) {
+            if(row<0)return;
+            const auto &c=system.constraints[row];const auto &p=model.get(owner).p;
+            auto world=[&](QString id) {
+                for(const auto &point:system.points)if(point.id==id)
+                    return Model::planePoint(p["plane"].toString("XY"),point.position.x(),point.position.y(),p["offset"].toDouble());
+                return QVector3D();
+            };
+            canvas->selectedDetails.clear();canvas->selectedDetail={};
+            if(c.relation==sketch::Relation::Horizontal || c.relation==sketch::Relation::Vertical) {
+                for(const auto &line:system.lines)if(line.id==c.first)
+                    canvas->selectedDetails.append({owner,"edge",-1,{world(line.start),world(line.end)}});
+            } else {
+                canvas->selectedDetails.append({owner,"vertex",-1,{world(c.first)}});
+                if(!c.second.isEmpty())canvas->selectedDetails.append({owner,"vertex",-1,{world(c.second)}});
+            }
+            canvas->update();
+        });
+        list->setCurrentRow(0);dialog.resize(430,320);
+        dialog.move(mapToGlobal(QPoint(std::max(0,width()-450),160)));
+        const bool accepted=dialog.exec()==QDialog::Accepted;
+        canvas->selectedDetails=previousDetails;canvas->selectedDetail=previousDetail;canvas->update();
+        if(accepted && list->currentItem()) {
+            model.removeSketchConstraint(owner,list->currentItem()->data(Qt::UserRole).toString());refresh();
+        }
     });
     for(bool vertical:{false,true})command(vertical?"constraint_distance_y":"constraint_distance_x",
         vertical?"Cota vertical":"Cota horizontal","",[this,vertical]{
@@ -1630,7 +1673,7 @@ void Window::buildProperties() {
             auto *state=new QLabel(QString("%1 graus de liberdade · %2 restrições redundantes")
                 .arg(solved.degreesOfFreedom).arg(solved.redundantConstraints.size()));
             state->setObjectName("sketchConstraintStatus"); state->setWordWrap(true); propertyForm->addRow(state);
-            auto *remove=new QPushButton("Remover restrição…"); propertyForm->addRow(remove);
+            auto *remove=new QPushButton("Revisar / remover restrições…"); propertyForm->addRow(remove);
             connect(remove,&QPushButton::clicked,commands["constraint_remove"],&QAction::trigger);
         }
         auto *note =
