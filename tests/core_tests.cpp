@@ -15,6 +15,39 @@
 class CoreTests : public QObject {
     Q_OBJECT
   private slots:
+    void nativeVersionFixtures() {
+        const QStringList paths{QFINDTESTDATA("fixtures/v1-basic.mcad"),QFINDTESTDATA("fixtures/v2-constrained.mcad"),QFINDTESTDATA("fixtures/v3-parameters.mcad")};
+        const QVector<double> volumes{6000,500,2000};
+        for(int i=0;i<paths.size();++i) {
+            QVERIFY(!paths[i].isEmpty());QFile fixture(paths[i]);QVERIFY(fixture.open(QIODevice::ReadOnly));
+            const auto expected=QJsonDocument::fromJson(fixture.readAll()).object();Model m;m.load(paths[i]);
+            QCOMPARE(m.json(),expected);QCOMPARE(m.json()["version"].toInt(),i+1);
+            QVERIFY(std::abs(Model::volume(m.features.back().shape)-volumes[i])<1e-6);
+            m.rebuild();QCOMPARE(m.json(),expected);
+            QTemporaryDir dir;m.save(dir.filePath("saved.mcad"));Model loaded;loaded.load(m.filePath);QCOMPARE(loaded.json(),expected);
+            auto future=expected;future["version"]=999;
+            const auto path=m.filePath;QVERIFY_THROWS_EXCEPTION(std::exception,m.loadJson(future));
+            QCOMPARE(m.json(),expected);QCOMPARE(m.filePath,path);QVERIFY(!m.dirty);
+        }
+    }
+    void graphAtDocumentLimitAndFailureRecovery() {
+        QJsonArray nodes;
+        for(int i=0;i<2000;++i) nodes.append(QJsonObject{{"id",QString::number(i)},
+            {"parameters",i==0?QJsonObject{}:QJsonObject{{"source",QString::number(i-1)}}}});
+        DependencyGraph graph(nodes);graph.requireHistoryOrder();QCOMPARE(graph.order().size(),2000);
+        QCOMPARE(graph.dependents("0").size(),1999);QCOMPARE(graph.order().back(),QString("1999"));
+        auto root=nodes[0].toObject();root["parameters"]=QJsonObject{{"source","1999"}};nodes[0]=root;
+        QVERIFY_THROWS_EXCEPTION(std::exception,DependencyGraph{nodes});
+        Model model;auto base=model.add("box",{{"w",10},{"h",10},{"d",10}});
+        auto tool=model.add("cylinder",{{"r",2},{"d",12},{"x",5},{"y",5},{"z",-1}});
+        auto cut=model.add("boolean",{{"target",base},{"tool",tool},{"mode","common"}});
+        const auto before=model.json();const auto shape=model.get(cut).shape;
+        auto invalid=model.get(tool).p;invalid["x"]=100;
+        // An empty intersection is rejected, preserving all three nodes and their shapes.
+        QVERIFY_THROWS_EXCEPTION(std::exception,model.edit(tool,invalid,"Outside"));
+        QCOMPARE(model.json(),before);QVERIFY(model.get(cut).shape.IsSame(shape));
+        QVERIFY(model.undo());QVERIFY(model.redo());QCOMPARE(model.json(),before);
+    }
     void chamferModesAndPersistence() {
         for(const auto &mode:QStringList{"equal","two","angle"}) {
             Model m;auto box=m.add("box",{{"w",30},{"h",30},{"d",10}});

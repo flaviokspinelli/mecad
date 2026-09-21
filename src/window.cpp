@@ -1235,21 +1235,32 @@ Window::Window(QString recoveryDirectory, bool promptRecovery) {
         if (!activeCommand)
             properties->show();
     });
+    recoveryStatus=new QLabel(this);recoveryStatus->setObjectName("recoveryStatus");
+    recoveryStatus->setAccessibleName("Estado da recuperação automática");
+    statusBar()->addPermanentWidget(recoveryStatus);
     try {
         recovery = std::make_unique<RecoveryStore>(
             recoveryDirectory.isEmpty() ? QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/recoveries"
                                         : recoveryDirectory);
     } catch (const std::exception &error) {
-        status->setText("Recuperação automática indisponível: " + QString::fromUtf8(error.what()));
+        recoveryStatus->setText("Recuperação indisponível");
+        recoveryStatus->setToolTip(QString::fromUtf8(error.what()));
     }
     auto *timer = new QTimer(this);
+    timer->setObjectName("recoveryTimer");
     connect(timer, &QTimer::timeout, this, &Window::autosave);
     timer->start(30000);
     buildRibbon();
     refresh();
     QTimer::singleShot(150, this, [this, promptRecovery] {
         if (!promptRecovery) return;
-        if (recovery && model.features.empty() && !recovery->available().empty()) {
+        if(!recovery || !model.features.empty())return;
+        const auto scan=recovery->scan();
+        if(!scan.warnings.empty()) {
+            recoveryStatus->setText("Recuperações com erro — File → Recover");
+            recoveryStatus->setToolTip(scan.warnings.join('\n'));
+        }
+        if (!scan.entries.empty()) {
             if (QMessageBox::question(
                     this, "Recover project",
                     "Foi encontrado um projeto de uma sessão interrompida. Deseja recuperá-lo?") ==
@@ -2357,21 +2368,30 @@ void Window::autosave() {
     if (!model.dirty) { clearRecovery(); return; }
     try {
         recovery->write(model);
+        recoveryStatus->setText("Recuperação: "+QTime::currentTime().toString("HH:mm:ss"));
+        recoveryStatus->setToolTip("Cópia automática local a cada 30 segundos. O arquivo original não foi alterado.");
     } catch (const std::exception &error) {
-        status->setText("Falha na recuperação automática: " + QString::fromUtf8(error.what()));
+        recoveryStatus->setText("Falha na recuperação automática");
+        recoveryStatus->setToolTip(QString::fromUtf8(error.what()));
     }
 }
 void Window::clearRecovery() {
     if (!recovery) return;
     try {
         recovery->clear();
+        recoveryStatus->clear();recoveryStatus->setToolTip({});
     } catch (const std::exception &error) {
-        status->setText("A recuperação antiga foi preservada: " + QString::fromUtf8(error.what()));
+        recoveryStatus->setText("Recuperação antiga preservada");
+        recoveryStatus->setToolTip(QString::fromUtf8(error.what()));
     }
 }
 void Window::recoverProject() {
     if (!recovery) throw std::runtime_error("A recuperação automática não está disponível nesta sessão.");
-    const auto entries = recovery->available();
+    const auto scan = recovery->scan();
+    const auto entries = scan.entries;
+    if(!scan.warnings.empty())
+        QMessageBox::warning(this,"Recuperações preservadas com erro",
+            "Estas cópias não puderam ser lidas e NÃO foram apagadas:\n\n"+scan.warnings.join('\n'));
     if (entries.empty()) {
         const auto legacy = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/recovery.mcad";
         QMessageBox::information(this, "Recover project", QFile::exists(legacy)

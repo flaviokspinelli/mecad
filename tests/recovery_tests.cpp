@@ -11,6 +11,33 @@
 class RecoveryTests : public QObject {
     Q_OBJECT
   private slots:
+    void everyNativeVersionRestores() {
+        for(int version=1;version<=3;++version) {
+            QTemporaryDir directory;QString id;QJsonObject expected;
+            {
+                RecoveryStore writer(directory.path());id=writer.sessionId();Model m;
+                auto sketch=m.add("sketch",{{"profile","rectangle"},{"w",10},{"h",10}});
+                if(version>=2)m.constrainSketch(sketch,sketch::Relation::Fixed,"p0",{},{0,0});
+                auto solid=m.add("extrude",{{"source",sketch},{"d",2}});
+                if(version==3){m.setParameters({{"depth","3 mm"}});m.setExpression(solid,"d","depth");}
+                QCOMPARE(m.json()["version"].toInt(),version);expected=m.json();writer.write(m);
+            }
+            RecoveryStore reader(directory.path());Model restored;reader.recover(id,restored);
+            QCOMPARE(restored.json(),expected);QVERIFY(restored.dirty);QVERIFY(restored.filePath.isEmpty());
+            restored.rebuild();QCOMPARE(restored.json(),expected);
+        }
+    }
+    void unreadableJournalIsReportedAndPreserved() {
+        QTemporaryDir directory;QString id;
+        {RecoveryStore writer(directory.path());id=writer.sessionId();Model m;m.add("box",{});writer.write(m);}
+        QFile journal(directory.filePath(id+".json"));QVERIFY(journal.open(QIODevice::WriteOnly));
+        journal.write("{broken");journal.close();
+        RecoveryStore reader(directory.path());const auto scan=reader.scan();
+        QVERIFY(scan.entries.empty());QCOMPARE(scan.warnings.size(),1);QVERIFY(scan.warnings.front().contains(id));
+        Model current;const auto before=current.json();
+        QVERIFY_THROWS_EXCEPTION(std::exception,reader.recover(id,current));QCOMPARE(current.json(),before);
+        QVERIFY(journal.open(QIODevice::ReadOnly));QCOMPARE(journal.readAll(),QByteArray("{broken"));
+    }
     void failedWriteKeepsPreviousCopy() {
         QTemporaryDir directory; QVERIFY(directory.isValid());
         const auto root = directory.filePath("journals");

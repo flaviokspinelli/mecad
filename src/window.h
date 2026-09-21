@@ -40,7 +40,7 @@ class Window : public QMainWindow {
     QLineEdit *featureName;
     QTabBar *tabs;
     QWidget *ribbon;
-    QLabel *documentTitle, *status;
+    QLabel *documentTitle, *status, *recoveryStatus;
     QString selected;
     std::unique_ptr<RecoveryStore> recovery;
     QMap<QString, QDoubleSpinBox *> fields;

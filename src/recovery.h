@@ -8,6 +8,10 @@ struct RecoveryEntry {
     QString id, originalPath;
     QDateTime savedAt;
 };
+struct RecoveryScan {
+    QList<RecoveryEntry> entries;
+    QStringList warnings;
+};
 
 // One journal per live document window. Destruction releases ownership, but
 // never discards unsaved work: only an explicit save/discard calls clear().
@@ -17,6 +21,7 @@ class RecoveryStore {
     void write(const Model &model);
     void clear();
     QList<RecoveryEntry> available() const;
+    RecoveryScan scan() const;
     QString recover(const QString &id, Model &destination);
     QString sessionId() const { return id; }
 

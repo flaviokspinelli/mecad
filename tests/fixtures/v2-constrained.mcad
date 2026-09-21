@@ -1,0 +1,19 @@
+{
+  "format": "MecaCAD", "version": 2, "units": "mm",
+  "features": [
+    {
+      "id": "profile", "name": "Constrained triangle", "type": "sketch", "visible": true,
+      "parameters": {
+        "profile": "polyline", "closed": true, "plane": "XY",
+        "points": [[0,0],[20,0],[0,10]],
+        "constraintSystem": {
+          "format": "MecaCADSketch", "version": 1,
+          "points": [{"id":"p0","position":[0,0]},{"id":"p1","position":[20,0]},{"id":"p2","position":[0,10]}],
+          "lines": [{"id":"e0","start":"p0","end":"p1","construction":false},{"id":"e1","start":"p1","end":"p2","construction":false},{"id":"e2","start":"p2","end":"p0","construction":false}],
+          "constraints": [{"id":"fixed-origin","type":"fixed","first":"p0","second":"","value":[0,0]},{"id":"base-horizontal","type":"horizontal","first":"e0","second":"","value":[0,0]}]
+        }
+      }
+    },
+    {"id":"solid","name":"Triangle extrusion","type":"extrude","visible":true,"parameters":{"source":"profile","d":5}}
+  ]
+}

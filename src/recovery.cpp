@@ -67,7 +67,10 @@ void RecoveryStore::clear() {
 }
 
 QList<RecoveryEntry> RecoveryStore::available() const {
-    QList<RecoveryEntry> entries;
+    return scan().entries;
+}
+RecoveryScan RecoveryStore::scan() const {
+    RecoveryScan result;
     for (const auto &file : QDir(directory).entryInfoList({"*.json"}, QDir::Files | QDir::NoSymLinks)) {
         const auto session = file.completeBaseName();
         if (session == id) continue;
@@ -76,14 +79,15 @@ QList<RecoveryEntry> RecoveryStore::available() const {
             claim.setStaleLockTime(0);
             if (!claim.tryLock(0)) continue;
             const auto root = read(session);
-            entries.append({session,root["originalPath"].toString(),
+            result.entries.append({session,root["originalPath"].toString(),
                             QDateTime::fromString(root["savedAt"].toString(), Qt::ISODateWithMs)});
-        } catch (const std::exception &) {
-            // Preserve unreadable/unsupported records for manual diagnosis.
+        } catch (const std::exception &error) {
+            // Preserve records and make failures discoverable instead of silently hiding work.
+            result.warnings.append(file.fileName()+": "+QString::fromUtf8(error.what()));
         }
     }
-    std::sort(entries.begin(), entries.end(), [](const auto &a, const auto &b) { return a.savedAt > b.savedAt; });
-    return entries;
+    std::sort(result.entries.begin(), result.entries.end(), [](const auto &a, const auto &b) { return a.savedAt > b.savedAt; });
+    return result;
 }
 
 QString RecoveryStore::recover(const QString &session, Model &destination) {

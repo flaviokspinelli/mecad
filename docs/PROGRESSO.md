@@ -278,3 +278,28 @@ Não foram concluídos 30 itens nesta execução. Nenhum item inteiro foi marcad
 aceito. Nenhum pacote ou nova versão .app foi produzido; dist e arquivos do usuário
 foram preservados. Próximos trabalhos continuam por dependência, não para inflar
 contagem com botões ou núcleos isolados.
+
+## 21/09/2026 — foco nos 38 parciais: recuperação e compatibilidade
+
+O pedido mais recente substitui a ampliação de escopo: concluir os 38 parciais,
+sem adicionar itens. BACKLOG.md e retomada automática foram ajustados. Pergunta
+de autorização para atualizar o aplicativo existente sem cópias foi enviada; até
+resposta explícita, dist continua intocado. Não reduzir aceites para mudar contagem.
+
+REL-03: cópias ilegíveis agora são reportadas sem apagá-las; falha de recuperação
+fica visível num indicador próprio, não é apagada por um refresh normal. O timer
+real da janela foi testado numa instância filha encerrada à força; arquivo original
+comparado byte a byte, dados v3 recuperados pela interface como cópia não salva.
+Recuperação de documentos v1/v2/v3 e isolamento de sessões verificados.
+
+REL-04: fixtures permanentes v1/v2/v3, volume esperado, reconstrução idempotente,
+salvar/reabrir e rejeição atômica de versão futura. A versão inicial publicada
+(895d7bd) já usava documento v1; v2/v3 são extensões recentes de desenvolvimento.
+PAR-02: cadeia de 2.000 nós, ciclo no limite e falha em operação dependente sem
+alterar documentos, shapes ou undo/redo. Mantido aceite funcional original.
+
+Testes desta revisão: recovery (9 resultados), UI direcionada de recuperação e
+histórico (6), core fixtures/limite de grafo (4), incluindo setup/cleanup; zero
+falhas. Janelas usadas somente nos testes necessários; nenhuma versão empacotada.
+O fechamento da entrega consolidada ainda exige os outros aceites e publicação
+autorizada; não é declaração de conclusão dos 38.

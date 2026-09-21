@@ -1,0 +1,7 @@
+{
+  "format":"MecaCAD", "version":3, "units":"mm",
+  "namedParameters":{"width":"2 cm","depth":"width/2"},
+  "features":[
+    {"id":"solid","name":"Parameterized box","type":"box","visible":true,"parameters":{"w":20,"h":10,"d":10,"expressions":{"w":"width","d":"depth"}}}
+  ]
+}

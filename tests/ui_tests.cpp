@@ -13,11 +13,42 @@
 #include <QTableWidget>
 #include <QLineEdit>
 #include <QDialogButtonBox>
+#include <QProcess>
+#include <QTextStream>
 #include <QtTest>
 
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void autosaveTimerSurvivesProcessCrash() {
+        QTemporaryDir dir;QVERIFY(dir.isValid());QProcess child;
+        child.start(QCoreApplication::applicationFilePath(),{"--recovery-ui-writer",dir.path()});
+        QVERIFY(child.waitForStarted(10000));QByteArray output;QElapsedTimer timeout;timeout.start();
+        while(!output.contains("READY") && timeout.elapsed()<15000) {
+            child.waitForReadyRead(200);output+=child.readAllStandardOutput();
+        }
+        QVERIFY2(output.contains("READY"),child.readAllStandardError().constData());
+        QFile original(dir.filePath("original.mcad"));QVERIFY(original.open(QIODevice::ReadOnly));
+        const auto bytes=original.readAll();original.close();
+        child.kill();QVERIFY(child.waitForFinished(10000));
+        Window window(dir.filePath("recoveries"),false);window.show();QVERIFY(QTest::qWaitForWindowExposed(&window));
+        QTimer::singleShot(100,[&]{for(auto *d:window.findChildren<QInputDialog *>())d->accept();});
+        window.findChild<QAction *>("recover")->trigger();
+        QVERIFY(window.model.dirty);QVERIFY(window.model.filePath.isEmpty());
+        QCOMPARE(window.model.parameters().value("width"),QString("20 mm"));
+        QVERIFY(std::abs(Model::volume(window.model.features.front().shape)-2000)<1e-6);
+        QVERIFY(original.open(QIODevice::ReadOnly));QCOMPARE(original.readAll(),bytes);original.close();
+        window.model.save(dir.filePath("recovered.mcad"));QVERIFY(window.close());
+        QVERIFY(QDir(dir.filePath("recoveries")).entryList({"*.json"},QDir::Files).empty());
+    }
+    void unavailableRecoveryStaysVisible() {
+        QTemporaryDir dir;QFile notDirectory(dir.filePath("blocked"));QVERIFY(notDirectory.open(QIODevice::WriteOnly));notDirectory.close();
+        Window window(notDirectory.fileName(),false);window.show();QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto *notice=window.findChild<QLabel *>("recoveryStatus");QVERIFY(notice);QVERIFY(notice->isVisible());
+        QVERIFY(notice->text().contains("indisponível"));QVERIFY(!notice->toolTip().isEmpty());
+        window.findChild<QAction *>("undo")->trigger();QVERIFY(notice->text().contains("indisponível"));
+        QVERIFY(window.close());
+    }
     void chamferPreviewEditAndCancel() {
         QTemporaryDir dir;Model source;source.add("box",{{"w",30},{"h",30},{"d",10}});
         source.save(dir.filePath("box.mcad"));Window window(dir.filePath("recovery"),false);window.openPath(source.filePath);
@@ -1457,6 +1488,21 @@ int main(int argc, char **argv) {
     app.setQuitOnLastWindowClosed(false);
     app.setOrganizationName("MecaCADTests");
     app.setApplicationName("MecaCADTests");
+    const auto args=app.arguments();
+    if(args.size()==3 && args[1]=="--recovery-ui-writer") {
+        Window window(QDir(args[2]).filePath("recoveries"),false);window.show();
+        window.model.setParameters({{"width","10 mm"}});
+        window.model.add("box",{{"w",10},{"h",10},{"d",10},{"expressions",QJsonObject{{"w","width"}}}});
+        window.model.save(QDir(args[2]).filePath("original.mcad"));
+        window.model.setParameters({{"width","20 mm"}});
+        // Accelerate the real production timer, not a direct RecoveryStore::write call.
+        auto *timer=window.findChild<QTimer *>("recoveryTimer");if(!timer)return 2;timer->start(50);
+        QTimer ready;
+        QObject::connect(&ready,&QTimer::timeout,[&]{
+            if(QDir(QDir(args[2]).filePath("recoveries")).entryList({"*.json"},QDir::Files).isEmpty())return;
+            ready.stop();QTextStream(stdout)<<"READY\n"<<Qt::flush;
+        });ready.start(50);return app.exec();
+    }
     UiTests tests;
     return QTest::qExec(&tests, argc, argv);
 }
