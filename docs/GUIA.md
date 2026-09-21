@@ -5,7 +5,8 @@
 1. Clique em **Create Sketch**, no canto esquerdo da barra de criação.
 2. Clique no plano **XY**, **XZ** ou **YZ** exibido na área 3D. Também é possível
    clicar em uma face plana alinhada a esses planos; seu offset será usado.
-3. A ferramenta de retângulo começa ativa. Clique em dois cantos na área de desenho.
+3. A ferramenta de retângulo começa ativa. Pressione no primeiro canto, arraste e
+   solte no segundo. Também é possível clicar nos dois cantos separadamente.
 4. Se precisar de medidas exatas, selecione o perfil e pressione **D**. Ajuste as
    dimensões e clique em **Apply**. Isso é opcional; selecionar não abre o painel.
 5. Clique em **Finish Sketch** no lado direito da barra.
@@ -71,6 +72,12 @@ Cada retângulo, círculo, arco ou cadeia de linhas cria um sketch independente.
 Uma polilinha fecha ao clicar novamente no primeiro ponto ou usar Shift+Enter.
 Arcos usam três cliques: início, ponto intermediário e fim. Arcos e linhas abertas
 podem ser exportados em DXF, mas não extrudados como sólidos.
+
+Retângulos e círculos mostram prévia ao pressionar e arrastar; soltar confirma.
+No círculo, pressione no centro e arraste até a borda. A ferramenta Line aceita
+o primeiro segmento por arraste, seguido dos demais vértices por clique. Enter
+conclui a cadeia; Esc descarta o perfil em andamento. Arrastar para navegar com
+Alt ou botão central não cria entidades de sketch.
 
 O snap arredonda as coordenadas ao milímetro; desative **Snap 1 mm** para desenho
 livre. Para precisão final, digite os valores no painel. A grade visual adapta o

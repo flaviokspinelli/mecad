@@ -217,6 +217,7 @@ void Viewport::viewDirection(QVector3D direction, bool animated) {
     cameraAnimation.start();
 }
 void Viewport::setTool(QString name) {
+    sketchPressCandidate = sketchDragging = false;
     tool = name;
     navigationMode.clear();
     draft.clear();
@@ -650,6 +651,15 @@ QVector3D Viewport::moveHandleTip(int axis) const {
 }
 void Viewport::mousePressEvent(QMouseEvent *e) {
     setFocus();
+    if (sketchDragging)
+        draft.clear();
+    sketchDragging = false;
+    sketchPressCandidate = sketchMode && draft.empty() &&
+                           (tool == "rectangle" || tool == "circle" || tool == "polyline") &&
+                           e->button() == Qt::LeftButton && !e->modifiers().testFlag(Qt::AltModifier) &&
+                           navigationMode.isEmpty() && !handleActive && !moveHandleActive &&
+                           cubeDirectionAt(e->position()).isNull() &&
+                           !QRect(width() - 84, 100, 50, 20).contains(e->position().toPoint());
     last = pressed = e->position();
     draggingHandle = handleActive && e->button() == Qt::LeftButton &&
                      QLineF(e->position(), project(handleOrigin + handleAxis * handleDistance)).length() < 18;
@@ -698,6 +708,15 @@ void Viewport::mouseMoveEvent(QMouseEvent *e) {
     const bool alternative =
         e->buttons().testFlag(Qt::LeftButton) && e->modifiers().testFlag(Qt::AltModifier);
     const bool toolbarNavigation = e->buttons().testFlag(Qt::LeftButton) && !navigationMode.isEmpty();
+    if (sketchPressCandidate && (middle || alternative || toolbarNavigation)) {
+        if (sketchDragging)
+            draft.clear();
+        sketchPressCandidate = sketchDragging = false;
+    }
+    if (sketchPressCandidate && !sketchDragging && QLineF(pressed, e->position()).length() > 4) {
+        draft.append(planeAt(pressed));
+        sketchDragging = true;
+    }
     if (middle || alternative || toolbarNavigation) {
         cameraAnimation.stop();
         const bool orbit = !sketchMode && (toolbarNavigation ? navigationMode == "orbit"
@@ -716,19 +735,27 @@ void Viewport::mouseMoveEvent(QMouseEvent *e) {
     update();
 }
 void Viewport::mouseReleaseEvent(QMouseEvent *e) {
+    bool sketchDrag = sketchPressCandidate && e->button() == Qt::LeftButton &&
+                      !e->modifiers().testFlag(Qt::AltModifier) &&
+                      QLineF(pressed, e->position()).length() > 4;
+    if (sketchDrag && !sketchDragging)
+        draft.append(planeAt(pressed));
+    if (!sketchDrag && sketchDragging)
+        draft.clear();
+    sketchPressCandidate = sketchDragging = false;
     if (draggingHandle) {
         draggingHandle = false;
         return;
     }
-    if (QLineF(pressed, e->position()).length() > 4 || e->button() != Qt::LeftButton)
+    if ((!sketchDrag && QLineF(pressed, e->position()).length() > 4) || e->button() != Qt::LeftButton)
         return;
     auto s = e->position();
     auto direction = cubeDirectionAt(s);
-    if (!direction.isNull()) {
+    if (!sketchDrag && !direction.isNull()) {
         viewDirection(direction);
         return;
     }
-    if (QRect(width() - 84, 100, 50, 20).contains(s.toPoint())) {
+    if (!sketchDrag && QRect(width() - 84, 100, 50, 20).contains(s.toPoint())) {
         view("iso", true);
         return;
     }
@@ -791,6 +818,11 @@ void Viewport::mouseReleaseEvent(QMouseEvent *e) {
         draft.push_back(cursor);
         if (draft.size() == 2 && tool == "rectangle") {
             auto a = draft[0], b = draft[1];
+            if (std::abs(b.x() - a.x()) < 1e-5 || std::abs(b.y() - a.y()) < 1e-5) {
+                draft.resize(1);
+                update();
+                return;
+            }
             submit({{"profile", "rectangle"},
                     {"x", std::min(a.x(), b.x())},
                     {"y", std::min(a.y(), b.y())},

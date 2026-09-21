@@ -11,6 +11,67 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void sketchDragGestures() {
+        Model model;
+        Viewport v(&model);
+        v.resize(900, 600);
+        v.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&v));
+        v.onProfile = [&](QJsonObject p) {
+            model.add("sketch", p, "Dragged sketch");
+            v.refresh();
+        };
+        auto move = [&](QPoint position, Qt::KeyboardModifiers modifiers = Qt::NoModifier) {
+            QMouseEvent event(QEvent::MouseMove, QPointF(position), QPointF(v.mapToGlobal(position)),
+                              Qt::NoButton, Qt::LeftButton, modifiers);
+            QApplication::sendEvent(&v, &event);
+        };
+        const QPoint start(400, 350), end(550, 250);
+        for (auto plane : {"XY", "XZ", "YZ"})
+            for (auto tool : {"rectangle", "circle"}) {
+                model.clear();
+                v.refresh();
+                v.sketchMode = true;
+                v.plane = plane;
+                v.view("top");
+                v.setTool(tool);
+                QTest::mousePress(&v, Qt::LeftButton, Qt::NoModifier, start);
+                QCOMPARE(model.features.size(), size_t(0));
+                move(end);
+                QCOMPARE(model.features.size(), size_t(0));
+                QTest::mouseRelease(&v, Qt::LeftButton, Qt::NoModifier, end);
+                QCOMPARE(model.features.size(), size_t(1));
+                QCOMPARE(model.features.back().p["profile"].toString(), QString(tool));
+                QCOMPARE(model.features.back().p["plane"].toString(), QString(plane));
+                QVERIFY(model.features.back().p[tool == QString("circle") ? "r" : "w"].toDouble() > 0);
+            }
+        model.clear();
+        v.refresh();
+        v.plane = "XY";
+        v.view("top");
+        v.setTool("rectangle");
+        QTest::mousePress(&v, Qt::LeftButton, Qt::NoModifier, start);
+        move(end);
+        QTest::keyClick(&v, Qt::Key_Escape);
+        QTest::mouseRelease(&v, Qt::LeftButton, Qt::NoModifier, end);
+        QVERIFY(model.features.empty());
+        v.setTool("rectangle");
+        QTest::mouseClick(&v, Qt::LeftButton, Qt::NoModifier, start);
+        QTest::mouseClick(&v, Qt::LeftButton, Qt::NoModifier, end);
+        QCOMPARE(model.features.size(), size_t(1));
+        v.setTool("polyline");
+        QTest::mousePress(&v, Qt::LeftButton, Qt::NoModifier, start);
+        move(end);
+        QTest::mouseRelease(&v, Qt::LeftButton, Qt::NoModifier, end);
+        QTest::keyClick(&v, Qt::Key_Return);
+        QCOMPARE(model.features.size(), size_t(2));
+        QCOMPARE(model.features.back().p["points"].toArray().size(), 2);
+        v.setTool("rectangle");
+        QTest::mousePress(&v, Qt::LeftButton, Qt::AltModifier, start);
+        move(end, Qt::AltModifier);
+        QTest::mouseRelease(&v, Qt::LeftButton, Qt::AltModifier, end);
+        QCOMPARE(model.features.size(), size_t(2));
+    }
     void viewCubeNavigation() {
         Model model;
         model.add("box", {{"x", 0}, {"y", 0}, {"z", 0}, {"w", 50}, {"h", 30}, {"d", 20}}, "Cube test");
