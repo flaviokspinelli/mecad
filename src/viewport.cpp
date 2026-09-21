@@ -950,9 +950,14 @@ void Viewport::editDimension(const DimensionTarget &target) {
             if(target.key=="constraint:"+constraint.id)
                 expression=QString::number(constraint.relation==sketch::Relation::DistanceX?constraint.value.x():constraint.value.y(),'g',12)+" mm";
         editor->setText(expression);
-    } else editor->setText(QString::number(model->get(selected).p[target.key].toDouble() * target.multiplier, 'g', 12));
+    } else {
+        const auto expression=model->get(selected).p.value("expressions").toObject().value(target.key).toString();
+        editor->setText(expression.isEmpty()?QString::number(model->get(selected).p[target.key].toDouble()*target.multiplier,'g',12):
+            target.multiplier==1?expression:QString("(%1) * %2").arg(expression).arg(target.multiplier));
+    }
+    editor->setProperty("originalDimensionText",editor->text());
     editor->setAlignment(Qt::AlignCenter);
-    editor->setToolTip("Medida em mm · Enter confirma · Esc cancela");
+    editor->setToolTip("Número em mm, unidade ou fórmula do projeto · Enter confirma · Esc cancela");
     editor->setStyleSheet("QLineEdit { background:#263b4b; color:#f4ce89; border:1px solid #72cffa; "
                           "border-radius:3px; padding:3px; }");
     auto center = target.rect.center();
@@ -974,12 +979,23 @@ bool Viewport::eventFilter(QObject *object, QEvent *event) {
                 return true;
             }
             if (key->key() == Qt::Key_Return || key->key() == Qt::Key_Enter) {
+                if(dimensionEditor->text()==dimensionEditor->property("originalDimensionText").toString()) {
+                    closeDimensionEditor();setFocus();return true;
+                }
                 bool ok = false;
                 double value =
                     dimensionEditor->text().trimmed().replace(',', '.').toDouble(&ok) / dimensionMultiplier;
                 QString error;
-                if(dimensionKey.startsWith("constraint:") && onDimensionExpression)
-                    error=onDimensionExpression(dimensionFeature,dimensionKey,dimensionEditor->text());
+                const bool bound=model->get(dimensionFeature).p.value("expressions").toObject().contains(dimensionKey);
+                if(onDimensionExpression && (dimensionKey.startsWith("constraint:") || bound || !ok)) {
+                    QString formula=dimensionEditor->text().trimmed();
+                    if(formula.isEmpty())error="Digite uma medida ou fórmula.";
+                    else {
+                        if(ok)formula+=" mm";
+                        if(dimensionMultiplier!=1)formula=QString("(%1) / %2").arg(formula).arg(dimensionMultiplier);
+                        error=onDimensionExpression(dimensionFeature,dimensionKey,formula);
+                    }
+                }
                 else if (!ok || !std::isfinite(value) || value <= 1e-5 || value > 1e6)
                     error = "Digite uma medida positiva válida em mm.";
                 else if (onDimensionEdit)

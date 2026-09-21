@@ -20,6 +20,42 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void inlineProfileExpressionsAndUnits() {
+        QTemporaryDir dir;Window window(dir.filePath("recovery"),false);window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));auto *v=window.findChild<Viewport *>();
+        window.model.setParameters({{"medida","40 mm"}});
+        for(bool circle:{false,true}) {
+            const auto id=window.model.add("sketch",circle?QJsonObject{{"profile","circle"},{"r",10}}:
+                QJsonObject{{"profile","rectangle"},{"w",20},{"h",10}});
+            v->onEditSketch(id);v->refresh();v->fit();const QString field=circle?"r":"w";
+            auto edit=[&]() -> QLineEdit * {
+                v->grab();for(const auto &target:v->dimensions)if(target.key==field){v->editDimension(target);return v->dimensionEditor;}
+                return nullptr;
+            };
+            const auto initial=window.model.json();
+            auto *input=edit();QVERIFY(input);QTest::keyClick(input,Qt::Key_Escape);QCOMPARE(window.model.json(),initial);
+            input=edit();QVERIFY(input);input->setText("medida / 2");QTest::keyClick(input,Qt::Key_Return);
+            QCOMPARE(window.model.get(id).p[field].toDouble(),circle?10.:20.);
+            window.model.setParameters({{"medida","60 mm"}});v->refresh();
+            QCOMPARE(window.model.get(id).p[field].toDouble(),circle?15.:30.);
+            const auto before=window.model.json();input=edit();QVERIFY(input);
+            QVERIFY(input->text().contains("medida"));QTest::keyClick(input,Qt::Key_Return);QCOMPARE(window.model.json(),before);
+            input=edit();QVERIFY(input);input->setText("2,5 cm");QTest::keyClick(input,Qt::Key_Return);
+            QCOMPARE(window.model.get(id).p[field].toDouble(),circle?12.5:25.);
+            const auto valid=window.model.json();
+            for(const auto &bad:QStringList{"-2 mm","90 deg","unknown_parameter",""}) {
+                input=edit();QVERIFY(input);input->setText(bad);QTest::keyClick(input,Qt::Key_Return);
+                QCOMPARE(window.model.json(),valid);QVERIFY(v->dimensionEditor);QTest::keyClick(input,Qt::Key_Escape);
+            }
+            input=edit();QVERIFY(input);input->setText("30");QTest::keyClick(input,Qt::Key_Return);
+            QCOMPARE(window.model.get(id).p[field].toDouble(),circle?15.:30.);
+            window.findChild<QAction *>("undo")->trigger();QCOMPARE(window.model.json(),valid);
+            window.findChild<QAction *>("redo")->trigger();
+            window.model.setParameters({{"medida","40 mm"}});
+        }
+        window.model.save(dir.filePath("expressions.mcad"));Model reopened;reopened.load(window.model.filePath);
+        QCOMPARE(reopened.json(),window.model.json());
+    }
     void conflictingSketchConstraintIsExplained() {
         QTemporaryDir dir;Model source;
         const auto id=source.add("sketch",{{"profile","polyline"},{"points",QJsonArray{QJsonArray{0,0},QJsonArray{20,10}}}});

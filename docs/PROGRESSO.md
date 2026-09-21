@@ -1,5 +1,23 @@
 # Execução do backlog
 
+## 21/09/2026 — unidades e fórmulas nas cotas dos perfis
+
+SK-03/PAR-04: largura/altura de retângulo e diâmetro de círculo no canvas aceitam
+unidades e parâmetros nomeados. Círculo converte a expressão do diâmetro para raio
+interno e reabre mostrando a medida exibida. Enter sem alteração não regrava nem
+acumula conversões. Números simples sem vínculo mantêm a edição numérica anterior.
+Campo vazio, unidade angular em comprimento e valores inválidos preservam o estado.
+
+inlineProfileExpressionsAndUnits, inlineDimensions e namedSketchDimensionFromSelection
+passaram (três casos, cinco resultados Qt). Cobrem vírgula decimal, cm, atualização
+de parâmetro, undo/redo, persistência, erro e cancelamento. A regressão inicialmente
+detectou leitura com QJsonObject::operator[] inserindo campo expressions vazio;
+corrigida para value(), com teste explícito de abrir/cancelar sem alterar documento.
+
+MecaCAD recompilado no build existente, sem distribuição nova. Não implementa
+cotas angulares ou restrições radiais gerais no solver, portanto os itens seguem
+parciais. Arquivos do usuário preservados.
+
 ## 21/09/2026 — diagnóstico visual ao adicionar restrição incompatível
 
 SK-04: comandos horizontal/vertical/fixar e cotas X/Y avaliam a nova relação antes

@@ -66,6 +66,21 @@ os parâmetros nomeados do projeto. Desvincular a fórmula mantém a medida atua
 
 ## Limitações e próximos aceites
 
+### Largura, altura e diâmetro no canvas
+
+As cotas dos perfis retângulo e círculo também aceitam unidades e expressões:
+por exemplo `2,5 cm` ou `largura / 2`. Números simples continuam em mm. No círculo,
+o valor informado é o **diâmetro** exibido; a fórmula é convertida para o raio
+armazenado. Reabrir uma cota vinculada mostra a expressão correspondente à medida
+exibida. Enter sem modificar o texto não altera o documento nem acumula conversões.
+
+Fórmulas inválidas, unidades incompatíveis e medidas não positivas deixam o editor
+aberto com erro, preservando o projeto. Esc cancela. Campo vazio não remove vínculo
+por acidente: use Link Dimension to Expression para desvincular explicitamente.
+Isso edita os parâmetros dos perfis; não adiciona restrições radiais ao solver.
+
+### Limites restantes
+
 Ainda não cobre cotas angulares/radiais no solver, referências entre medidas de
 recursos, renomeação com atualização automática de fórmulas,
 funções matemáticas, autocomplete ou gráfico visual de dependências. O editor de
