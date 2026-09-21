@@ -25,6 +25,7 @@ class Viewport : public QOpenGLWidget, protected QOpenGLFunctions {
         QVector<QVector3D> geometry;
     };
     SelectionTarget selectedDetail, hoveredDetail;
+    SelectionTarget sketchSupport;
     QVector<SelectionTarget> selectedDetails;
     QString selectionFilter = "auto";
     bool hasSubselection() const {

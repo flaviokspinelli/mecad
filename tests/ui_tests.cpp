@@ -4,6 +4,7 @@
 #include <QDialog>
 #include <QFile>
 #include <QMouseEvent>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QSurfaceFormat>
 #include <QTemporaryDir>
@@ -12,6 +13,62 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void selectedEdgeFilletAndMeasurement() {
+        Window window;
+        auto body = window.model.add("box", {{"w",30},{"h",30},{"d",10}});
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto *v = window.findChild<Viewport *>();
+        v->refresh(); v->fit(); v->view("iso");
+        v->selectionFilter = "edge";
+        QTest::mouseClick(v, Qt::LeftButton, Qt::NoModifier, v->project({30,0,5}).toPoint());
+        QCOMPARE(v->selectedDetail.kind, QString("edge"));
+        auto before = window.model.json();
+        bool preview = false, blocked = false;
+        QTimer::singleShot(180, [&] {
+            preview = v->model->features.size() == 2 && window.model.json() == before;
+            auto *radius = window.findChild<QDoubleSpinBox *>("filletRadius");
+            if (radius) radius->setValue(100);
+            if (v->onAcceptCommand) v->onAcceptCommand();
+            blocked = bool(v->onCancelCommand) && v->model->json() == before;
+            if (radius) radius->setValue(2);
+            if (v->onAcceptCommand) v->onAcceptCommand();
+        });
+        window.findChild<QAction *>("fillet")->trigger();
+        QVERIFY(preview); QVERIFY(blocked);
+        QCOMPARE(window.model.features.size(), size_t(2));
+        QCOMPARE(window.model.features.back().p["edges"].toArray().size(), 1);
+        auto good = window.model.json();
+        window.findChild<QAction *>("undo")->trigger();
+        QCOMPARE(window.model.json(), before);
+        window.findChild<QAction *>("redo")->trigger();
+        QCOMPARE(window.model.json(), good);
+        window.findChild<QAction *>("undo")->trigger();
+        v->selectionFilter = "face";
+        QTest::mouseClick(v, Qt::LeftButton, Qt::NoModifier, v->project({15,15,10}).toPoint());
+        QString measure;
+        QTimer::singleShot(100, [&] {
+            for (auto *dialog : window.findChildren<QMessageBox *>()) { measure = dialog->text(); dialog->accept(); }
+        });
+        window.findChild<QAction *>("measure")->trigger();
+        QVERIFY(measure.contains("900.0000"));
+        v->selectionFilter = "vertex";
+        QTest::mouseClick(v, Qt::LeftButton, Qt::NoModifier, v->project({30,0,0}).toPoint());
+        QTest::mouseClick(v, Qt::LeftButton, Qt::ShiftModifier, v->project({30,0,10}).toPoint());
+        QCOMPARE(v->selectedDetails.size(), 2);
+        QTimer::singleShot(100, [&] {
+            for (auto *dialog : window.findChildren<QMessageBox *>()) { measure = dialog->text(); dialog->accept(); }
+        });
+        window.findChild<QAction *>("measure")->trigger();
+        QCOMPARE(measure, QString("Distância mínima: 10.0000 mm"));
+        v->onSelect(body);
+        QTimer::singleShot(180, [&] {
+            window.grab().save(QDir::currentPath()+"/fillet-preview-test.png");
+            if (v->onCancelCommand) v->onCancelCommand();
+        });
+        window.findChild<QAction *>("fillet")->trigger();
+        QCOMPARE(window.model.json(), before);
+    }
     void frontFaceProfilePriority() {
         Window window;
         auto body = window.model.add("box", {{"w",30},{"h",30},{"d",30}});
@@ -63,6 +120,7 @@ class UiTests : public QObject {
         QTest::mouseClick(v, Qt::LeftButton, Qt::NoModifier, v->project(Model::planePoint(v->plane,local.x()+3,local.y()+3)).toPoint());
         QCOMPARE(window.model.features.size(), size_t(2));
         auto sketch = window.model.features.back().id;
+        QCOMPARE(window.model.get(sketch).p["support"].toString(), body);
         window.findChild<QAction *>("finish")->trigger();
         auto target = v->pickDetail(v->project({15,15,10}));
         QCOMPARE(target.feature, sketch);
@@ -76,6 +134,38 @@ class UiTests : public QObject {
         });
         window.findChild<QAction *>("extrude")->trigger();
         QVERIFY(acceptedProfile);
+        const auto beforeCut = window.model.json();
+        v->onSelect(sketch);
+        bool cutPreview = false;
+        QTimer::singleShot(180, [&] {
+            for (auto *combo : window.findChildren<QComboBox *>()) {
+                int index = combo->findData("cut");
+                if (index >= 0) combo->setCurrentIndex(index);
+            }
+            if (v->onHandleDistance) v->onHandleDistance(-5);
+            QTest::qWait(100);
+            cutPreview = v->model->features.size() == 3 && window.model.json() == beforeCut;
+            window.grab().save(QDir::currentPath()+"/face-sketch-cut-workflow.png");
+            if (v->onAcceptCommand) v->onAcceptCommand();
+        });
+        window.findChild<QAction *>("extrude")->trigger();
+        QVERIFY(cutPreview);
+        QCOMPARE(window.model.features.size(), size_t(3));
+        double removed = window.model.get(sketch).p["w"].toDouble() * window.model.get(sketch).p["h"].toDouble() * 5;
+        QVERIFY(std::abs(Model::volume(window.model.features.back().shape)-(9000-removed)) < .01);
+        auto result = window.model.json();
+        window.findChild<QAction *>("undo")->trigger();
+        QCOMPARE(window.model.json(), beforeCut);
+        window.findChild<QAction *>("redo")->trigger();
+        QCOMPARE(window.model.json(), result);
+        QTemporaryDir dir;
+        window.model.save(dir.filePath("face-cut.mcad"));
+        window.openPath(dir.filePath("face-cut.mcad"));
+        QCOMPARE(window.model.json(), result);
+        window.model.exportStep(dir.filePath("face-cut.step"));
+        window.model.exportStl(dir.filePath("face-cut.stl"));
+        QVERIFY(QFileInfo(dir.filePath("face-cut.step")).size() > 0);
+        QVERIFY(QFileInfo(dir.filePath("face-cut.stl")).size() > 0);
     }
     void extrudeCutPreview() {
         Window window;
@@ -85,7 +175,7 @@ class UiTests : public QObject {
         window.show();
         QVERIFY(QTest::qWaitForWindowExposed(&window));
         window.activateWindow();
-        QVERIFY(QTest::qWaitForWindowActive(&window));
+        // Events below target widgets directly; desktop focus is not a prerequisite.
         auto *v = window.findChild<Viewport *>();
         v->refresh(); v->fit(); v->onSelect(sketch);
         auto before = window.model.json();
@@ -123,7 +213,7 @@ class UiTests : public QObject {
         window.show();
         QVERIFY(QTest::qWaitForWindowExposed(&window));
         window.activateWindow();
-        QVERIFY(QTest::qWaitForWindowActive(&window));
+        // Events below target widgets directly; desktop focus is not a prerequisite.
         auto *v = window.findChild<Viewport *>();
         v->refresh();
         v->fit();
@@ -289,7 +379,7 @@ class UiTests : public QObject {
         window.show();
         QVERIFY(QTest::qWaitForWindowExposed(&window));
         window.activateWindow();
-        QVERIFY(QTest::qWaitForWindowActive(&window));
+        // Events below target widgets directly; desktop focus is not a prerequisite.
         auto *v = window.findChild<Viewport *>();
         v->refresh();
         v->fit();

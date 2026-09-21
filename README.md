@@ -8,7 +8,17 @@ desenvolvida e testada em macOS 14, Apple Silicon.
 
 ## Abrir
 
-Abra `dist/MecaCAD-0.2.24.app`. O pacote local reúne o executável e suas bibliotecas.
+Abra `dist/MecaCAD-0.2.25.app`. O pacote local reúne o executável e suas bibliotecas.
+
+Na 0.2.25, novos sketches criados em faces guardam uma referência ao suporte e
+acompanham mudanças dimensionais que preservem sua topologia. Seleções de arestas
+com Shift podem receber Fillet com prévia, validação do raio e cancelamento sem
+alterar o documento. Measure informa área de faces, comprimento geométrico de
+arestas e distância mínima entre dois elementos. As orientações e avisos agora
+aparecem na barra de estado. Tentativas recusadas de excluir operações com
+dependências não modificam o JSON do projeto.
+
+Veja [validação e limitações desta entrega](docs/QUALIDADE-0.2.25.md).
 
 Na 0.2.24, clique no interior de uma face plana e use Create Sketch para desenhar
 sobre ela, inclusive em faces inclinadas. Também pode iniciar Create Sketch e
@@ -16,8 +26,8 @@ então escolher a face. Um perfil fechado sobre a face tem prioridade no clique
 em seu interior, permitindo selecionar o sketch e abrir Extrude. O filtro Faces
 permite selecionar a face mesmo onde há um perfil. Para selecionar o corpo inteiro,
 use o Browser ou o filtro Objetos / perfis. Faces curvas e malhas STL não são
-suportes de sketch. O plano da face fica salvo no projeto, mas nesta versão não
-acompanha alterações posteriores na posição/geometria do corpo de suporte.
+suportes de sketch. Sketches salvos até 0.2.24 mantêm o plano fixo original; não
+recebem automaticamente o vínculo introduzido na 0.2.25.
 
 Na 0.2.23, Extrude → Cut escolhe automaticamente o destino quando há uma única
 peça CAD disponível. Com várias peças, escolha Target body ou clique na peça.

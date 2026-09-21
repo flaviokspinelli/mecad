@@ -1243,6 +1243,7 @@ void Viewport::mouseReleaseEvent(QMouseEvent *e) {
     }
     if (choosingPlane) {
         QString name;
+        sketchSupport = {};
         double offset = 0;
         auto target = pickDetail(s, true);
         if (!target.feature.isEmpty() && target.index >= 0) {
@@ -1252,6 +1253,7 @@ void Viewport::mouseReleaseEvent(QMouseEvent *e) {
                     return;
                 }
                 name = Model::facePlane(model->get(target.feature).shape, target.index);
+                sketchSupport = target;
             } catch (const std::exception &error) {
                 if (onHint) onHint(QString::fromUtf8(error.what()));
                 return;

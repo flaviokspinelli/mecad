@@ -11,6 +11,62 @@
 class CoreTests : public QObject {
     Q_OBJECT
   private slots:
+    void associativeFaceSketchCut() {
+        Model model;
+        auto body = model.add("box", {{"w",30},{"h",30},{"d",10}});
+        QString plane; int face = -1;
+        for (const auto &triangle : model.triangles()) {
+            auto candidate = Model::facePlane(model.get(body).shape, triangle.face);
+            if (Model::planeNormal(candidate).z() > .99) { plane=candidate; face=triangle.face; break; }
+        }
+        QVERIFY(face >= 0);
+        auto center = Model::planeCoordinates(plane, {15,15,10});
+        auto sketch = model.add("sketch", {{"profile","rectangle"},{"plane",plane},
+            {"x",center.x()-5},{"y",center.y()-5},{"w",10},{"h",10},
+            {"support",body},{"supportFace",face},{"supportFaceCount",6}});
+        auto cut = model.add("extrude", {{"source",sketch},{"target",body},{"mode","cut"},{"d",-2}});
+        QVERIFY(std::abs(Model::volume(model.get(cut).shape)-8800)<.001);
+        auto before = model.json();
+        model.edit(body, {{"w",30},{"h",30},{"d",20}}, "Box");
+        QVERIFY(std::abs(Model::volume(model.get(cut).shape)-17800)<.001);
+        QVERIFY(std::abs(Model::planePoint(model.get(sketch).p["plane"].toString(),0,0).z()-20)<.001);
+        auto changed = model.json();
+        QVERIFY(model.undo()); QCOMPARE(model.json(),before);
+        QVERIFY(model.redo()); QCOMPARE(model.json(),changed);
+        QTemporaryDir dir;
+        model.save(dir.filePath("parametric.mcad"));
+        Model reopened; reopened.load(dir.filePath("parametric.mcad"));
+        QCOMPARE(reopened.json(), changed);
+        QVERIFY_THROWS_EXCEPTION(std::exception, model.remove(body));
+        QCOMPARE(model.json(),changed);
+        model.deleteBody(cut);
+        QVERIFY(model.bodies().empty());
+        QVERIFY(model.undo()); QCOMPARE(model.json(),changed);
+    }
+    void selectedEdgeFilletPersistence() {
+        Model model;
+        auto box = model.add("box", {{"w",30},{"h",30},{"d",10}});
+        auto before = model.json();
+        QVERIFY_THROWS_EXCEPTION(std::exception, model.add("fillet", {{"source",box},{"r",2},{"edges",QJsonArray{999}}}));
+        QCOMPARE(model.json(), before);
+        auto fillet = model.add("fillet", {{"source",box},{"r",2},{"edges",QJsonArray{0}}});
+        QVERIFY(BRepCheck_Analyzer(model.get(fillet).shape).IsValid());
+        const double volume = Model::volume(model.get(fillet).shape);
+        QVERIFY(volume < 9000 && volume > 8800);
+        auto good = model.json();
+        QVERIFY_THROWS_EXCEPTION(std::exception, model.edit(fillet, {{"source",box},{"r",100},{"edges",QJsonArray{0}}}, "Fillet"));
+        QCOMPARE(model.json(), good);
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        model.save(dir.filePath("part.mcad"));
+        Model loaded; loaded.load(dir.filePath("part.mcad"));
+        QVERIFY(std::abs(Model::volume(loaded.get(fillet).shape)-volume)<.001);
+        loaded.exportStep(dir.filePath("part.step"));
+        Model imported; imported.importStep(dir.filePath("part.step"));
+        QVERIFY(std::abs(Model::volume(imported.features.back().shape)-volume)<.001);
+        QVERIFY(model.undo()); QCOMPARE(model.json(), before);
+        QVERIFY(model.redo()); QCOMPARE(model.json(), good);
+    }
     void planarFaceFrames() {
         Model model;
         auto box = model.add("box", {{"w",30},{"h",30},{"d",10}});

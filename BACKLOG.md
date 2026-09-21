@@ -2,6 +2,16 @@
 
 ## Estado após a entrega 0.2
 
+0.2.25: consolidação de seleção de faces e perfis, sketches vinculados a faces
+com topologia preservada, filetes em arestas selecionadas com prévia cancelável,
+áreas/comprimentos/distâncias e testes de fluxos encadeados. Registro em
+[QUALIDADE-0.2.25.md](docs/QUALIDADE-0.2.25.md).
+
+Prioridade de produto: não equiparar aprovação dos testes ao nível de maturidade
+do Fusion. Permanecem bloqueadores: solucionador de restrições de sketches,
+identificação persistente de faces/arestas sob mudanças topológicas, operações
+longas fora da thread gráfica, perfis compostos e validação de projetos maiores.
+
 0.2.9: edição por clique nas cotas de retângulos e círculos, com Enter/Esc,
 validação, desfazer/refazer e reconstrução de operações dependentes.
 Comprimentos de segmentos e restrições dimensionais gerais continuam pendentes.
@@ -99,7 +109,7 @@ parâmetros, salva o projeto e exporta um STL e um STEP válidos.
 
 ## Marco 3 — Sketch paramétrico
 
-- [ ] **P0** Criar sketch em planos globais ou faces planas.
+- [x] **P0** Criar sketch em planos globais ou faces planas.
 - [x] **P0** Desenhar linha, retângulo, círculo e arco.
 - [ ] **P0** Aplicar cotas lineares, angulares, radiais e de diâmetro.
 - [ ] **P0** Aplicar restrições coincidente, horizontal e vertical.

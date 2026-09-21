@@ -1,5 +1,8 @@
 #include "window.h"
 #include <BRepBndLib.hxx>
+#include <BRepGProp.hxx>
+#include <BRepExtrema_DistShapeShape.hxx>
+#include <GProp_GProps.hxx>
 #include <Bnd_Box.hxx>
 #include <TopExp.hxx>
 #include <TopTools_IndexedMapOfShape.hxx>
@@ -453,7 +456,7 @@ QAction *Window::command(QString key, QString label, QString shortcut, std::func
             const QStringList bodyCommands = {"delete", "rollback", "transform", "copy",
                                               "fillet", "hole",     "boolean",   "cut",
                                               "common", "extrude",  "revolve",   "dimension"};
-            if (key != "delete" && key != "transform" &&
+            if (key != "delete" && key != "transform" && key != "fillet" &&
                 (canvas->hasSubselection() || canvas->selectedDetails.size() > 1) && bodyCommands.contains(key))
                 throw std::runtime_error(
                     "Há subelementos ou vários itens selecionados. Esta ferramenta ainda atua em um objeto inteiro; "
@@ -938,7 +941,7 @@ Window::Window() {
     properties->hide();
     status = new QLabel("Ready");
     statusBar()->addWidget(status, 1);
-    statusBar()->hide();
+    statusBar()->show();
     canvas->installEventFilter(this);
     browser->show();
     navigation->show();
@@ -975,6 +978,7 @@ Window::Window() {
         const auto &p = model.get(id).p;
         canvas->plane = p["plane"].toString("XY");
         canvas->planeOffset = p["offset"].toDouble();
+        canvas->sketchSupport = {p["support"].toString(), "face", p["supportFace"].toInt(-1), {}};
         canvas->sketchMode = true;
         canvas->setTool({});
         canvas->view("top");
@@ -1008,6 +1012,13 @@ Window::Window() {
     canvas->onHint = [this](QString s) { status->setText(s); };
     canvas->onProfile = [this](QJsonObject p) {
         run([&] {
+            if (!canvas->sketchSupport.feature.isEmpty()) {
+                p["support"] = canvas->sketchSupport.feature;
+                p["supportFace"] = canvas->sketchSupport.index;
+                TopTools_IndexedMapOfShape faces;
+                TopExp::MapShapes(model.get(canvas->sketchSupport.feature).shape, TopAbs_FACE, faces);
+                p["supportFaceCount"] = faces.Extent();
+            }
             selected = model.add("sketch", p, "Sketch " + QString::number(model.features.size() + 1));
             refresh();
             status->setText("Sketch criado. Ajuste as dimensões à direita ou continue desenhando.");
@@ -1348,7 +1359,7 @@ void Window::buildProperties() {
         }
     if (f.type == "sketch") {
         auto *note =
-            new QLabel("Plane: " + f.p["plane"].toString() + "\nProfile: " + f.p["profile"].toString() +
+            new QLabel("Plane: " + (f.p["plane"].toString().startsWith("FACE:") ? QString("Face da peça") : f.p["plane"].toString()) + "\nProfile: " + f.p["profile"].toString() +
                        "\nDimensions drive the profile.");
         note->setWordWrap(true);
         note->setStyleSheet("color:#74869a;font-size:11px;");
@@ -1433,9 +1444,11 @@ void Window::primitive(const QString &type) {
 }
 void Window::startSketch() {
     pendingSketchTool = "rectangle";
+    canvas->sketchSupport = {};
     if (canvas->selectedDetail.kind == "face" && canvas->selectedDetails.size() <= 1) {
         auto target = canvas->selectedDetail;
         auto plane = Model::facePlane(model.get(target.feature).shape, target.index);
+        canvas->sketchSupport = target;
         canvas->choosingPlane = false;
         canvas->onPlaneChosen(plane, 0);
         return;
@@ -1483,6 +1496,13 @@ void Window::exactSketch() {
     f.number("r", "Circle radius", 10, .001);
     if (f.acceptForm()) {
         auto p = f.values();
+        if (p["plane"].toString() == canvas->plane && !canvas->sketchSupport.feature.isEmpty()) {
+            p["support"] = canvas->sketchSupport.feature;
+            p["supportFace"] = canvas->sketchSupport.index;
+            TopTools_IndexedMapOfShape faces;
+            TopExp::MapShapes(model.get(canvas->sketchSupport.feature).shape, TopAbs_FACE, faces);
+            p["supportFaceCount"] = faces.Extent();
+        }
         if (p["profile"] == "circle") {
             p.remove("w");
             p.remove("h");
@@ -1923,26 +1943,88 @@ void Window::hole() {
     }
 }
 void Window::fillet() {
-    if (selected.isEmpty() || model.get(selected).type == "sketch")
-        throw std::runtime_error("Selecione um corpo.");
-    Form f(this, "Fillet — all edges");
-    f.number("r", "Radius", 1, .001);
-    f.note("Aplica o raio em todas as arestas do corpo selecionado.");
-    if (f.acceptForm()) {
-        auto p = f.values();
-        p["source"] = selected;
-        selected = model.add("fillet", p, "Fillet");
-        refresh();
+    if (selected.isEmpty() || model.get(selected).type == "sketch" || model.isMesh(selected))
+        throw std::runtime_error("Selecione arestas de um sólido CAD ou um corpo CAD inteiro.");
+    QJsonArray edges;
+    for (const auto &item : canvas->selectedDetails) {
+        if (item.feature != selected || (item.kind != "edge" && item.kind != "object"))
+            throw std::runtime_error("Selecione arestas de um único corpo para aplicar o filete.");
+        if (item.kind == "edge") edges.append(item.index);
     }
+    const QString source = selected;
+    Form f(this, "Fillet");
+    f.number("r", "Radius", 1, .001);
+    f.nums["r"]->setObjectName("filletRadius");
+    f.note(edges.empty() ? "Todas as arestas do corpo. Para escolher arestas, cancele e selecione-as com Shift."
+                        : QString("%1 aresta(s) selecionada(s). Altere o raio para visualizar o resultado.").arg(edges.size()));
+    auto *feedback = new QLabel;
+    feedback->setWordWrap(true);
+    f.layout->addRow(feedback);
+    auto parameters = [&] {
+        auto p = f.values(); p["source"] = source;
+        if (!edges.empty()) p["edges"] = edges;
+        return p;
+    };
+    Model preview = model;
+    bool valid = false;
+    auto updatePreview = [&] {
+        valid = false;
+        try {
+            preview = model;
+            auto id = preview.add("fillet", parameters(), "Fillet preview");
+            canvas->selected = id;
+            canvas->setModel(&preview);
+            feedback->clear(); valid = true;
+        } catch (const std::exception &error) {
+            canvas->selected = source; canvas->setModel(&model);
+            feedback->setText(QString::fromUtf8(error.what()));
+        } catch (const Standard_Failure &) {
+            canvas->selected = source; canvas->setModel(&model);
+            feedback->setText("Não foi possível aplicar o filete. Reduza o raio.");
+        }
+    };
+    QTimer debounce;
+    debounce.setSingleShot(true); debounce.setInterval(80);
+    connect(f.nums["r"], qOverload<double>(&QDoubleSpinBox::valueChanged), &f, [&] { debounce.start(); });
+    connect(&debounce, &QTimer::timeout, &f, updatePreview);
+    f.validate = [&] { debounce.stop(); updatePreview(); return valid; };
+    activeCommand = &f;
+    canvas->onCancelCommand = [&] { f.reject(); };
+    canvas->onAcceptCommand = [&] { f.accept(); };
+    QTimer::singleShot(0, &f, updatePreview);
+    bool accepted = f.acceptForm();
+    debounce.stop(); activeCommand.clear();
+    canvas->onCancelCommand = {}; canvas->onAcceptCommand = {};
+    canvas->selected = source; canvas->setModel(&model);
+    if (accepted) selected = model.add("fillet", parameters(), "Fillet");
+    refresh();
 }
 void Window::measure() {
-    if (canvas->selectedDetail.kind == "face") {
-        QMessageBox::information(this, "Face", "Use Create Sketch para desenhar sobre uma face plana. Para medir a peça, selecione o corpo no Browser.");
+    auto shapeFor = [&](const Viewport::SelectionTarget &detail) {
+        const auto &shape = model.get(detail.feature).shape;
+        if (model.isMesh(detail.feature))
+            throw std::runtime_error("Medição entre elementos exige geometria CAD, não STL.");
+        if (detail.kind == "object") return shape;
+        TopTools_IndexedMapOfShape elements;
+        TopExp::MapShapes(shape, detail.kind == "face" ? TopAbs_FACE : detail.kind == "edge" ? TopAbs_EDGE : TopAbs_VERTEX, elements);
+        if (detail.index < 0 || detail.index >= elements.Extent())
+            throw std::runtime_error("Seleção inválida. Selecione novamente o elemento.");
+        return TopoDS_Shape(elements(detail.index+1));
+    };
+    if (canvas->selectedDetails.size() == 2) {
+        BRepExtrema_DistShapeShape distance(shapeFor(canvas->selectedDetails[0]), shapeFor(canvas->selectedDetails[1]));
+        if (!distance.IsDone()) throw std::runtime_error("Não foi possível calcular a distância.");
+        QMessageBox::information(this, "Measure", QString("Distância mínima: %1 mm").arg(distance.Value(), 0, 'f', 4));
         return;
     }
-    if (canvas->selectedDetails.size() > 1) {
-        QMessageBox::information(this, "Seleção múltipla",
-                                 "Selecione somente uma aresta, vértice ou objeto para medir.");
+    if (canvas->selectedDetails.size() > 2)
+        throw std::runtime_error("Selecione um elemento para medir, ou dois com Shift para medir a distância mínima.");
+    if (canvas->selectedDetail.kind == "face") {
+        GProp_GProps properties;
+        BRepGProp::SurfaceProperties(shapeFor(canvas->selectedDetail), properties);
+        auto center = properties.CentreOfMass();
+        QMessageBox::information(this, "Measure — Face", QString("Área: %1 mm²\nCentro: (%2, %3, %4) mm")
+            .arg(properties.Mass(), 0, 'f', 4).arg(center.X(), 0, 'f', 3).arg(center.Y(), 0, 'f', 3).arg(center.Z(), 0, 'f', 3));
         return;
     }
     if (canvas->hasSubselection()) {
@@ -1955,11 +2037,10 @@ void Window::measure() {
                                          .arg(p.y(), 0, 'f', 3)
                                          .arg(p.z(), 0, 'f', 3));
         } else {
-            double length = 0;
-            for (int i = 1; i < detail.geometry.size(); ++i)
-                length += (detail.geometry[i] - detail.geometry[i - 1]).length();
+            GProp_GProps properties;
+            BRepGProp::LinearProperties(shapeFor(detail), properties);
             QMessageBox::information(this, "Aresta",
-                                     QString("Comprimento aproximado: %1 mm").arg(length, 0, 'f', 3));
+                                     QString("Comprimento: %1 mm").arg(properties.Mass(), 0, 'f', 4));
         }
         return;
     }

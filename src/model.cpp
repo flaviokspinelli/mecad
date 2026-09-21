@@ -42,6 +42,7 @@
 #include <cmath>
 #include <gp_Circ.hxx>
 #include <sstream>
+#include <set>
 #include <stdexcept>
 
 namespace {
@@ -275,8 +276,8 @@ void Model::toggle(const QString &id) {
     checkpoint(before);
 }
 void Model::remove(const QString &id) {
-    for (auto &f : features)
-        for (auto k : {"source", "target", "tool"})
+    for (const auto &f : features)
+        for (auto k : {"source", "target", "tool", "support"})
             require(
                 f.p[k].toString() != id,
                 "Há operações dependentes. Exclua primeiro as operações posteriores que usam este objeto.");
@@ -322,6 +323,15 @@ void Model::rebuild() {
         f.shape.Nullify();
     for (auto &f : features) {
         try {
+            if (f.type == "sketch" && !f.p["support"].toString().isEmpty()) {
+                const auto &support = get(f.p["support"].toString());
+                require(!support.shape.IsNull() && !isMesh(support.id), "O plano do sketch depende de um corpo CAD anterior válido.");
+                TopTools_IndexedMapOfShape faces;
+                TopExp::MapShapes(support.shape, TopAbs_FACE, faces);
+                require(faces.Extent() == f.p["supportFaceCount"].toInt(),
+                        "A topologia do suporte mudou. Não foi possível preservar a referência da face do sketch.");
+                f.p["plane"] = facePlane(support.shape, f.p["supportFace"].toInt(-1));
+            }
             const auto &p = f.p;
             auto source = [&](const char *key) {
                 require(!isMesh(p[key].toString()) || f.type == "transform" || f.type == "copy" ||
@@ -422,11 +432,27 @@ void Model::rebuild() {
                 f.shape = source("source");
             } else if (f.type == "fillet") {
                 auto s = source("source");
+                require(!isMesh(p["source"].toString()), "Filete exige um sólido CAD, não uma malha STL.");
                 BRepFilletAPI_MakeFillet fillet(s);
-                for (TopExp_Explorer it(s, TopAbs_EDGE); it.More(); it.Next())
-                    fillet.Add(positive(p, "r", 1), TopoDS::Edge(it.Current()));
+                TopTools_IndexedMapOfShape edges;
+                TopExp::MapShapes(s, TopAbs_EDGE, edges);
+                if (p.contains("edges")) {
+                    require(p["edges"].isArray() && !p["edges"].toArray().empty(), "Selecione ao menos uma aresta.");
+                    std::set<int> indices;
+                    for (auto entry : p["edges"].toArray()) {
+                        int index = entry.toInt(-1);
+                        require(entry.isDouble() && entry.toDouble() == index && index >= 0 && index < edges.Extent(),
+                                "Aresta de filete inválida. Selecione novamente as arestas.");
+                        indices.insert(index);
+                    }
+                    for (int index : indices)
+                        fillet.Add(positive(p, "r", 1), TopoDS::Edge(edges(index+1)));
+                } else {
+                    for (int i=1; i<=edges.Extent(); ++i)
+                        fillet.Add(positive(p, "r", 1), TopoDS::Edge(edges(i)));
+                }
                 fillet.Build();
-                require(fillet.IsDone(), "Não foi possível aplicar este raio a todas as arestas.");
+                require(fillet.IsDone(), "Não foi possível aplicar este raio às arestas. Reduza o raio ou altere a seleção.");
                 f.shape = fillet.Shape();
             } else if (f.type == "mesh") {
                 auto encoded = p["stl"].toString().toLatin1();
