@@ -69,6 +69,7 @@ class Viewport : public QOpenGLWidget, protected QOpenGLFunctions {
     std::function<void(QString)> onSelect;
     std::function<void(QString)> onEditSketch;
     std::function<QString(QString, QString, double)> onDimensionEdit;
+    std::function<QString(QString, QString, QString)> onDimensionExpression;
     std::function<void(QJsonObject)> onProfile;
     std::function<void(QString)> onHint;
     void refresh();

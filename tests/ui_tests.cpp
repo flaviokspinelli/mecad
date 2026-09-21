@@ -20,6 +20,35 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void namedSketchDimensionFromSelection() {
+        QTemporaryDir dir;Model source;source.setParameters({{"largura","30 mm"}});
+        const auto sk=source.add("sketch",{{"profile","rectangle"},{"w",20},{"h",10},{"plane","XY"}});
+        source.save(dir.filePath("source.mcad"));Window window(dir.filePath("recovery"),false);window.openPath(source.filePath);window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));auto *v=window.findChild<Viewport *>();v->sketchMode=true;v->onSelect(sk);v->fit();v->view("top");v->selectionFilter="edge";
+        QTest::mouseClick(v,Qt::LeftButton,Qt::NoModifier,v->project({10,0,0}).toPoint());QCOMPARE(v->selectedDetail.kind,QString("edge"));
+        const auto before=window.model.json();
+        QTimer watchdog;watchdog.setInterval(4000);connect(&watchdog,&QTimer::timeout,[&]{for(auto *d:window.findChildren<QDialog *>())if(d->isVisible())d->reject();});watchdog.start();
+        QTimer::singleShot(100,[&]{for(auto *dialog:window.findChildren<QInputDialog *>())dialog->reject();});
+        window.findChild<QAction *>("constraint_distance_x")->trigger();QCOMPARE(window.model.json(),before);
+        QTimer::singleShot(100,[&]{for(auto *dialog:window.findChildren<QInputDialog *>()){dialog->setTextValue("largura");dialog->accept();}});
+        window.findChild<QAction *>("constraint_distance_x")->trigger();
+        const auto system=window.model.sketchSystem(sk);QCOMPARE(system.constraints.size(),5);
+        const auto constraint=system.constraints.back();QCOMPARE(constraint.relation,sketch::Relation::DistanceX);QCOMPARE(constraint.value.x(),30.);
+        QCOMPARE(window.model.get(sk).p.value("expressions").toObject().value("constraint:"+constraint.id).toString(),QString("largura"));
+        window.findChild<QAction *>("undo")->trigger();QCOMPARE(window.model.json(),before);
+        window.findChild<QAction *>("redo")->trigger();QCOMPARE(window.model.sketchSystem(sk).constraints.back().value.x(),30.);
+        v->onSelect(sk);v->update();QTest::qWait(80);QVERIFY(!v->dimensions.empty());
+        auto target=v->dimensions.back();QVERIFY(target.key.startsWith("constraint:"));
+        QTest::mouseClick(v,Qt::LeftButton,Qt::NoModifier,target.rect.center().toPoint());
+        auto *editor=v->findChild<QLineEdit *>("inlineDimension");QVERIFY(editor);QCOMPARE(editor->text(),QString("largura"));
+        editor->setText("largura / 2");QTest::keyClick(editor,Qt::Key_Return);
+        QCOMPARE(window.model.sketchSystem(sk).constraints.back().value.x(),15.);
+        const auto dimensionState=window.model.json();v->update();QTest::qWait(80);
+        QTest::mouseClick(v,Qt::LeftButton,Qt::NoModifier,v->dimensions.back().rect.center().toPoint());
+        editor=v->findChild<QLineEdit *>("inlineDimension");QVERIFY(editor);editor->setText("0 mm");QTest::keyClick(editor,Qt::Key_Return);
+        QCOMPARE(window.model.json(),dimensionState);QVERIFY(editor->isVisible());QTest::keyClick(editor,Qt::Key_Escape);
+        window.model.save(dir.filePath("result.mcad"));QVERIFY(window.close());
+    }
     void dynamicOperationEdgesAndFilletReedit() {
         for(bool chamfer:{false,true}) {
             QTemporaryDir dir;Model source;auto body=source.add("box",{{"w",30},{"h",30},{"d",10}});
@@ -392,7 +421,7 @@ class UiTests : public QObject {
         QCOMPARE(measure, QString("Distância mínima: 10.0000 mm"));
         v->onSelect(body);
         QTimer::singleShot(180, [&] {
-            window.grab().save(QDir::currentPath()+"/fillet-preview-test.png");
+            window.grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("fillet-preview-test.png"));
             if (v->onCancelCommand) v->onCancelCommand();
         });
         window.findChild<QAction *>("fillet")->trigger();
@@ -412,7 +441,7 @@ class UiTests : public QObject {
         QTest::mouseClick(v, Qt::LeftButton, Qt::NoModifier, pixel);
         QCOMPARE(v->selectedDetail.feature, sketch);
         QCOMPARE(v->selectedDetail.kind, QString("object"));
-        v->grab().save(QDir::currentPath()+"/front-profile-selection-test.png");
+        v->grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("front-profile-selection-test.png"));
         v->selectionFilter = "face";
         auto face = v->pickDetail(pixel);
         QCOMPARE(face.feature, body);
@@ -437,7 +466,7 @@ class UiTests : public QObject {
         QCOMPARE(face.feature, body);
         QTest::mouseClick(v, Qt::LeftButton, Qt::NoModifier, pixel);
         QCOMPARE(v->selectedDetail.kind, QString("face"));
-        v->grab().save(QDir::currentPath()+"/face-selection-test.png");
+        v->grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("face-selection-test.png"));
         window.findChild<QAction *>("sketch")->trigger();
         QVERIFY(v->sketchMode);
         QVERIFY(v->plane.startsWith("FACE:"));
@@ -474,7 +503,7 @@ class UiTests : public QObject {
             if (v->onHandleDistance) v->onHandleDistance(-5);
             QTest::qWait(100);
             cutPreview = v->model->features.size() == 3 && window.model.json() == beforeCut;
-            window.grab().save(QDir::currentPath()+"/face-sketch-cut-workflow.png");
+            window.grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("face-sketch-cut-workflow.png"));
             if (v->onAcceptCommand) v->onAcceptCommand();
         });
         window.findChild<QAction *>("extrude")->trigger();
@@ -518,7 +547,7 @@ class UiTests : public QObject {
             QTest::qWait(100);
             if (v->model->features.size() == 3)
                 preview = std::abs(Model::volume(v->model->features.back().shape)-8500)<.01;
-            v->grab().save(QDir::currentPath() + "/extrude-cut-test.png");
+            v->grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("extrude-cut-test.png"));
             v->onHandleDistance(5);
             QTest::qWait(100);
             invalidCleared = v->model->json() == before;
@@ -560,7 +589,7 @@ class UiTests : public QObject {
             v->onMoveTranslation({3,4,0});
             QTest::qWait(100);
             previewed = v->model->get(id).p["profile"] == "polyline" && window.model.json() == before;
-            v->grab().save(QDir::currentPath() + "/sketch-elements-move-test.png");
+            v->grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("sketch-elements-move-test.png"));
             v->onAcceptCommand();
         });
         window.findChild<QAction *>("transform")->trigger();
@@ -575,7 +604,7 @@ class UiTests : public QObject {
         bool recognized = false;
         QTimer::singleShot(180, [&] {
             recognized = v->handleActive && v->handleDistance == 0;
-            v->grab().save(QDir::currentPath() + "/contour-extrude-test.png");
+            v->grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("contour-extrude-test.png"));
             if (v->onCancelCommand) v->onCancelCommand();
         });
         window.findChild<QAction *>("extrude")->trigger();
@@ -601,7 +630,7 @@ class UiTests : public QObject {
             v->onRotateAngle(90);
             QTest::qWait(100);
             moved = v->model->bodies().size() == 2 && window.model.json() == bodiesBefore;
-            v->grab().save(QDir::currentPath() + "/batch-move-test.png");
+            v->grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("batch-move-test.png"));
             v->onAcceptCommand();
         });
         window.findChild<QAction *>("transform")->trigger();
@@ -650,7 +679,7 @@ class UiTests : public QObject {
             QMouseEvent move(QEvent::MouseMove, end, v.mapToGlobal(end), Qt::NoButton, Qt::LeftButton, modifiers);
             QApplication::sendEvent(&v, &move);
             QVERIFY(v.areaDragging);
-            v.grab().save(QDir::currentPath() + "/area-selection-test.png");
+            v.grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("area-selection-test.png"));
             QTest::mouseRelease(&v, Qt::LeftButton, modifiers, end);
         };
         drag(area, Qt::NoModifier);
@@ -685,7 +714,7 @@ class UiTests : public QObject {
         QCOMPARE(v.selectedDetails[0].kind, QString("edge"));
         QCOMPARE(v.selectedDetails[1].kind, QString("edge"));
         QCOMPARE(v.selectedDetails[2].kind, QString("vertex"));
-        v.grab().save(QDir::currentPath() + "/shift-selection-test.png");
+        v.grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("shift-selection-test.png"));
         click(40, 15, Qt::ShiftModifier);
         QCOMPARE(v.selectedDetails.size(), 2);
         QTest::mouseClick(&v, Qt::LeftButton, Qt::ShiftModifier, QPoint(10, 400));
@@ -760,10 +789,10 @@ class UiTests : public QObject {
             QTest::mouseClick(&v, Qt::LeftButton, Qt::NoModifier, pixel(20, 0).toPoint());
             QCOMPARE(v.selectedDetail.kind, QString("edge"));
             QVERIFY(v.hasSubselection());
-            v.grab().save(QDir::currentPath() + "/selected-edge-test.png");
+            v.grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("selected-edge-test.png"));
             QTest::mouseClick(&v, Qt::LeftButton, Qt::NoModifier, pixel(0, 0).toPoint());
             QCOMPARE(v.selectedDetail.kind, QString("vertex"));
-            v.grab().save(QDir::currentPath() + "/selected-vertex-test.png");
+            v.grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("selected-vertex-test.png"));
             v.selectionFilter = "edge";
             QVERIFY(v.pickDetail(pixel(20, 15)).feature.isEmpty());
             v.selectionFilter = "object";
@@ -875,7 +904,7 @@ class UiTests : public QObject {
                         QTest::qWait(10);
                     }
                     previewChanged = (v->mesh.front().a - before).length() > 1;
-                    window.grab().save(QDir::currentPath() + "/rotation-ring-test.png");
+                    window.grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("rotation-ring-test.png"));
                     QTest::mouseRelease(v, Qt::LeftButton, Qt::NoModifier,
                                         (center + QPointF(0, -85)).toPoint());
                     QTest::keyClick(v, Qt::Key_Return);
@@ -981,7 +1010,7 @@ class UiTests : public QObject {
                         lastPoint = v->mesh.front().a;
                     }
                     QCOMPARE(window.model.json(), original);
-                    window.grab().save(QDir::currentPath() + "/free-move-test.png");
+                    window.grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("free-move-test.png"));
                     QTest::mouseRelease(v, Qt::LeftButton, Qt::NoModifier, start + QPoint(70, -35));
                     QTest::keyClick(v, center ? Qt::Key_Return : Qt::Key_Escape);
                 });
@@ -1013,7 +1042,7 @@ class UiTests : public QObject {
         QVERIFY(QTest::qWaitForWindowExposed(&window));
         auto *v = window.findChild<Viewport *>();
         QCOMPARE(v->mesh.size(), size_t(12));
-        window.grab().save(QDir::currentPath() + "/imported-stl-test.png");
+        window.grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("imported-stl-test.png"));
         QVERIFY(v->span > 1);
         QCOMPARE(window.model.get(id).type, QString("mesh"));
         window.openPath(dir.filePath("box.stl"));
@@ -1046,7 +1075,7 @@ class UiTests : public QObject {
                                  Qt::NoButton, Qt::NoButton, Qt::NoModifier);
                 QApplication::sendEvent(&v, &move);
                 if (sides == 6 && QString(plane) == "XY")
-                    v.grab().save(QDir::currentPath() + "/polygon-preview-test.png");
+                    v.grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("polygon-preview-test.png"));
                 QTest::mouseClick(&v, Qt::LeftButton, Qt::NoModifier, vertex);
                 QCOMPARE(model.features.size(), size_t(1));
                 auto p = model.get(id).p;
@@ -1113,7 +1142,7 @@ class UiTests : public QObject {
         QVERIFY(editor);
         QVERIFY(editor->hasFocus());
         QTest::keyClicks(editor, "55,5");
-        window.grab().save(QDir::currentPath() + "/inline-dimension-test.png");
+        window.grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("inline-dimension-test.png"));
         QTest::keyClick(editor, Qt::Key_Return);
         QCOMPARE(window.model.get(id).p["w"].toDouble(), 55.5);
         QCOMPARE(window.model.features.size(), size_t(1));
@@ -1249,7 +1278,7 @@ class UiTests : public QObject {
             QCOMPARE(created["h"].toDouble(), 30.);
             v.selected = rectangle;
             v.cursor = v.sketchPoint(screen({58, 12.75}) + QPointF(0, 3));
-            v.grab().save(QDir::currentPath() + "/smart-snap-test.png");
+            v.grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("smart-snap-test.png"));
             v.onProfile = {};
         }
     }
@@ -1276,7 +1305,7 @@ class UiTests : public QObject {
             QVERIFY(xy.y() > xz.y());
             QVERIFY(xy.y() > yz.y());
             QVERIFY(yz.x() < xz.x());
-            v.grab().save(QDir::currentPath() + "/plane-layout-test.png");
+            v.grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("plane-layout-test.png"));
             const auto face = v.planeRegions[i + 3];
             auto position = face.second.boundingRect().center();
             // Labels stay selectable even where translucent planes overlap.
@@ -1378,7 +1407,7 @@ class UiTests : public QObject {
             const auto before = v->cameraDirection();
             QTest::mouseMove(v, pixel);
             QTest::qWait(30);
-            viewport.grab().save(QDir::currentPath() + "/cube-hover-test.png");
+            viewport.grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("cube-hover-test.png"));
             QTest::mouseClick(v, Qt::LeftButton, Qt::NoModifier, pixel);
             QVERIFY(v->isViewAnimating());
             QVERIFY((v->cameraDirection() - before).length() < .05);
@@ -1395,7 +1424,7 @@ class UiTests : public QObject {
         QVERIFY(v->isViewAnimating());
         QTRY_VERIFY(!v->isViewAnimating());
         QVERIFY((v->cameraDirection() - homeDirection).length() < .001);
-        viewport.grab().save(QDir::currentPath() + "/cube-home-icon.png");
+        viewport.grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("cube-home-icon.png"));
         v->view("front", true);
         QTest::qWait(60);
         v->view("right", true);
@@ -1436,7 +1465,7 @@ class UiTests : public QObject {
         QVERIFY(v->sketchMode);
         QCOMPARE(accidentalProfiles, 0);
         QCOMPARE(model.json(), original);
-        viewport.grab().save(QDir::currentPath() + "/cube-drag-test.png");
+        viewport.grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("cube-drag-test.png"));
         viewport.close();
     }
     void sketchToSolid() {
@@ -1448,7 +1477,7 @@ class UiTests : public QObject {
         window.findChild<QAction *>("sketch")->trigger();
         QVERIFY(v->choosingPlane);
         QTest::qWait(100);
-        window.grab().save(QDir::currentPath() + "/plane-selection-test.png");
+        window.grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("plane-selection-test.png"));
         QTest::mouseClick(v, Qt::LeftButton, Qt::NoModifier,
                           v->planeRegions[3].second.boundingRect().center().toPoint());
         QVERIFY(v->sketchMode);
@@ -1462,7 +1491,7 @@ class UiTests : public QObject {
         QVERIFY(window.model.features.front().p["w"].toDouble() > 0);
         auto image = v->grab().toImage();
         QVERIFY(!image.isNull());
-        image.save(QDir::currentPath() + "/sketch-test.png");
+        image.save(QDir(QCoreApplication::applicationDirPath()).filePath("sketch-test.png"));
         window.findChild<QAction *>("finish")->trigger();
         QVERIFY(!v->sketchMode);
         bool dragged = false;
@@ -1501,11 +1530,11 @@ class UiTests : public QObject {
                     lastExtent = extent;
                 }
             }
-            window.grab().save(QDir::currentPath() + "/extrude-live-drag.png");
+            window.grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("extrude-live-drag.png"));
             QTest::mouseRelease(v, Qt::LeftButton, Qt::NoModifier, end);
             dragged = v->handleDistance > before + 5;
             QTest::qWait(80);
-            window.grab().save(QDir::currentPath() + "/extrude-panel-test.png");
+            window.grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("extrude-panel-test.png"));
             QTest::keyClick(v, Qt::Key_Return);
         });
         window.findChild<QAction *>("extrude")->trigger();
@@ -1543,7 +1572,7 @@ class UiTests : public QObject {
             QTest::mouseRelease(v, Qt::LeftButton, Qt::NoModifier, end);
             QTest::qWait(80);
             moved = v->moveDistances.x() > 10;
-            window.grab().save(QDir::currentPath() + "/move-panel-test.png");
+            window.grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("move-panel-test.png"));
             QTest::keyClick(v, Qt::Key_Return);
         });
         window.findChild<QAction *>("transform")->trigger();

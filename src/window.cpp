@@ -746,6 +746,31 @@ Window::Window(QString recoveryDirectory, bool promptRecovery) {
         if(!ok) return;
         model.removeSketchConstraint(selected,system.constraints[choices.indexOf(choice)].id); refresh();
     });
+    for(bool vertical:{false,true})command(vertical?"constraint_distance_y":"constraint_distance_x",
+        vertical?"Cota vertical":"Cota horizontal","",[this,vertical]{
+        const auto items=canvas->selectedDetails;
+        if(items.empty())throw std::runtime_error("Selecione uma linha ou dois vértices do mesmo sketch.");
+        const auto owner=items.front().feature;const auto system=model.sketchSystem(owner);
+        QString first,second;
+        if(items.size()==1 && items.front().kind=="edge") {
+            const auto id=model.sketchEntityId(owner,"edge",items.front().index);
+            for(const auto &line:system.lines)if(line.id==id){first=line.end;second=line.start;break;}
+        } else if(items.size()==2 && items[0].feature==items[1].feature && items[0].kind=="vertex" && items[1].kind=="vertex") {
+            first=model.sketchEntityId(owner,"vertex",items[0].index);second=model.sketchEntityId(owner,"vertex",items[1].index);
+        }
+        if(first.isEmpty() || second.isEmpty())throw std::runtime_error("Selecione uma linha ou dois vértices do mesmo sketch.");
+        QPointF a,b;for(const auto &point:system.points){if(point.id==first)a=point.position;if(point.id==second)b=point.position;}
+        const double distance=vertical?a.y()-b.y():a.x()-b.x();bool ok=false;
+        const auto formula=QInputDialog::getText(this,vertical?"Cota vertical":"Cota horizontal",
+            "Distância com sinal (primeiro ponto menos segundo). Use mm ou uma fórmula do projeto.",QLineEdit::Normal,
+            QString::number(distance,'g',12)+" mm",&ok);
+        if(!ok)return;
+        const auto value=parameters::evaluate(formula,parameters::resolve(model.parameters()));
+        if(value.length!=1 || value.angle!=0)throw std::runtime_error("A cota deve resultar em comprimento.");
+        Model work=model;const auto constraint=work.constrainSketch(owner,vertical?sketch::Relation::DistanceY:sketch::Relation::DistanceX,
+            first,second,vertical?QPointF(0,value.value):QPointF(value.value,0));
+        work.setExpression(owner,"constraint:"+constraint,formula);model.commit(work.json());selected=owner;refresh();
+    });
     command("exact", "Create by dimensions…", "", [this] { exactSketch(); });
     command("extrude", "Extrude", "E", [this] { extrude(); });
     command("revolve", "Revolve", "", [this] { extrude(true); });
@@ -829,15 +854,21 @@ Window::Window(QString recoveryDirectory, bool promptRecovery) {
         const auto id=selected;
         QDialog dialog(this);dialog.setObjectName("expressionEditor");dialog.setWindowTitle("Expressão da medida");
         auto *layout=new QVBoxLayout(&dialog);auto *field=new QComboBox(&dialog);field->setObjectName("expressionField");
-        field->addItems(Model::expressionFields(model.get(id).type,model.get(id).p));layout->addWidget(field);
+        for(const auto &key:Model::expressionFields(model.get(id).type,model.get(id).p)) {
+            QString label=key;
+            if(key.startsWith("constraint:"))for(const auto &constraint:model.sketchSystem(id).constraints)if(key=="constraint:"+constraint.id)
+                label=QString("Cota %1: %2 − %3 [%4]").arg(constraint.relation==sketch::Relation::DistanceX?"X":"Y",constraint.first,constraint.second,constraint.id.left(8));
+            field->addItem(label,key);
+        }
+        layout->addWidget(field);
         auto *input=new QLineEdit(&dialog);input->setObjectName("expressionInput");layout->addWidget(input);
-        auto load=[&]{input->setText(model.get(id).p.value("expressions").toObject().value(field->currentText()).toString());};
+        auto load=[&]{input->setText(model.get(id).p.value("expressions").toObject().value(field->currentData().toString()).toString());};
         connect(field,&QComboBox::currentTextChanged,&dialog,load);load();
         layout->addWidget(new QLabel("Comprimentos em mm/cm/m/in; ângulos em deg/rad.\nEx.: largura / 2 ou 90 deg.\nVazio desvincula e mantém a medida atual.",&dialog));
         auto *buttons=new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel,&dialog);layout->addWidget(buttons);
         connect(buttons,&QDialogButtonBox::rejected,&dialog,&QDialog::reject);
         connect(buttons,&QDialogButtonBox::accepted,&dialog,[&]{
-            try {model.setExpression(id,field->currentText(),input->text());dialog.accept();}
+            try {model.setExpression(id,field->currentData().toString(),input->text());dialog.accept();}
             catch(const std::exception &e) {QMessageBox::warning(&dialog,"Expressão não aplicada",e.what());}
         });
         if(dialog.exec()==QDialog::Accepted)refresh();
@@ -1152,6 +1183,7 @@ Window::Window(QString recoveryDirectory, bool promptRecovery) {
         }
     };
     canvas->onEditSketch = [this](QString id) {
+        if(model.get(id).inactive)return;
         if (activeCommand)
             return;
         const auto &p = model.get(id).p;
@@ -1163,6 +1195,15 @@ Window::Window(QString recoveryDirectory, bool promptRecovery) {
         canvas->view("top");
         select(id);
         buildRibbon();
+    };
+    canvas->onDimensionExpression=[this](QString id,QString field,QString formula)->QString {
+        if(activeCommand)return "Conclua ou cancele a operação atual.";
+        try {
+            bool numeric=false;formula.trimmed().replace(',','.').toDouble(&numeric);
+            if(numeric)formula+=" mm";
+            model.setExpression(id,field,formula);selected=id;refresh();return {};
+        } catch(const std::exception &error){return QString::fromUtf8(error.what());}
+          catch(const Standard_Failure &error){return QString::fromUtf8(error.GetMessageString());}
     };
     canvas->onPlaneChosen = [this](QString name, double offset) {
         canvas->plane = name;
@@ -1413,7 +1454,7 @@ void Window::buildRibbon() {
         group("MODIFY", {"dimension"}, {"dimension"}, {"Trim", "Extend", "Offset", "Mirror"},
               {"trim", "offset"});
         group("CONSTRAINTS", {"constraint_horizontal","constraint_vertical","constraint_fixed"},
-              {"constraint_horizontal","constraint_vertical","constraint_fixed","constraint_remove"},
+              {"constraint_horizontal","constraint_vertical","constraint_fixed","constraint_distance_x","constraint_distance_y","constraint_remove"},
               {"Coincident", "Parallel", "Perpendicular", "Tangent", "Equal"});
         row->addStretch();
         auto *finish = new QToolButton;

@@ -1,5 +1,23 @@
 # Execução do backlog
 
+## 21/09/2026 — cotas X/Y com fórmulas no canvas
+
+PAR-04/SK-03: cotas de distância X/Y do solver aceitam parâmetros nomeados.
+No menu Constraints, uma linha ou dois vértices geram uma cota com fórmula em
+uma transação. No canvas, clicar no valor permite editar número ou expressão;
+falha mantém o editor aberto com erro, Esc cancela. Remover uma cota também
+remove seu vínculo, preservando os parâmetros do projeto e o undo.
+
+Core expressionsDriveConstrainedDimensions cobre reconstrução de sólido,
+graus de liberdade, unidades incompatíveis, colapso do perfil, desvinculação,
+remoção/undo e persistência. Passou junto dos testes de sketches restritos.
+UI namedSketchDimensionFromSelection, inlineDimensions, namedParametersEditing
+e sketchConstraintsSelectionAndPersistence passaram, incluindo cancelamento,
+edição de fórmula diretamente no canvas e rejeição de zero sem alterar projeto.
+
+Limite explícito: cotas angulares/radiais e entidades curvas no solver continuam
+pendentes; não é fechamento integral de SK-03. Sem novo pacote de aplicativo.
+
 ## 21/09/2026 — seleção dinâmica de filete/chanfro
 
 GEO-03/04 e PAR-06: painel permite selecionar arestas no corpo original, com

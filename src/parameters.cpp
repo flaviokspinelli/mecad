@@ -16,7 +16,13 @@ QStringList Model::expressionFields(const QString &type,const QJsonObject &p) {
         if(profile=="rectangle")return {"x","y","w","h","offset"};
         if(profile=="circle")return {"x","y","r","offset"};
         if(profile=="arc")return {"x1","y1","xm","ym","x2","y2","offset"};
-        if(profile=="polyline")return {"offset"};
+        if(profile=="polyline") {
+            QStringList fields{"offset"};
+            if(p.contains("constraintSystem"))for(const auto &constraint:sketch::System::fromJson(p["constraintSystem"].toObject()).constraints)
+                if(constraint.relation==sketch::Relation::DistanceX || constraint.relation==sketch::Relation::DistanceY)
+                    fields.append("constraint:"+constraint.id);
+            return fields;
+        }
     }
     return {};
 }

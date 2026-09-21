@@ -493,7 +493,17 @@ void Model::rebuildGeometry() {
                 const bool angular=it.key()=="angle";
                 require(quantity.length==(angular?0:1) && quantity.angle==(angular?1:0),
                         "A expressão de "+it.key()+(angular?" deve resultar em ângulo (use deg ou rad).":" deve resultar em comprimento (use mm, cm, m ou in)."));
-                f.p[it.key()]=angular?quantity.value*180/M_PI:quantity.value;
+                if(it.key().startsWith("constraint:")) {
+                    auto system=sketch::System::fromJson(f.p["constraintSystem"].toObject());
+                    const auto id=it.key().mid(11);bool found=false;
+                    for(auto &constraint:system.constraints)if(constraint.id==id) {
+                        require(constraint.relation==sketch::Relation::DistanceX || constraint.relation==sketch::Relation::DistanceY,
+                                "A expressão exige uma cota de distância X ou Y.");
+                        constraint.value=constraint.relation==sketch::Relation::DistanceX?QPointF(quantity.value,0):QPointF(0,quantity.value);
+                        found=true;break;
+                    }
+                    require(found,"Cota vinculada não encontrada.");f.p["constraintSystem"]=system.json();
+                } else f.p[it.key()]=angular?quantity.value*180/M_PI:quantity.value;
             }
             if (f.type == "sketch" && f.p.contains("constraintSystem")) resolveSketch(f);
             if (f.type == "sketch" && !f.p.value("support").toString().isEmpty()) {

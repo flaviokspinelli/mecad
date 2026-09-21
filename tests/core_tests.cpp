@@ -17,6 +17,25 @@
 class CoreTests : public QObject {
     Q_OBJECT
   private slots:
+    void expressionsDriveConstrainedDimensions() {
+        Model m;m.setParameters({{"width","20 mm"}});
+        auto sk=m.add("sketch",{{"profile","rectangle"},{"w",20},{"h",10}});
+        m.constrainSketch(sk,sketch::Relation::Fixed,"p0",{},{0,0});
+        const auto width=m.constrainSketch(sk,sketch::Relation::DistanceX,"p1","p0",{20,0});
+        m.constrainSketch(sk,sketch::Relation::DistanceY,"p3","p0",{0,10});
+        const auto field="constraint:"+width;
+        m.setExpression(sk,field,"width");auto solid=m.add("extrude",{{"source",sk},{"d",5}});
+        QCOMPARE(m.sketchSystem(sk).solve().degreesOfFreedom,0);
+        m.setParameters({{"width","30 mm"}});QVERIFY(std::abs(Model::volume(m.get(solid).shape)-1500)<1e-7);
+        const auto good=m.json();QVERIFY_THROWS_EXCEPTION(std::exception,m.setParameters({{"width","0 mm"}}));QCOMPARE(m.json(),good);
+        QVERIFY_THROWS_EXCEPTION(std::exception,m.setExpression(sk,field,"90 deg"));QCOMPARE(m.json(),good);
+        QVERIFY_THROWS_EXCEPTION(std::exception,m.setExpression(sk,"constraint:missing","10 mm"));QCOMPARE(m.json(),good);
+        QTemporaryDir dir;m.save(dir.filePath("dimensions.mcad"));Model loaded;loaded.load(m.filePath);QCOMPARE(loaded.json(),good);
+        loaded.removeSketchConstraint(sk,width);QVERIFY(!loaded.get(sk).p["expressions"].toObject().contains(field));
+        QVERIFY(loaded.undo());QCOMPARE(loaded.json(),good);
+        loaded.setExpression(sk,field,{});loaded.setParameters({{"width","40 mm"}});
+        QVERIFY(std::abs(Model::volume(loaded.get(solid).shape)-1500)<1e-7);
+    }
     void suppressionPreservesHistoryAndDependencies() {
         Model m;const auto base=m.add("box",{{"w",20},{"h",10},{"d",5}});
         const auto moved=m.add("transform",{{"source",base},{"x",4}});

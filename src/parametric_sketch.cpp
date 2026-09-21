@@ -125,5 +125,13 @@ void Model::removeSketchConstraint(const QString &id,const QString &constraint) 
     system.constraints.erase(std::remove_if(system.constraints.begin(),system.constraints.end(),
         [&](const auto &c){return c.id==constraint;}),system.constraints.end());
     requireSketch(old!=system.constraints.size(), "Restrição inexistente.");
-    const auto &f=get(id); edit(id,constrainedParameters(f,system),f.name);
+    const auto &f=get(id);auto p=constrainedParameters(f,system);
+    auto bindings=p["expressions"].toObject();bindings.remove("constraint:"+constraint);
+    if(bindings.empty())p.remove("expressions");else p["expressions"]=bindings;
+    auto document=json();auto entries=document["features"].toArray();
+    for(int i=0;i<entries.size();++i) {
+        auto entry=entries[i].toObject();if(entry["id"]!=id)continue;
+        entry["parameters"]=p;entries[i]=entry;break;
+    }
+    document["features"]=entries;document["version"]=std::max(document["version"].toInt(),2);commit(document);
 }

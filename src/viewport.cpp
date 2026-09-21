@@ -552,6 +552,20 @@ void Viewport::paintOverlay(QPainter &p) {
                 double r = params["r"].toDouble();
                 dimension(point(x - r, y), point(x + r, y), {0, 0}, "Ø " + QString::number(r * 2, 'f', 2),
                           "r", 2);
+            } else if(params.contains("constraintSystem")) {
+                const auto system=sketch::System::fromJson(params["constraintSystem"].toObject());
+                QMap<QString,QPointF> points;for(const auto &entry:system.points)points[entry.id]=entry.position;
+                int horizontal=0,vertical=0;
+                for(const auto &constraint:system.constraints) {
+                    const auto a=points.value(constraint.first),b=points.value(constraint.second);
+                    const auto key="constraint:"+constraint.id;
+                    if(constraint.relation==sketch::Relation::DistanceX)
+                        dimension(point(a.x(),b.y()),point(b.x(),b.y()),{0,26.+28.*horizontal++},
+                            "X "+QString::number(constraint.value.x(),'f',2),key);
+                    else if(constraint.relation==sketch::Relation::DistanceY)
+                        dimension(point(b.x(),a.y()),point(b.x(),b.y()),{40.+48.*vertical++,0},
+                            "Y "+QString::number(constraint.value.y(),'f',2),key);
+                }
             }
         }
     }
@@ -876,8 +890,14 @@ void Viewport::editDimension(const DimensionTarget &target) {
     auto *editor = new QLineEdit(this);
     dimensionEditor = editor;
     editor->setObjectName("inlineDimension");
-    editor->setText(
-        QString::number(model->get(selected).p[target.key].toDouble() * target.multiplier, 'g', 12));
+    if(target.key.startsWith("constraint:")) {
+        const auto &parameters=model->get(selected).p;
+        QString expression=parameters.value("expressions").toObject().value(target.key).toString();
+        if(expression.isEmpty())for(const auto &constraint:sketch::System::fromJson(parameters["constraintSystem"].toObject()).constraints)
+            if(target.key=="constraint:"+constraint.id)
+                expression=QString::number(constraint.relation==sketch::Relation::DistanceX?constraint.value.x():constraint.value.y(),'g',12)+" mm";
+        editor->setText(expression);
+    } else editor->setText(QString::number(model->get(selected).p[target.key].toDouble() * target.multiplier, 'g', 12));
     editor->setAlignment(Qt::AlignCenter);
     editor->setToolTip("Medida em mm · Enter confirma · Esc cancela");
     editor->setStyleSheet("QLineEdit { background:#263b4b; color:#f4ce89; border:1px solid #72cffa; "
@@ -905,7 +925,9 @@ bool Viewport::eventFilter(QObject *object, QEvent *event) {
                 double value =
                     dimensionEditor->text().trimmed().replace(',', '.').toDouble(&ok) / dimensionMultiplier;
                 QString error;
-                if (!ok || !std::isfinite(value) || value <= 1e-5 || value > 1e6)
+                if(dimensionKey.startsWith("constraint:") && onDimensionExpression)
+                    error=onDimensionExpression(dimensionFeature,dimensionKey,dimensionEditor->text());
+                else if (!ok || !std::isfinite(value) || value <= 1e-5 || value > 1e6)
                     error = "Digite uma medida positiva válida em mm.";
                 else if (onDimensionEdit)
                     error = onDimensionEdit(dimensionFeature, dimensionKey, value);

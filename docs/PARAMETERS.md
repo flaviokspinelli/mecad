@@ -20,7 +20,7 @@ o tooltip identifica a fórmula. Não é necessário editar o arquivo manualment
 Campos atuais: dimensões e posições de primitivas, extrusão d, filete r,
 chanfro d/d2/angle, revolução angle/axis, deslocamentos/pivô/ângulo de movimento
 e cópia, medidas do furo e coordenadas/medidas de sketches retangulares,
-circulares e de arco. Polilinhas aceitam offset; suas cotas restritas ainda não.
+circulares e de arco. Polilinhas aceitam offset e fórmulas nas cotas X/Y do solver.
 Campos angle exigem ângulo explícito; os demais exigem comprimento. Uma fórmula negativa só é aceita quando a
 operação geométrica permite, por exemplo extrusão em sentido contrário.
 
@@ -51,9 +51,22 @@ suprimidas; os demais continuam v1/v2.
 Versões antigas recusam v3 em vez de descartar fórmulas silenciosamente.
 Nenhum novo pacote do aplicativo é criado para mudar a versão do documento.
 
+## Cotas de sketch
+
+Em Sketch → Constraints, selecione uma linha ou dois vértices com Shift e use
+Cota horizontal / Cota vertical. A distância é assinada (primeiro ponto menos
+segundo); em uma linha, fim menos início. Informe `20 mm`, `2 cm` ou um parâmetro
+como `largura / 2`. A cota e a fórmula entram como uma única etapa de undo.
+
+As cotas aparecem no canvas do sketch e podem ser editadas clicando no valor.
+Esse editor aceita a fórmula completa e também números simples em mm, inclusive
+vírgula decimal. Enter aplica, Esc cancela; falha conserva o documento e mostra
+o erro no editor. Remover uma restrição remove também seu vínculo, sem apagar
+os parâmetros nomeados do projeto. Desvincular a fórmula mantém a medida atual.
+
 ## Limitações e próximos aceites
 
-Ainda não cobre cotas/restrições de sketches, referências entre medidas de
+Ainda não cobre cotas angulares/radiais no solver, referências entre medidas de
 recursos, renomeação com atualização automática de fórmulas,
 funções matemáticas, autocomplete ou gráfico visual de dependências. O editor de
 extrusão não aceita sobrescrever numericamente uma distância vinculada: edite ou
