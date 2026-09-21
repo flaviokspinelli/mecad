@@ -2,16 +2,19 @@
 
 ## 21/09/2026 — mini-MVP congelado validado
 
-O escopo ativo foi reduzido e congelado em dois itens: confiabilidade essencial
-(comandos seguros, undo/redo, recuperação, integridade `.mcad` e erros claros) e
-base do produto (arquitetura, preferências, documentação mínima e testes locais).
-Nenhum recurso novo entra sem autorização explícita.
+O escopo ativo foi reduzido e congelado em três itens: confiabilidade essencial
+(comandos seguros, undo/redo, recuperação, integridade `.mcad` e erros claros),
+base do produto (arquitetura, preferências, documentação mínima e testes locais)
+e uma única frente de interface que reúne seleção, área, gestos, manipuladores,
+edição em comando, descoberta e ergonomia básica. Nenhum recurso novo entra sem
+autorização explícita.
 
 Validação direcionada concluída: `core_tests` 39/39 e `ui_tests` 17/17. Os
 avisos de OpenGL ocorreram apenas no backend offscreen dos testes e não
 produziram falhas. CI completo, empacotamento reproduzível, logs avançados e
-documentação extensa ficaram fora do mini-MVP. Os 38 itens anteriores e os
-demais itens do backlog ficam congelados.
+documentação extensa ficaram fora do mini-MVP. A frente MVP-INTERFACE ainda não
+está declarada concluída. Os 38 itens anteriores e os demais itens do backlog
+ficam congelados.
 
 ## 21/09/2026 — guia interno atualizado e atalhos reais
 
