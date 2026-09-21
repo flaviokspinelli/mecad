@@ -20,4 +20,3 @@ destination="dist/MecaCAD-0.2.10.app"
 test ! -e "$destination" || { echo "Package already exists: $destination"; exit 1; }
 mkdir -p dist
 ditto "$bundle" "$destination"
-ditto -c -k --sequesterRsrc --keepParent "$destination" dist/MecaCAD-0.2.10-macOS-arm64.zip

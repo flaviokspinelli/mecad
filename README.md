@@ -105,7 +105,7 @@ ctest --test-dir build --output-on-failure
 open build/MecaCAD.app
 ```
 
-Para gerar o pacote com bibliotecas e ZIP: `sh scripts/package-macos.sh`.
+Para gerar apenas o aplicativo `.app` com suas bibliotecas, sem ZIP: `sh scripts/package-macos.sh`.
 
 O teste de interface requer uma sessão gráfica. A versão Windows ainda não foi
 compilada nem validada; o CMake usa dependências Qt/Open CASCADE disponíveis em
