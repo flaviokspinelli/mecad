@@ -6,7 +6,7 @@ Progresso após essa versão: [registro de execução](docs/PROGRESSO.md).
 UX-05: [pivô de rotação configurável e alças XY/XZ/YZ](docs/ROTATION-PIVOT.md)
 implementados e testados em desenvolvimento, incluindo escolha de pivô em
 vértices STL visíveis; aceite integral ainda pendente.
-Pedido vigente: **fechar um mini-MVP interno de 3 itens**, sem ampliar o escopo.
+Pedido vigente: **fechar um mini-MVP interno de 4 itens**, sem ampliar o escopo.
 Este mini-MVP substitui a entrega anterior dos 8 itens e todas as ampliações
 anteriores.
 A lista fica congelada; nenhum novo recurso entra automaticamente.
@@ -20,9 +20,11 @@ Lista congelada do mini-MVP:
 - MVP-INTERFACE — seleção consistente de subelementos e corpos, seleção por
   área, convenções de teclado, mover/girar, edição nos comandos, descoberta de
   comandos e ergonomia básica.
+- MVP-SKETCH — entidades persistentes, solver integrado, cotas gerais, graus de
+  liberdade/conflitos, arraste com restrições e snapping/inferências.
 
-Status: **2/3 aceites verificados em desenvolvimento**; MVP-INTERFACE permanece
-em execução, sem ampliar o escopo. Evidências: `core_tests`
+Status: **2/4 aceites verificados em desenvolvimento**; MVP-INTERFACE e
+MVP-SKETCH permanecem em execução, sem ampliar o escopo. Evidências: `core_tests`
 (39/39) e o conjunto direcionado de `ui_tests` (17/17). Não fazem parte deste
 aceite CI completo, empacotamento reproduzível, logs avançados ou documentação
 extensa. A validação final em uso real continua sendo responsabilidade do
