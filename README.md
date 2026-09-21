@@ -8,7 +8,7 @@ desenvolvida e testada em macOS 14, Apple Silicon.
 
 ## Abrir
 
-Abra `dist/MecaCAD-0.2.13.app`. O pacote local reúne o executável e suas bibliotecas.
+Abra `dist/MecaCAD-0.2.14.app`. O pacote local reúne o executável e suas bibliotecas.
 O código-fonte não depende da pasta `dist`, que é gerada e ignorada pelo Git.
 
 Para começar: **File → Open example — mounting bracket**. Também existem os
@@ -17,6 +17,12 @@ arquivos `examples/Mounting-bracket.mcad`, `.step`, `.stl` e `Base-profile.dxf`.
 Leia o [guia de uso](docs/GUIA.md) e o [estado da entrega](docs/ENTREGA-0.2.md).
 
 ## Novidades de interação
+
+Na 0.2.14, Move / Copy permite arrastar o objeto selecionado ou o centro das
+hastes no plano da tela; as setas restringem a um eixo X, Y ou Z. A prévia acompanha
+o arraste contínuo. Enter confirma uma operação e Esc descarta a prévia.
+Mover/copiar também funciona em malhas STL; elas continuam sendo malhas, sem
+conversão em sólido CAD. A velocidade da prévia depende da complexidade do modelo.
 
 Na 0.2.13, File → Import STEP / STL e Insert aceitam STL binário e ASCII.
 File → Open também abre STL em um novo documento. A malha é incorporada ao `.mcad`,

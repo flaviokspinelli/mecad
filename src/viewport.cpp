@@ -313,6 +313,7 @@ void Viewport::viewDirection(QVector3D direction, bool animated) {
     cameraAnimation.start();
 }
 void Viewport::setTool(QString name) {
+    draggingMoveFree = draggingHandle = false;
     magnetLabel.clear();
     magnetGuides.clear();
     sketchPressCandidate = sketchDragging = false;
@@ -691,6 +692,9 @@ void Viewport::paintOverlay(QPainter &p) {
             p.drawEllipse(tip, 5, 5);
             p.drawText(tip + QPointF(9, -9), QString("XYZ")[axis]);
         }
+        p.setPen(QPen(QColor("#bceaff"), 2));
+        p.setBrush(draggingMoveFree ? QColor("#68ccef") : QColor("#314e63"));
+        p.drawRoundedRect(QRectF(base - QPointF(7, 7), QSizeF(14, 14)), 3, 3);
     }
     if (handleActive) {
         auto base = project(handleOrigin), tip = project(handleOrigin + handleAxis * handleDistance);
@@ -952,7 +956,10 @@ void Viewport::mousePressEvent(QMouseEvent *e) {
         sketchPressPoint = sketchPoint(pressed);
     draggingHandle = handleActive && e->button() == Qt::LeftButton &&
                      QLineF(e->position(), project(handleOrigin + handleAxis * handleDistance)).length() < 18;
-    if (moveHandleActive && e->button() == Qt::LeftButton) {
+    draggingMoveFree = false;
+    if (moveHandleActive && e->button() == Qt::LeftButton && navigationMode.isEmpty() &&
+        !e->modifiers().testFlag(Qt::AltModifier)) {
+        bool overCenter = QLineF(e->position(), project(handleOrigin + moveDistances)).length() < 12;
         double nearest = 18;
         for (int axis = 0; axis < 3; ++axis) {
             double distance = QLineF(e->position(), project(moveHandleTip(axis))).length();
@@ -964,6 +971,13 @@ void Viewport::mousePressEvent(QMouseEvent *e) {
                 handleAxis[axis] = 1;
                 handleDistance = moveDistances[axis];
             }
+        }
+        if (overCenter || (!draggingHandle && !selected.isEmpty() && pick(e->position()) == selected)) {
+            draggingHandle = false;
+            draggingMoveFree = true;
+            moveStartDistances = moveDistances;
+            moveDragInverse = matrix().inverted();
+            setCursor(Qt::ClosedHandCursor);
         }
     }
 }
@@ -1017,6 +1031,21 @@ void Viewport::mouseMoveEvent(QMouseEvent *e) {
         magnetLabel.clear();
         magnetGuides.clear();
     }
+    if (draggingMoveFree) {
+        auto movement = e->position() - pressed;
+        auto deltaWorld =
+            moveDragInverse.map(QVector3D(2 * movement.x() / width(), -2 * movement.y() / height(), 0)) -
+            moveDragInverse.map(QVector3D());
+        moveDistances = moveStartDistances + deltaWorld;
+        if (snap)
+            for (int axis = 0; axis < 3; ++axis)
+                moveDistances[axis] = std::round(moveDistances[axis] * 10) / 10;
+        if (onMoveTranslation)
+            onMoveTranslation(moveDistances);
+        setCursor(Qt::ClosedHandCursor);
+        update();
+        return;
+    }
     if (draggingHandle) {
         auto a = project(handleOrigin), b = project(handleOrigin + handleAxis);
         auto dir = b - a;
@@ -1066,6 +1095,12 @@ void Viewport::mouseMoveEvent(QMouseEvent *e) {
     update();
 }
 void Viewport::mouseReleaseEvent(QMouseEvent *e) {
+    if (draggingMoveFree) {
+        draggingMoveFree = false;
+        setCursor(Qt::OpenHandCursor);
+        update();
+        return;
+    }
     if (dimensionPressed) {
         dimensionPressed = false;
         if (QLineF(pressed, e->position()).length() <= 4)
@@ -1236,6 +1271,7 @@ void Viewport::keyPressEvent(QKeyEvent *e) {
         return;
     }
     if (e->key() == Qt::Key_Escape) {
+        draggingMoveFree = draggingHandle = false;
         if (cubePressed) {
             cubePressed = false;
             cubeDragging = true;
@@ -1247,6 +1283,7 @@ void Viewport::keyPressEvent(QKeyEvent *e) {
             onCancelCommand();
         setTool({});
     } else if (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter) {
+        draggingMoveFree = draggingHandle = false;
         if (onAcceptCommand) {
             onAcceptCommand();
             return;

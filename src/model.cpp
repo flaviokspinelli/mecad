@@ -261,7 +261,7 @@ void Model::rebuild() {
         try {
             const auto &p = f.p;
             auto source = [&](const char *key) {
-                require(get(p[key].toString()).type != "mesh",
+                require(!isMesh(p[key].toString()) || f.type == "transform" || f.type == "copy",
                         "Esta operação requer um sólido CAD. Conversão de malha STL ainda não disponível.");
                 auto s = get(p[key].toString()).shape;
                 require(!s.IsNull(), "A operação depende de uma etapa futura ou inválida.");
@@ -344,7 +344,9 @@ void Model::rebuild() {
                 rotation.SetRotation(gp_Ax1(gp::Origin(), dir), angle * M_PI / 180);
                 gp_Trsf translation;
                 translation.SetTranslation(gp_Vec(value(p, "x"), value(p, "y"), value(p, "z")));
-                f.shape = BRepBuilderAPI_Transform(source("source"), translation * rotation, true).Shape();
+                f.shape = BRepBuilderAPI_Transform(source("source"), translation * rotation,
+                                                   !isMesh(p["source"].toString()))
+                              .Shape();
             } else if (f.type == "fillet") {
                 auto s = source("source");
                 BRepFilletAPI_MakeFillet fillet(s);
@@ -383,9 +385,9 @@ void Model::rebuild() {
                 BRepTools::Read(f.shape, stream, builder);
             } else
                 throw std::runtime_error("Operação desconhecida.");
-            require(!f.shape.IsNull() && (f.type == "mesh" || BRepCheck_Analyzer(f.shape).IsValid()),
+            require(!f.shape.IsNull() && (isMesh(f.id) || BRepCheck_Analyzer(f.shape).IsValid()),
                     "A operação produziu geometria inválida.");
-            if (f.type != "sketch" && f.type != "mesh")
+            if (f.type != "sketch" && !isMesh(f.id))
                 require(TopExp_Explorer(f.shape, TopAbs_SOLID).More(),
                         "A operação não produziu um sólido. Confira posições e interseções.");
         } catch (const Standard_Failure &e) {
@@ -401,6 +403,18 @@ bool Model::consumed(const QString &id) const {
             return true;
     }
     return false;
+}
+bool Model::isMesh(const QString &id) const {
+    QString current = id;
+    for (size_t depth = 0; depth <= features.size(); ++depth) {
+        const auto &feature = get(current);
+        if (feature.type == "mesh")
+            return true;
+        if (feature.type != "transform" && feature.type != "copy")
+            return false;
+        current = feature.p["source"].toString();
+    }
+    throw std::runtime_error("Dependência circular no modelo.");
 }
 std::vector<int> Model::bodies(bool visibleOnly) const {
     std::vector<int> result;
@@ -420,7 +434,7 @@ std::vector<Triangle> Model::triangles() const {
     std::vector<Triangle> result;
     for (int i : bodies()) {
         const auto &shape = features[i].shape;
-        if (features[i].type != "mesh")
+        if (!isMesh(features[i].id))
             BRepMesh_IncrementalMesh mesh(shape, 0.15, false, 0.35, true);
         for (TopExp_Explorer it(shape, TopAbs_FACE); it.More(); it.Next()) {
             auto face = TopoDS::Face(it.Current());
@@ -479,11 +493,10 @@ TopoDS_Shape Model::exportShape(const QString &id) const {
 }
 void Model::exportStep(const QString &path, const QString &id) const {
     if (!id.isEmpty())
-        require(get(id).type != "mesh",
-                "STL é uma malha, não um sólido CAD. Conversão para STEP ainda não disponível.");
+        require(!isMesh(id), "STL é uma malha, não um sólido CAD. Conversão para STEP ainda não disponível.");
     else
         for (int i : bodies())
-            require(features[i].type != "mesh",
+            require(!isMesh(features[i].id),
                     "Selecione um sólido CAD para exportar STEP; há malhas STL visíveis.");
     STEPControl_Writer w;
     require(w.Transfer(exportShape(id), STEPControl_AsIs) == IFSelect_RetDone,

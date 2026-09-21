@@ -11,6 +11,60 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void freeMoveLivePreview() {
+        QTemporaryDir dir;
+        for (bool stl : {false, true}) {
+            Window window;
+            window.model.add("box", {{"w", 40}, {"h", 30}, {"d", 20}});
+            if (stl) {
+                window.model.exportStl(dir.filePath("move.stl"));
+                window.model.clear();
+                window.model.importStl(dir.filePath("move.stl"));
+            }
+            window.model.save(dir.filePath("move.mcad"));
+            window.openPath(dir.filePath("move.mcad"));
+            window.show();
+            QVERIFY(QTest::qWaitForWindowExposed(&window));
+            auto *v = window.findChild<Viewport *>();
+            auto original = window.model.json();
+            for (bool center : {true, false}) {
+                int updates = 0;
+                bool started = false;
+                QTimer::singleShot(180, [&] {
+                    auto start = v->project(center ? v->handleOrigin : QVector3D(10, 10, 20)).toPoint();
+                    QTest::mousePress(v, Qt::LeftButton, Qt::NoModifier, start);
+                    started = v->draggingMoveFree;
+                    auto lastPoint = v->mesh.front().a;
+                    for (int step = 1; step <= 35; ++step) {
+                        QPoint point = start + QPoint(step * 2, -step);
+                        QMouseEvent move(QEvent::MouseMove, QPointF(point), QPointF(v->mapToGlobal(point)),
+                                         Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+                        QApplication::sendEvent(v, &move);
+                        QTest::qWait(10);
+                        if ((v->mesh.front().a - lastPoint).length() > .01)
+                            ++updates;
+                        lastPoint = v->mesh.front().a;
+                    }
+                    QCOMPARE(window.model.json(), original);
+                    window.grab().save(QDir::currentPath() + "/free-move-test.png");
+                    QTest::mouseRelease(v, Qt::LeftButton, Qt::NoModifier, start + QPoint(70, -35));
+                    QTest::keyClick(v, center ? Qt::Key_Return : Qt::Key_Escape);
+                });
+                window.findChild<QAction *>("transform")->trigger();
+                QVERIFY(started);
+                QVERIFY(updates >= 3);
+                if (center) {
+                    QCOMPARE(window.model.features.size(), size_t(2));
+                    auto p = window.model.features.back().p;
+                    QVERIFY(std::abs(p["x"].toDouble()) + std::abs(p["y"].toDouble()) +
+                                std::abs(p["z"].toDouble()) >
+                            1);
+                    window.findChild<QAction *>("undo")->trigger();
+                }
+                QCOMPARE(window.model.json(), original);
+            }
+        }
+    }
     void importedMeshViewport() {
         QTemporaryDir dir;
         Model source;

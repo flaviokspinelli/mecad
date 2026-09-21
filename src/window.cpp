@@ -1277,7 +1277,7 @@ void Window::buildProperties() {
                 });
             });
         }
-    } else if (f.type == "mesh") {
+    } else if (model.isMesh(f.id)) {
         propertyForm->addRow(
             new QLabel("Malha STL · unidades: mm\nVolume não calculado; não é um sólido paramétrico."));
     } else {
@@ -1519,7 +1519,8 @@ void Window::transform(bool copy) {
         precision->setText(expanded ? "Precise values / rotation ▾" : "Precise values / rotation ▸");
         panel.adjustSize();
     });
-    panel.note("Arraste as setas X, Y ou Z na peça.\nRotação numérica em torno da origem global.");
+    panel.note("Arraste a peça ou o centro das hastes para mover no plano da tela.\n"
+               "Use as setas para restringir a X, Y ou Z. Enter confirma; Esc cancela.");
     auto *feedback = new QLabel;
     feedback->setWordWrap(true);
     feedback->setStyleSheet("color:#edc17e;font-size:11px;");
@@ -1557,9 +1558,15 @@ void Window::transform(bool copy) {
     debounce.setInterval(35);
     connect(&debounce, &QTimer::timeout, &panel, updatePreview);
     for (auto *spin : panel.nums)
-        connect(spin, qOverload<double>(&QDoubleSpinBox::valueChanged), &panel, [&] { debounce.start(); });
+        connect(spin, qOverload<double>(&QDoubleSpinBox::valueChanged), &panel, [&] {
+            if (!debounce.isActive())
+                debounce.start();
+        });
     for (auto *combo : panel.combos)
-        connect(combo, qOverload<int>(&QComboBox::currentIndexChanged), &panel, [&] { debounce.start(); });
+        connect(combo, qOverload<int>(&QComboBox::currentIndexChanged), &panel, [&] {
+            if (!debounce.isActive())
+                debounce.start();
+        });
     commandSelection = [&](QString id) {
         int index = panel.combos["source"]->findData(id);
         if (index >= 0)
@@ -1567,6 +1574,10 @@ void Window::transform(bool copy) {
     };
     canvas->onMoveDistance = [&](int axis, double distance) {
         panel.nums[QString("xyz")[axis]]->setValue(distance);
+    };
+    canvas->onMoveTranslation = [&](QVector3D distances) {
+        for (int axis = 0; axis < 3; ++axis)
+            panel.nums[QString("xyz")[axis]]->setValue(distances[axis]);
     };
     canvas->onCancelCommand = [&] { panel.reject(); };
     canvas->onAcceptCommand = [&] { panel.accept(); };
@@ -1576,6 +1587,7 @@ void Window::transform(bool copy) {
     activeCommand.clear();
     commandSelection = {};
     canvas->onMoveDistance = {};
+    canvas->onMoveTranslation = {};
     canvas->onCancelCommand = {};
     canvas->onAcceptCommand = {};
     canvas->moveHandleActive = false;
@@ -1628,7 +1640,7 @@ void Window::measure() {
     BRepBndLib::AddOptimal(f.shape, b);
     double x, y, z, X, Y, Z;
     b.Get(x, y, z, X, Y, Z);
-    if (f.type == "mesh") {
+    if (model.isMesh(f.id)) {
         QMessageBox::information(
             this, "Measure — STL",
             QString("%1\n\nX: %2 mm\nY: %3 mm\nZ: %4 mm\n\nVolume não calculado para malhas.")

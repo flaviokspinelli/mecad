@@ -30,6 +30,7 @@ class Model {
     Feature &get(const QString &id);
     const Feature &get(const QString &id) const;
     bool consumed(const QString &id) const;
+    bool isMesh(const QString &id) const;
     std::vector<int> bodies(bool visibleOnly = true) const;
     std::vector<Triangle> triangles() const;
     QJsonObject json() const;

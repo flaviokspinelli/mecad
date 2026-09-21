@@ -31,6 +31,7 @@ class Viewport : public QOpenGLWidget, protected QOpenGLFunctions {
     double moveHandleLength = 25;
     QVector3D moveDistances;
     std::function<void(int, double)> onMoveDistance;
+    std::function<void(QVector3D)> onMoveTranslation;
     QVector3D moveHandleTip(int axis) const;
     std::function<void(QString, double)> onPlaneChosen;
     std::function<void(double)> onHandleDistance;
@@ -96,6 +97,9 @@ class Viewport : public QOpenGLWidget, protected QOpenGLFunctions {
     QVector<QPair<QString, QPolygonF>> planeRegions;
     QPointF planeHover{-1, -1};
     bool draggingHandle = false;
+    bool draggingMoveFree = false;
+    QVector3D moveStartDistances;
+    QMatrix4x4 moveDragInverse;
     bool cubePressed = false, cubeDragging = false;
     float cubeStartYaw = 0, cubeStartPitch = 0;
     bool sketchPressCandidate = false, sketchDragging = false;

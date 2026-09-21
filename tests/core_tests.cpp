@@ -40,6 +40,15 @@ class CoreTests : public QObject {
             Model again;
             again.importStl(dir.filePath("roundtrip.stl"));
             QCOMPARE(again.triangles().size(), size_t(12));
+            auto beforeMove = loaded.triangles().front().a;
+            auto moved = loaded.add("transform", {{"source", id}, {"x", 12}, {"y", -3}, {"z", 7}});
+            QVERIFY(loaded.isMesh(moved));
+            QVERIFY((loaded.triangles().front().a - beforeMove - QVector3D(12, -3, 7)).length() < .001);
+            loaded.save(saved);
+            Model reopened;
+            reopened.load(saved);
+            QVERIFY(reopened.isMesh(moved));
+            QCOMPARE(reopened.triangles().front().a, loaded.triangles().front().a);
             QVERIFY_THROWS_EXCEPTION(std::runtime_error, loaded.exportStep(dir.filePath("mesh.step")));
         }
         QFile invalid(dir.filePath("invalid.stl"));
