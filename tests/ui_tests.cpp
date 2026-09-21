@@ -20,6 +20,39 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void conflictingSketchConstraintIsExplained() {
+        QTemporaryDir dir;Model source;
+        const auto id=source.add("sketch",{{"profile","polyline"},{"points",QJsonArray{QJsonArray{0,0},QJsonArray{20,10}}}});
+        source.constrainSketch(id,sketch::Relation::Fixed,"p0",{},{0,0});
+        source.constrainSketch(id,sketch::Relation::Fixed,"p1",{},{20,10});
+        source.save(dir.filePath("conflict.mcad"));
+        Window window(dir.filePath("recovery"),false);window.openPath(source.filePath);window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));auto *v=window.findChild<Viewport *>();v->onSelect(id);
+        v->selectedDetails={{id,"edge",0,{{0,0,0},{20,10,0}}}};
+        const auto before=window.model.json();bool explained=false,highlighted=false;
+        QTimer::singleShot(100,[&]{
+            auto *dialog=window.findChild<QDialog *>("constraintConflict");if(!dialog)return;
+            auto *list=dialog->findChild<QListWidget *>("constraintConflictList");
+            explained=list->count()==3 && list->currentItem()->text().startsWith("NOVA");
+            highlighted=v->selectedDetails.size()==1 && v->selectedDetails.front().geometry.size()==2;
+            dialog->grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("constraint-conflict.png"));
+            dialog->reject();
+        });
+        window.findChild<QAction *>("constraint_horizontal")->trigger();
+        QVERIFY(explained);QVERIFY(highlighted);QCOMPARE(window.model.json(),before);
+        QCOMPARE(v->selectedDetails.front().index,0);
+        bool reviewed=false;
+        QTimer::singleShot(100,[&]{
+            auto *dialog=window.findChild<QDialog *>("constraintConflict");if(!dialog)return;
+            QTimer::singleShot(100,[&]{
+                auto *review=window.findChild<QDialog *>("constraintReview");
+                reviewed=review && review->isVisible();if(review)review->reject();
+            });
+            dialog->findChild<QPushButton *>("reviewConflictingConstraints")->click();
+        });
+        window.findChild<QAction *>("constraint_horizontal")->trigger();
+        QVERIFY(reviewed);QCOMPARE(window.model.json(),before);
+    }
     void reviewRedundantSketchConstraints() {
         QTemporaryDir dir;Model source;
         const auto id=source.add("sketch",{{"profile","rectangle"},{"w",30},{"h",20}});

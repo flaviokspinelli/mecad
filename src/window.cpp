@@ -729,6 +729,7 @@ Window::Window(QString recoveryDirectory, bool promptRecovery) {
             QPointF value;
             if(relation==sketch::Relation::Fixed)
                 for(const auto &point:model.sketchSystem(owner).points) if(point.id==entities.front()) value=point.position;
+            if(!checkSketchConstraint(owner,relation,entities.front(),pair ? entities.back() : QString(),value))return;
             model.constrainSketch(owner,relation,entities.front(),pair ? entities.back() : QString(),value);
             selected=owner; canvas->selectedDetails.clear(); canvas->selectedDetail={}; refresh();
             status->setText(QString("Restrição aplicada · %1 graus de liberdade").arg(model.sketchSystem(owner).solve().degreesOfFreedom));
@@ -810,6 +811,8 @@ Window::Window(QString recoveryDirectory, bool promptRecovery) {
         if(!ok)return;
         const auto value=parameters::evaluate(formula,parameters::resolve(model.parameters()));
         if(value.length!=1 || value.angle!=0)throw std::runtime_error("A cota deve resultar em comprimento.");
+        if(!checkSketchConstraint(owner,vertical?sketch::Relation::DistanceY:sketch::Relation::DistanceX,
+            first,second,vertical?QPointF(0,value.value):QPointF(value.value,0)))return;
         Model work=model;const auto constraint=work.constrainSketch(owner,vertical?sketch::Relation::DistanceY:sketch::Relation::DistanceX,
             first,second,vertical?QPointF(0,value.value):QPointF(value.value,0));
         work.setExpression(owner,"constraint:"+constraint,formula);model.commit(work.json());selected=owner;refresh();
@@ -2317,6 +2320,55 @@ void Window::transform(bool copy) {
         canvas->selectedDetail = previousDetail;
         canvas->update();
     }
+}
+bool Window::checkSketchConstraint(const QString &owner, sketch::Relation relation,
+                                   const QString &first, const QString &second, QPointF value) {
+    auto system=model.sketchSystem(owner);
+    QString candidate="new-constraint";
+    auto exists=[&]{for(const auto &c:system.constraints)if(c.id==candidate)return true;return false;};
+    while(exists())candidate+="_";
+    system.constraints.append({candidate,relation,first,second,value});
+    const auto solution=system.solve();
+    if(solution.consistent)return true;
+    const auto previousDetails=canvas->selectedDetails;const auto previousDetail=canvas->selectedDetail;
+    QDialog dialog(this);dialog.setObjectName("constraintConflict");dialog.setWindowTitle("Restrição incompatível");
+    auto *layout=new QVBoxLayout(&dialog);
+    auto *note=new QLabel("A nova restrição não foi aplicada. Estas relações participam do conflito;\n"
+                         "a lista pode conter mais relações que o mínimo necessário.\nSelecione uma relação para localizar a geometria.");
+    note->setWordWrap(true);layout->addWidget(note);
+    auto *list=new QListWidget;list->setObjectName("constraintConflictList");layout->addWidget(list);
+    const QStringList labels{"Coincidente","Horizontal","Vertical","Ponto fixo","Distância X","Distância Y"};
+    QVector<sketch::Constraint> conflicts;
+    for(const auto &c:system.constraints)if(solution.conflictCandidates.contains(c.id)) {
+        conflicts.append(c);
+        list->addItem((c.id==candidate?QString("NOVA · "):QString())+labels[int(c.relation)]+" · "+c.first+" "+c.second);
+    }
+    connect(list,&QListWidget::currentRowChanged,&dialog,[&](int row){
+        if(row<0)return;
+        const auto &c=conflicts[row];const auto p=model.get(owner).p;
+        auto point=[&](QString id){for(const auto &pt:system.points)if(pt.id==id)
+            return Model::planePoint(p["plane"].toString("XY"),pt.position.x(),pt.position.y(),p["offset"].toDouble());return QVector3D();};
+        canvas->selectedDetails.clear();canvas->selectedDetail={};
+        if(c.relation==sketch::Relation::Horizontal || c.relation==sketch::Relation::Vertical) {
+            for(const auto &line:system.lines)if(line.id==c.first)
+                canvas->selectedDetails.append({owner,"edge",-1,{point(line.start),point(line.end)}});
+        } else {
+            canvas->selectedDetails.append({owner,"vertex",-1,{point(c.first)}});
+            if(!c.second.isEmpty())canvas->selectedDetails.append({owner,"vertex",-1,{point(c.second)}});
+        }
+        canvas->update();
+    });
+    auto *buttons=new QDialogButtonBox(QDialogButtonBox::Cancel);layout->addWidget(buttons);
+    auto *review=buttons->addButton("Revisar restrições existentes…",QDialogButtonBox::AcceptRole);
+    review->setObjectName("reviewConflictingConstraints");
+    connect(buttons,&QDialogButtonBox::accepted,&dialog,&QDialog::accept);
+    connect(buttons,&QDialogButtonBox::rejected,&dialog,&QDialog::reject);
+    list->setCurrentRow(conflicts.size()-1);dialog.resize(480,340);
+    dialog.move(mapToGlobal(QPoint(std::max(0,width()-500),160)));
+    const bool inspect=dialog.exec()==QDialog::Accepted;
+    canvas->selectedDetails=previousDetails;canvas->selectedDetail=previousDetail;canvas->update();
+    if(inspect){selected=owner;commands["constraint_remove"]->trigger();}
+    return false;
 }
 void Window::hole() {
     QList<QPair<QString, QString>> bodies;

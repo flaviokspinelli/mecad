@@ -61,6 +61,8 @@ class Window : public QMainWindow {
     void finishSketch();
     void sketchTool(const QString &type);
     void exactSketch();
+    bool checkSketchConstraint(const QString &owner, sketch::Relation relation,
+                               const QString &first, const QString &second, QPointF value);
     void extrude(bool revolve = false);
     void booleanOp(const QString &mode);
     void transform(bool copy);

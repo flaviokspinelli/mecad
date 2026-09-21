@@ -1,5 +1,24 @@
 # Execução do backlog
 
+## 21/09/2026 — diagnóstico visual ao adicionar restrição incompatível
+
+SK-04: comandos horizontal/vertical/fixar e cotas X/Y avaliam a nova relação antes
+de aplicar. Em incompatibilidade, painel lista candidatas apontadas pelo solver,
+marca a nova relação e realça linhas/pontos da geometria original. A lista é
+explicitamente não mínima. Acesso à revisão de relações existentes permite
+remoção deliberada; a tentativa rejeitada não é reaplicada automaticamente.
+
+Quatro testes funcionais passaram: conflictingSketchConstraintIsExplained,
+reviewRedundantSketchConstraints, sketchConstraintsSelectionAndPersistence e
+namedSketchDimensionFromSelection (seis resultados Qt com setup/cleanup).
+Verificados cancelamento, seleção restaurada, documento inalterado na falha,
+abertura da revisão, remoção reversível e persistência. Captura do painel em
+build/constraint-conflict.png inspecionada. MecaCAD recompilado sem empacotar.
+
+Limites: conflitos de edição direta de fórmulas, outros caminhos de reconstrução
+e erros de contorno ainda usam diagnóstico anterior. Não é conclusão de SK-04
+ou dos 38 itens. Nenhum arquivo do usuário ou distribuição existente alterado.
+
 ## 21/09/2026 — revisão visual das restrições existentes
 
 SK-04: substituída a lista simples de remoção por um painel de revisão com graus
