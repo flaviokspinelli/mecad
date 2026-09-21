@@ -1,5 +1,18 @@
 # Execução do backlog
 
+## 21/09/2026 — MVP congelado validado
+
+O escopo ativo foi reduzido e congelado em oito itens: seleção de
+corpos/subelementos, Shift/área, sketch básico e cotas, extrusão/corte com
+prévia, mover/girar incluindo STL, sketch em face plana, importação/exportação
+STL/STEP/DXF e persistência `.mcad` com undo/redo. Nenhum recurso novo entra
+sem autorização explícita.
+
+Validação direcionada concluída: `core_tests` 39/39 e `ui_tests` 17/17. Os
+avisos de OpenGL ocorreram apenas no backend offscreen dos testes e não
+produziram falhas. O MVP não deve ser confundido com paridade com o Fusion;
+os 38 itens anteriores e os demais itens do backlog ficam congelados.
+
 ## 21/09/2026 — guia interno atualizado e atalhos reais
 
 PROD-05/UX-07: removida ajuda estática que ainda descrevia a versão 0.1 e negava
