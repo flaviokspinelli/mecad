@@ -32,6 +32,7 @@
 #include <QScrollArea>
 #include <QSettings>
 #include <QShortcut>
+#include <QKeySequenceEdit>
 #include <QSplitter>
 #include <QStandardPaths>
 #include <QStatusBar>
@@ -978,6 +979,7 @@ Window::Window(QString recoveryDirectory, bool promptRecovery, QString preferenc
             "sketch; dimensions drive rectangles/circles. General sketch constraints, face attachment, "
             "assemblies and simulation are not yet available.");
     });
+    help->addAction(command("configure_shortcuts","Configurar atalhos…","",[this]{configureShortcuts();}));
     auto *bar = addToolBar("Application");
     bar->setObjectName("applicationToolbar");
     bar->setMovable(false);
@@ -1406,6 +1408,15 @@ Window::Window(QString recoveryDirectory, bool promptRecovery, QString preferenc
     timer->start(30000);
     buildRibbon();
     refresh();
+    for(const auto &key:QStringList{"rectangle","circle","polyline","dimension","extrude","hole","transform","measure","search","fit"})
+        defaultShortcuts[key]=commands[key]->shortcut().toString(QKeySequence::PortableText);
+    auto shortcuts=defaultShortcuts;
+    const auto saved=preferences->value("keyboard/shortcuts").toMap();
+    for(auto it=saved.cbegin();it!=saved.cend();++it)if(shortcuts.contains(it.key()))shortcuts[it.key()]=it.value().toString();
+    if(validateShortcuts(shortcuts).isEmpty()) {
+        for(auto it=shortcuts.cbegin();it!=shortcuts.cend();++it)commands[it.key()]->setShortcut(QKeySequence(it.value(),QKeySequence::PortableText));
+    } else status->setText("Atalhos salvos inválidos; usando padrões.");
+    buildRibbon();
     QTimer::singleShot(150, this, [this, promptRecovery] {
         if (!promptRecovery) return;
         if(!recovery || !model.features.empty())return;
@@ -2765,6 +2776,44 @@ void Window::closeEvent(QCloseEvent *e) {
         e->accept();
     } else
         e->ignore();
+}
+QString Window::validateShortcuts(const QMap<QString,QString> &values) const {
+    QMap<QString,QString> assigned;
+    for(auto it=commands.cbegin();it!=commands.cend();++it) {
+        const auto text=values.contains(it.key())?values[it.key()]:it.value()->shortcut().toString(QKeySequence::PortableText);
+        if(text.isEmpty())continue;
+        const QKeySequence sequence(text,QKeySequence::PortableText);
+        if(values.contains(it.key()) && (sequence.count()!=1 || sequence[0].key()<Qt::Key_A || sequence[0].key()>Qt::Key_Z))
+            return "Use uma letra de A a Z, opcionalmente com modificadores, ou deixe vazio.";
+        const auto normalized=sequence.toString(QKeySequence::PortableText);
+        if(assigned.contains(normalized))return "Conflito entre "+assigned[normalized]+" e "+it.value()->text()+".";
+        assigned[normalized]=it.value()->text();
+    }
+    return {};
+}
+void Window::configureShortcuts() {
+    QDialog dialog(this);dialog.setObjectName("shortcutPreferences");dialog.setWindowTitle("Atalhos de modelagem");
+    auto *layout=new QVBoxLayout(&dialog);auto *form=new QFormLayout;layout->addLayout(form);
+    QMap<QString,QKeySequenceEdit *> editors;
+    for(auto it=defaultShortcuts.cbegin();it!=defaultShortcuts.cend();++it) {
+        auto *input=new QKeySequenceEdit(commands[it.key()]->shortcut());input->setMaximumSequenceLength(1);
+        input->setObjectName("shortcut_"+it.key());editors[it.key()]=input;form->addRow(commands[it.key()]->text(),input);
+    }
+    auto *error=new QLabel;error->setObjectName("shortcutError");error->setWordWrap(true);layout->addWidget(error);
+    auto *buttons=new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel|QDialogButtonBox::RestoreDefaults);layout->addWidget(buttons);
+    auto values=[&]{QMap<QString,QString> result;for(auto it=editors.cbegin();it!=editors.cend();++it)result[it.key()]=it.value()->keySequence().toString(QKeySequence::PortableText);return result;};
+    auto validate=[&]{const auto message=validateShortcuts(values());error->setText(message);buttons->button(QDialogButtonBox::Ok)->setEnabled(message.isEmpty());};
+    for(auto *input:editors)connect(input,&QKeySequenceEdit::keySequenceChanged,&dialog,validate);
+    connect(buttons->button(QDialogButtonBox::RestoreDefaults),&QPushButton::clicked,&dialog,[&]{for(auto it=editors.cbegin();it!=editors.cend();++it)it.value()->setKeySequence(QKeySequence(defaultShortcuts[it.key()],QKeySequence::PortableText));});
+    connect(buttons,&QDialogButtonBox::rejected,&dialog,&QDialog::reject);
+    connect(buttons,&QDialogButtonBox::accepted,&dialog,[&]{validate();if(error->text().isEmpty())dialog.accept();});
+    validate();dialog.resize(430,420);
+    if(dialog.exec()!=QDialog::Accepted)return;
+    QVariantMap stored;const auto chosen=values();
+    for(auto it=chosen.cbegin();it!=chosen.cend();++it){stored[it.key()]=it.value();commands[it.key()]->setShortcut(QKeySequence(it.value(),QKeySequence::PortableText));}
+    preferences->setValue("keyboard/shortcuts",stored);preferences->sync();
+    if(preferences->status()!=QSettings::NoError)status->setText("Atalhos aplicados nesta sessão, mas não foi possível salvá-los.");
+    buildRibbon();
 }
 void Window::search() {
     QDialog dialog(this);dialog.setObjectName("commandSearch");dialog.setWindowTitle("Buscar comando");

@@ -1540,9 +1540,7 @@ void Viewport::keyPressEvent(QKeyEvent *e) {
         }
         if (tool == "polyline")
             finishPolyline(e->modifiers().testFlag(Qt::ShiftModifier));
-    } else if (e->key() == Qt::Key_F)
-        fit();
-    else
+    } else
         QOpenGLWidget::keyPressEvent(e);
     update();
 }

@@ -14,5 +14,6 @@ a busca, mantendo as validações e painéis normais da ferramenta.
 Sem resultados, Enter não faz nada. Ações desabilitadas ficam atenuadas e não
 podem ser executadas. Isso não significa que todas as exigências geométricas já
 sejam previstas pela busca: ferramentas habilitadas ainda validam a seleção e
-explicam falhas em seu próprio fluxo. Não há atalhos configuráveis ou favoritos
-nesta implementação.
+explicam falhas em seu próprio fluxo. Os atalhos dos comandos principais podem
+ser configurados em Help → Configurar atalhos; a busca mostra a combinação atual.
+Favoritos não estão implementados.

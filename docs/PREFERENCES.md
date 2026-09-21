@@ -17,5 +17,17 @@ arestas, snap e encaixe inteligente ligados. Se não for possível gravar, a esc
 continua valendo na sessão e a barra de status informa a falha. Não há promessa de
 sincronização ao vivo entre várias instâncias abertas.
 
-Unidades, idioma, atalhos configuráveis e perfis de navegação ainda não fazem
-parte dessas preferências persistentes. Portanto PROD-05 permanece parcial.
+## Atalhos de modelagem
+
+Help → Configurar atalhos permite alterar retângulo, círculo, linha, cota,
+extrusão, furo, movimento, medição, busca e enquadramento. Use uma letra A–Z,
+opcionalmente com modificadores, ou apague a combinação para desativá-la.
+Conflitos com outros comandos (inclusive salvar/abrir) bloqueiam OK.
+Enter/Esc, Delete e navegação não são remapeados por esse painel.
+
+Cancelar não aplica nada. Restaurar padrões preenche o painel; confirme com OK
+para aplicar. Atalhos são guardados no mesmo arquivo de preferências, fora do
+documento. Configuração inválida na abertura usa os padrões e informa o problema.
+
+Unidades, idioma e perfis de navegação ainda não fazem parte dessas preferências
+persistentes. Portanto PROD-05 permanece parcial.

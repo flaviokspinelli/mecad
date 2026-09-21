@@ -49,6 +49,9 @@ class Window : public QMainWindow {
     bool refreshing = false;
     std::unique_ptr<QSettings> preferences;
     void savePreference(const QString &key, bool value);
+    QMap<QString,QString> defaultShortcuts;
+    QString validateShortcuts(const QMap<QString,QString> &values) const;
+    void configureShortcuts();
     QPointer<QDialog> activeCommand;
     std::function<void(QString)> commandSelection;
     QString pendingSketchTool = "rectangle";

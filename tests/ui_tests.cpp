@@ -12,6 +12,7 @@
 #include <QToolButton>
 #include <QTableWidget>
 #include <QLineEdit>
+#include <QKeySequenceEdit>
 #include <QDialogButtonBox>
 #include <QProcess>
 #include <QTextStream>
@@ -20,6 +21,42 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void configurableShortcutsPersistAndRejectConflicts() {
+        QTemporaryDir dir;const auto path=dir.filePath("preferences.ini");
+        {
+            Window window(dir.filePath("recovery"),false,path);const auto before=window.model.json();
+            for(bool apply:{false,true}) {
+                bool checked=false;
+                QTimer::singleShot(100,[&]{
+                    auto *dialog=window.findChild<QDialog *>("shortcutPreferences");if(!dialog)return;
+                    auto *fit=dialog->findChild<QKeySequenceEdit *>("shortcut_fit");
+                    auto *buttons=dialog->findChild<QDialogButtonBox *>();
+                    fit->setKeySequence(QKeySequence("E"));
+                    checked=!buttons->button(QDialogButtonBox::Ok)->isEnabled();
+                    fit->setKeySequence(QKeySequence("Ctrl+S"));checked=checked && !buttons->button(QDialogButtonBox::Ok)->isEnabled();
+                    fit->setKeySequence(QKeySequence("G"));checked=checked && buttons->button(QDialogButtonBox::Ok)->isEnabled();
+                    if(apply)buttons->button(QDialogButtonBox::Ok)->click();else dialog->reject();
+                });
+                window.findChild<QAction *>("configure_shortcuts")->trigger();QVERIFY(checked);
+                QCOMPARE(window.findChild<QAction *>("fit")->shortcut(),QKeySequence(apply?"G":"F"));
+                QCOMPARE(window.model.json(),before);
+            }
+        }
+        Window reopened(dir.filePath("recovery"),false,path);
+        QCOMPARE(reopened.findChild<QAction *>("fit")->shortcut(),QKeySequence("G"));
+        reopened.show();QVERIFY(QTest::qWaitForWindowExposed(&reopened));reopened.raise();reopened.activateWindow();
+        QVERIFY(QTest::qWaitForWindowActive(&reopened));auto *v=reopened.findChild<Viewport *>();v->setFocus();
+        QSignalSpy invoked(reopened.findChild<QAction *>("fit"),&QAction::triggered);
+        v->span=127;QTest::keyClick(v,Qt::Key_F);QCOMPARE(invoked.count(),0);QCOMPARE(v->span,127.f);
+        QTest::keyClick(v,Qt::Key_G);QCOMPARE(invoked.count(),1);
+        QTimer::singleShot(100,[&]{auto *dialog=reopened.findChild<QDialog *>("shortcutPreferences");
+            auto *buttons=dialog->findChild<QDialogButtonBox *>();buttons->button(QDialogButtonBox::RestoreDefaults)->click();buttons->button(QDialogButtonBox::Ok)->click();});
+        reopened.findChild<QAction *>("configure_shortcuts")->trigger();
+        QCOMPARE(reopened.findChild<QAction *>("fit")->shortcut(),QKeySequence("F"));
+        QSettings broken(path,QSettings::IniFormat);broken.setValue("keyboard/shortcuts",QVariantMap{{"fit","E"}});broken.sync();
+        Window fallback(dir.filePath("recovery"),false,path);
+        QCOMPARE(fallback.findChild<QAction *>("fit")->shortcut(),QKeySequence("F"));
+    }
     void displayPreferencesPersistWithoutDocumentChanges() {
         QTemporaryDir dir;const auto settings=dir.filePath("preferences.ini");
         {

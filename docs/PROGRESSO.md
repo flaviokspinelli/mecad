@@ -1,5 +1,23 @@
 # Execução do backlog
 
+## 21/09/2026 — atalhos configuráveis dos comandos principais
+
+PROD-05/UX-07: Help → Configurar atalhos altera dez comandos de modelagem/busca,
+com uma letra e modificadores opcionais, ou vazio para desativar. Validação bloqueia
+duplicidade entre comandos e colisão com atalhos de arquivo. Cancelar não aplica;
+Restaurar padrões preenche o painel e exige OK. Persistência em preferences.ini,
+sem alteração do documento. Configuração inválida usa padrões com aviso.
+
+Removido F fixo no keyPress da viewport, evitando que o enquadramento continuasse
+ativo na tecla antiga. Ribbon e busca usam os atalhos atuais. Não altera Enter/Esc,
+Delete ou navegação. Ainda não é editor de todos os comandos/gestos do aplicativo.
+
+configurableShortcutsPersistAndRejectConflicts, commandSearchFiltersAndKeyboard e
+inlineProfileExpressionsAndUnits passaram: três casos, cinco resultados Qt.
+Verificados persistência, conflitos E e Ctrl+S, cancelamento, padrões, configuração
+inválida e teclas reais F/G. Build existente atualizado, sem empacotamento e sem
+alterar desenhos. PROD-05/UX-07 continuam parciais.
+
 ## 21/09/2026 — preferências locais de visualização e encaixe
 
 PROD-05: fundo claro/escuro, arestas visíveis, snap e encaixe inteligente agora
