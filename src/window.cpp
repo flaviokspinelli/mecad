@@ -33,6 +33,8 @@
 #include <QSettings>
 #include <QShortcut>
 #include <QKeySequenceEdit>
+#include <QTextBrowser>
+#include <QTabWidget>
 #include <QSplitter>
 #include <QStandardPaths>
 #include <QStatusBar>
@@ -968,17 +970,7 @@ Window::Window(QString recoveryDirectory, bool promptRecovery, QString preferenc
         savePreference("view/light",v);
         canvas->update();
     });
-    help->addAction("Quick start", this, [this] {
-        QMessageBox::information(
-            this, "MecaCAD — Quick start",
-            "1. Create Sketch → choose XY, XZ or YZ.\n2. Draw a rectangle (R), circle (C) or line (L).\n3. "
-            "Select the sketch in the Browser; edit dimensions on the right.\n4. Finish Sketch → Extrude "
-            "(E).\n5. Save and use File → Export.\n\nMiddle drag: pan · Shift+middle drag: orbit · Scroll: "
-            "zoom · F: "
-            "fit\nLine: Enter finishes; Shift+Enter closes the profile.\n\nVersion 0.1: one profile per "
-            "sketch; dimensions drive rectangles/circles. General sketch constraints, face attachment, "
-            "assemblies and simulation are not yet available.");
-    });
+    help->addAction(command("help_guide","Guia de uso e limites…","",[this]{showHelp();}));
     help->addAction(command("configure_shortcuts","Configurar atalhos…","",[this]{configureShortcuts();}));
     auto *bar = addToolBar("Application");
     bar->setObjectName("applicationToolbar");
@@ -2814,6 +2806,56 @@ void Window::configureShortcuts() {
     preferences->setValue("keyboard/shortcuts",stored);preferences->sync();
     if(preferences->status()!=QSettings::NoError)status->setText("Atalhos aplicados nesta sessão, mas não foi possível salvá-los.");
     buildRibbon();
+}
+void Window::showHelp() {
+    QDialog dialog(this);dialog.setObjectName("usageGuide");dialog.setWindowTitle("MecaCAD — Guia de uso");
+    auto *layout=new QVBoxLayout(&dialog);auto *tabs=new QTabWidget;tabs->setObjectName("guideTabs");layout->addWidget(tabs);
+    auto page=[&](QString title,QString html) {
+        auto *text=new QTextBrowser;text->setOpenExternalLinks(false);text->setOpenLinks(false);
+        text->setHtml("<style>body {font-size:13px;} h2 {color:#74d3ee;} li {margin-bottom:8px;} p {margin-bottom:12px;}</style>"+html);
+        tabs->addTab(text,title);
+    };
+    page("Desenhar e modelar",QString::fromUtf8(
+        "<h2>Do sketch ao sólido</h2><ol><li>Use <b>Create Sketch</b> e escolha XY, XZ, YZ ou uma face plana CAD.</li>"
+        "<li>Desenhe com os comandos de retângulo, círculo, linha, arco ou polígono. Termine com <b>Finish Sketch</b>.</li>"
+        "<li>Selecione um perfil fechado e use <b>Extrude</b>. Arraste a seta para definir a distância; a geometria mostrada é uma prévia.</li>"
+        "<li>Para cortar, escolha a operação Cut e o corpo-alvo; a extrusão precisa atravessar o material. Confirme somente depois de conferir a prévia.</li>"
+        "<li>Salve o projeto em <b>.mcad</b> para manter parâmetros e histórico. Exportação não substitui o arquivo nativo.</li></ol>"
+        "<h2>Selecionar e mover</h2><p>O menu de seleção distingue objetos, faces, arestas e vértices. Shift alterna elementos. "
+        "Arraste uma área: esquerda→direita contém; direita→esquerda cruza.</p>"
+        "<p>Move / Copy: setas restringem a um eixo; quadrados restringem a XY/XZ/YZ; centro ou peça movem no plano da tela. "
+        "Ative Girar pelo mouse para usar o anel. O pivô pode ser numérico ou escolhido num vértice visível CAD/STL.</p>"));
+    page("Cotas e restrições",QString::fromUtf8(
+        "<h2>Editar medidas no desenho</h2><p>Clique na cota para editar. Retângulos, diâmetro de círculos e cotas X/Y aceitam "
+        "números em mm, unidades como <b>2,5 cm</b> e fórmulas como <b>largura / 2</b>. Crie os parâmetros em Change Parameters.</p>"
+        "<p>Enter confirma; Esc cancela. Uma fórmula inválida mantém o editor aberto e preserva o documento. No círculo, a medida exibida é o diâmetro.</p>"
+        "<h2>Restrições de linhas</h2><p>Selecione a linha para Horizontal/Vertical ou o vértice para Fixar. Para cotas X/Y, selecione uma linha "
+        "ou dois vértices do mesmo sketch. A distância tem sinal.</p><p>Em sketches com sistema de restrições, pontos dourados estão presos e azuis ainda podem mover-se. "
+        "O indicador informa os graus de liberdade do conjunto.</p><p>Revisar / remover restrições realça a geometria e identifica redundâncias. "
+        "Uma nova relação incompatível mostra participantes do conflito antes de aplicar; revise as relações existentes e tente novamente. "
+        "O encaixe inteligente ajuda a posicionar, mas não cria restrições permanentes.</p>"));
+    QString shortcuts="<h2>Atalhos atuais</h2><table cellspacing='8'>";
+    for(auto it=commands.cbegin();it!=commands.cend();++it) {
+        if(it.value()->shortcut().isEmpty() && !defaultShortcuts.contains(it.key()))continue;
+        const auto key=it.value()->shortcut().isEmpty()?QString("Sem atalho"):it.value()->shortcut().toString(QKeySequence::NativeText);
+        shortcuts+="<tr><td>"+it.value()->text().toHtmlEscaped()+"</td><td><b>"+key.toHtmlEscaped()+"</b></td></tr>";
+    }
+    shortcuts+="</table><p>Help → Configurar atalhos altera os comandos principais. A busca também mostra as teclas atuais.</p>"
+        "<h2>Navegação</h2><p>Botão central: pan. Shift + botão central: órbita fora do sketch. Roda: zoom. "
+        "No cubo de vistas, clique para orientar ou arraste para orbitar.</p><p>Enter confirma comandos e termina polilinhas; Shift+Enter fecha o contorno. "
+        "Esc cancela. Delete/Backspace apagam; Voltar uma etapa da peça é um comando separado.</p>";
+    page("Teclado e mouse",shortcuts);
+    page("Limites",QString::fromUtf8(
+        "<h2>O que ainda não está completo</h2><p>O aplicativo ainda está em desenvolvimento e não equivale ao Fusion.</p>"
+        "<ul><li>O sketch ainda trabalha com um contorno por perfil; regiões compostas e solver geral de curvas não estão completos.</li>"
+        "<li>O diagnóstico visual de conflitos cobre a inclusão por comandos específicos; nem todo erro de reconstrução usa esse painel.</li>"
+        "<li>STL é malha: mover/girar e escolher pivô não o convertem em sólido CAD paramétrico. O pivô armazena coordenadas, não um vínculo com o vértice.</li>"
+        "<li>STEP/STL não preservam o histórico paramétrico completo de outro aplicativo. Salve o original do seu projeto.</li>"
+        "<li>Referências topológicas, modelos grandes, montagens avançadas e simulação ainda não têm aceite profissional completo.</li></ul>"
+        "<p>Preferências de visualização, encaixe e atalhos são locais; não alteram o .mcad. Faça cópias de segurança dos desenhos importantes.</p>"));
+    auto *buttons=new QDialogButtonBox(QDialogButtonBox::Close);layout->addWidget(buttons);
+    connect(buttons,&QDialogButtonBox::rejected,&dialog,&QDialog::reject);
+    dialog.resize(760,560);dialog.exec();
 }
 void Window::search() {
     QDialog dialog(this);dialog.setObjectName("commandSearch");dialog.setWindowTitle("Buscar comando");

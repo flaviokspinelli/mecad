@@ -1,5 +1,19 @@
 # Execução do backlog
 
+## 21/09/2026 — guia interno atualizado e atalhos reais
+
+PROD-05/UX-07: removida ajuda estática que ainda descrevia a versão 0.1 e negava
+recursos já existentes. Help → Guia de uso e limites abre quatro abas com fluxos
+de sketch/modelagem, cotas/restrições, teclado/mouse e limitações explícitas.
+Tabela consulta QAction na abertura, refletindo teclas personalizadas e comandos
+sem atalho. Texto rolável, sem links externos nem alteração do documento.
+
+usageGuideUsesCurrentShortcuts e displayPreferencesPersistWithoutDocumentChanges
+passaram offscreen (dois casos, quatro resultados Qt). Verificados quatro tópicos,
+atalho Ctrl+G, comando sem tecla, limites e documento preservado. Captura
+build/usage-guide.png inspecionada. MecaCAD recompilado no build existente, sem
+pacote e sem janelas de teste. Não conclui o restante de PROD-05/UX-07.
+
 ## 21/09/2026 — atalhos configuráveis dos comandos principais
 
 PROD-05/UX-07: Help → Configurar atalhos altera dez comandos de modelagem/busca,

@@ -52,6 +52,7 @@ class Window : public QMainWindow {
     QMap<QString,QString> defaultShortcuts;
     QString validateShortcuts(const QMap<QString,QString> &values) const;
     void configureShortcuts();
+    void showHelp();
     QPointer<QDialog> activeCommand;
     std::function<void(QString)> commandSelection;
     QString pendingSketchTool = "rectangle";

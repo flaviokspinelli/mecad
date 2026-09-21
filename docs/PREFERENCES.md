@@ -29,5 +29,9 @@ Cancelar não aplica nada. Restaurar padrões preenche o painel; confirme com OK
 para aplicar. Atalhos são guardados no mesmo arquivo de preferências, fora do
 documento. Configuração inválida na abertura usa os padrões e informa o problema.
 
+Help → Guia de uso e limites reúne fluxos de sketch/modelagem, cotas/restrições,
+navegação e limitações atuais. A aba Teclado e mouse consulta os atalhos em uso
+na abertura do guia, inclusive comandos que ficaram sem tecla atribuída.
+
 Unidades, idioma e perfis de navegação ainda não fazem parte dessas preferências
 persistentes. Portanto PROD-05 permanece parcial.

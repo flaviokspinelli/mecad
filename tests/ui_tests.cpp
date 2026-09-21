@@ -13,6 +13,8 @@
 #include <QTableWidget>
 #include <QLineEdit>
 #include <QKeySequenceEdit>
+#include <QTextBrowser>
+#include <QTabWidget>
 #include <QDialogButtonBox>
 #include <QProcess>
 #include <QTextStream>
@@ -21,6 +23,20 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void usageGuideUsesCurrentShortcuts() {
+        QTemporaryDir dir;Window window(dir.filePath("recovery"),false);const auto before=window.model.json();
+        window.findChild<QAction *>("fit")->setShortcut(QKeySequence("Ctrl+G"));
+        window.findChild<QAction *>("rectangle")->setShortcut({});
+        bool current=false,limits=false;
+        QTimer::singleShot(100,[&]{auto *dialog=window.findChild<QDialog *>("usageGuide");if(!dialog)return;
+            auto *tabs=dialog->findChild<QTabWidget *>("guideTabs");QCOMPARE(tabs->count(),4);
+            const auto keys=qobject_cast<QTextBrowser *>(tabs->widget(2))->toPlainText();
+            current=keys.contains(QKeySequence("Ctrl+G").toString(QKeySequence::NativeText)) && keys.contains("Sem atalho");
+            limits=qobject_cast<QTextBrowser *>(tabs->widget(3))->toPlainText().contains("não equivale ao Fusion");
+            dialog->grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("usage-guide.png"));dialog->reject();
+        });
+        window.findChild<QAction *>("help_guide")->trigger();QVERIFY(current);QVERIFY(limits);QCOMPARE(window.model.json(),before);
+    }
     void configurableShortcutsPersistAndRejectConflicts() {
         QTemporaryDir dir;const auto path=dir.filePath("preferences.ini");
         {
