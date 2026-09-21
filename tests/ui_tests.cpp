@@ -75,8 +75,12 @@ class UiTests : public QObject {
         QApplication::sendEvent(&v,&edgeOn);QCOMPARE(v.moveDistances,before);
     }
     void pickRotationPivotVertex() {
-        QTemporaryDir dir;Model source;
-        source.add("box",{{"w",40},{"h",30},{"d",20}});source.save(dir.filePath("pick.mcad"));
+        QTemporaryDir dir;
+        for(bool stl : {false,true}) {
+        Model source;
+        source.add("box",{{"w",40},{"h",30},{"d",20}});
+        if(stl){source.exportStl(dir.filePath("pick.stl"));source.clear();source.importStl(dir.filePath("pick.stl"));}
+        source.save(dir.filePath("pick.mcad"));
         Window window(dir.filePath("recovery"),false);window.openPath(source.filePath);window.show();
         QVERIFY(QTest::qWaitForWindowExposed(&window));auto *v=window.findChild<Viewport *>();
         const auto before=window.model.json();const auto filter=v->selectionFilter;
@@ -94,6 +98,35 @@ class UiTests : public QObject {
         window.findChild<QAction *>("transform")->trigger();
         QVERIFY(picked);QCOMPARE(window.model.json(),before);
         QCOMPARE(v->selectionFilter,filter);QVERIFY(!v->commandSelectSubelements);
+        QVERIFY(!v->commandPickMeshVertices);
+        bool choosing=false;
+        QTimer::singleShot(100,[&] {
+            window.findChild<QPushButton *>("pickMovePivot")->click();
+            choosing=v->commandPickMeshVertices;
+            v->onCancelCommand();
+        });
+        window.findChild<QAction *>("transform")->trigger();
+        QVERIFY(choosing);QVERIFY(!v->commandPickMeshVertices);QCOMPARE(window.model.json(),before);
+        }
+    }
+    void meshPivotPickingVisibility() {
+        QTemporaryDir dir;Model model;model.add("box",{{"w",40},{"h",30},{"d",20}});
+        model.exportStl(dir.filePath("points.stl"));model.clear();const auto id=model.importStl(dir.filePath("points.stl"));
+        Viewport v(&model);v.resize(1000,700);v.refresh();v.view("top");v.selectionFilter="vertex";
+        const QVector3D point(0,0,20);
+        QVERIFY(v.pickDetail(v.project(point)).kind!="vertex");
+        v.commandPickMeshVertices=true;
+        for(float span : {60.f,120.f,240.f}) {
+            v.span=span;
+            const auto hit=v.pickDetail(v.project(point)+QPointF(1,1));
+            QCOMPARE(hit.feature,id);QCOMPARE(hit.kind,QString("vertex"));
+            QVERIFY((hit.geometry.front()-point).length()<1e-4);
+            QVERIFY(v.pickDetail(v.project(point),true).kind!="vertex");
+        }
+        model.add("box",{{"x",-5},{"y",-5},{"z",30},{"w",50},{"h",40},{"d",5}});
+        v.setModel(&model);
+        const auto hidden=v.pickDetail(v.project(point));
+        QVERIFY(hidden.feature!=id || hidden.kind!="vertex");
     }
     void customRotationPivot() {
         QTemporaryDir dir;

@@ -141,8 +141,25 @@ Viewport::SelectionTarget Viewport::pickDetail(QPointF pixel, bool objectOnly) c
         bool sketch = feature.type == "sketch";
         bool eligible = !feature.inactive && feature.type != "remove" && feature.visible &&
                         (!model->consumed(feature.id) || (sketch && sketchMode && feature.id == selected));
-        if (!eligible || (!sketch && model->isMesh(feature.id)))
+        if (!eligible) continue;
+        if (!sketch && model->isMesh(feature.id)) {
+            if (commandPickMeshVertices && wantVertex && selectionFilter == "vertex") {
+                int index = 0;
+                for (const auto &triangle : mesh) {
+                    if (model->features[triangle.feature].id != feature.id) continue;
+                    for (const auto point : {triangle.a, triangle.b, triangle.c}) {
+                        const double distance = QLineF(pixel, project(point)).length();
+                        const float z = depth(point);
+                        if (distance <= vertexDistance && (distance < vertexDistance - .1 || z < vertexDepth) && visible(point)) {
+                            vertexDistance = distance; vertexDepth = z;
+                            bestVertex = {feature.id, "vertex", index, {point}};
+                        }
+                        ++index;
+                    }
+                }
+            }
             continue;
+        }
         TopTools_IndexedMapOfShape edges;
         TopExp::MapShapes(feature.shape, TopAbs_EDGE, edges);
         if (wantVertex) {

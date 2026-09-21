@@ -2055,7 +2055,7 @@ void Window::transform(bool copy) {
     panel.layout->addRow(customPivot);
     auto *pickPivot = new QPushButton("Escolher vértice para o centro de giro");
     pickPivot->setObjectName("pickMovePivot");
-    pickPivot->setToolTip("Selecione um vértice CAD. Para STL, use coordenadas ou um vértice CAD de referência.");
+    pickPivot->setToolTip("Selecione um vértice visível de um corpo CAD ou de uma malha STL.");
     pickPivot->setCheckable(true);
     panel.layout->addRow(pickPivot);
     customPivot->setVisible(!subelements);
@@ -2196,6 +2196,7 @@ void Window::transform(bool copy) {
     connect(pickPivot, &QPushButton::toggled, &panel, [&](bool choosing) {
         debounce.stop();
         canvas->commandSelectSubelements = choosing;
+        canvas->commandPickMeshVertices = choosing;
         canvas->selectionFilter = choosing ? "vertex" : previousFilter;
         canvas->selectedDetails.clear(); canvas->selectedDetail = {}; canvas->hoveredDetail = {};
         if (choosing) {
@@ -2245,6 +2246,7 @@ void Window::transform(bool copy) {
     activeCommand.clear();
     commandSelection = {};
     canvas->commandSelectSubelements = false;
+    canvas->commandPickMeshVertices = false;
     canvas->selectionFilter = previousFilter;
     canvas->onMoveDistance = {};
     canvas->onMoveTranslation = {};

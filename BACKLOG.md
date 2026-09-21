@@ -4,7 +4,8 @@ Atualização: 21/09/2026. Base: MecaCAD 0.2.25, macOS Apple Silicon.
 
 Progresso após essa versão: [registro de execução](docs/PROGRESSO.md).
 UX-05: [pivô de rotação configurável e alças XY/XZ/YZ](docs/ROTATION-PIVOT.md)
-implementados e testados em desenvolvimento; aceite integral ainda pendente.
+implementados e testados em desenvolvimento, incluindo escolha de pivô em
+vértices STL visíveis; aceite integral ainda pendente.
 Pedido vigente em 21/09/2026: **terminar os 38 itens parciais**, sem ampliar o
 escopo. Substitui as ampliações anteriores de 65/95 itens. A lista fica congelada;
 um novo avanço não adiciona outro item automaticamente. Lista dos 38:

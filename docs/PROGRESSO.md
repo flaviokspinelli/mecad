@@ -1,5 +1,25 @@
 # Execução do backlog
 
+## 21/09/2026 — escolha de pivô diretamente no STL
+
+UX-05/UX-01: o modo de escolha de pivô aceita vértices visíveis da triangulação
+STL, com a mesma tolerância em pixels usada nos vértices CAD e verificação de
+oclusão por superfícies. Disponível somente no comando de pivô: seleção normal
+não passa a expor índices de malha como topologia CAD editável. Confirmação,
+cancelamento e retorno à prévia desativam a seleção temporária.
+
+O pivô continua armazenado em coordenadas px/py/pz, sem vínculo associativo com
+um nó da malha. Isso resolve a limitação de escolher o ponto com mouse, mas não
+implementa edição paramétrica da triangulação nem índices topológicos estáveis.
+Não há qualificação de desempenho para malhas grandes nesta revisão.
+
+Evidências: meshPivotPickingVisibility sem janela (três zooms, oclusão e seleção
+limitada ao comando); pickRotationPivotVertex ampliado para CAD/STL, clique,
+operação sem alteração e cancelamento durante a escolha; regressões de pivô
+numérico, planos de translação e anel de rotação. A primeira execução do teste
+sem janela expôs falta de refresh na montagem da fixture; corrigida antes da
+validação. Não houve nova distribuição nem alteração no arquivo do usuário.
+
 ## 21/09/2026 — alças de translação nos planos globais
 
 UX-05: manipulador Move / Copy agora oferece quadrados XY/XZ/YZ, com hover,

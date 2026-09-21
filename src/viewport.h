@@ -65,6 +65,8 @@ class Viewport : public QOpenGLWidget, protected QOpenGLFunctions {
     std::function<void()> onCancelCommand;
     std::function<void()> onAcceptCommand;
     bool commandSelectSubelements = false;
+    // Temporary point references for a manipulator, not editable CAD topology.
+    bool commandPickMeshVertices = false;
     void setModel(Model *m);
     double planeOffset = 0;
     int polygonSides = 6;

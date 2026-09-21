@@ -4,19 +4,22 @@ Em Move / Copy, o centro padrão é o centro da caixa envolvente da seleção.
 Para mudar:
 
 1. Ative **Centro de giro personalizado** e informe X/Y/Z globais; ou clique em
-   **Escolher vértice para o centro de giro** e selecione um vértice CAD no desenho.
+   **Escolher vértice para o centro de giro** e selecione um vértice CAD ou STL no desenho.
 2. Ative **Girar pelo mouse**, escolha X/Y/Z e arraste o anel. A prévia é contínua.
 3. Confirme com Enter/OK ou cancele com Esc. Somente escolher o pivô não altera
    a geometria nem adiciona uma operação ao histórico.
 
 Na escolha por vértice, a geometria original substitui temporariamente a prévia.
-Pode-se escolher um vértice de outro corpo CAD como referência. A rotação é feita
+Pode-se escolher um vértice de outro corpo CAD ou STL como referência. A rotação é feita
 no pivô original e depois é aplicada a translação; o manipulador acompanha essa
 translação. Desativar o pivô personalizado volta ao centro automático.
 
-STL aceita pivô numérico ou referência em um corpo CAD, mas não seleção dos nós
-da malha. Não há eixo arbitrário por dois pontos nem arraste livre do pivô nesta
-implementação. A precisão dos campos é 0,001 mm.
+STL aceita pivô numérico e seleção de vértices visíveis da triangulação. A seleção
+fica habilitada apenas enquanto se escolhe o pivô; não transforma nós da malha em
+vértices CAD editáveis. O comando armazena as coordenadas, não um vínculo associativo
+com o vértice. Reimportar ou deformar a malha não reposiciona esse pivô automaticamente.
+Vértices escondidos atrás de superfícies não são alvos. Não há eixo arbitrário por
+dois pontos nem arraste livre do pivô. A precisão dos campos é 0,001 mm.
 
 ## Translação por plano
 
