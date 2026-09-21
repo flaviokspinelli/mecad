@@ -31,6 +31,7 @@
 #include <QSaveFile>
 #include <QScrollArea>
 #include <QSettings>
+#include <QShortcut>
 #include <QSplitter>
 #include <QStandardPaths>
 #include <QStatusBar>
@@ -2744,20 +2745,61 @@ void Window::closeEvent(QCloseEvent *e) {
         e->ignore();
 }
 void Window::search() {
-    QStringList names;
-    QMap<QString, QAction *> actions;
-    for (auto it = commands.begin(); it != commands.end(); ++it) {
-        QString label = it.value()->text();
-        if (!it.value()->shortcut().isEmpty())
-            label += "    [" + it.value()->shortcut().toString(QKeySequence::NativeText) + "]";
-        names << label;
-        actions[label] = it.value();
+    QDialog dialog(this);dialog.setObjectName("commandSearch");dialog.setWindowTitle("Buscar comando");
+    dialog.resize(560,420);auto *layout=new QVBoxLayout(&dialog);
+    auto *input=new QLineEdit;input->setObjectName("commandSearchInput");
+    input->setPlaceholderText("Nome ou parte do comando…");layout->addWidget(input);
+    auto *list=new QListWidget;list->setObjectName("commandSearchResults");layout->addWidget(list);
+    auto *state=new QLabel;state->setObjectName("commandSearchStatus");layout->addWidget(state);
+    auto *buttons=new QDialogButtonBox(QDialogButtonBox::Cancel);layout->addWidget(buttons);
+    auto *execute=buttons->addButton("Executar",QDialogButtonBox::AcceptRole);
+    auto normalized=[](QString text) {
+        QString result;for(auto c:text.normalized(QString::NormalizationForm_D).toCaseFolded())
+            if(c.category()!=QChar::Mark_NonSpacing)result+=c;
+        return result;
+    };
+    auto availability=[&] {
+        auto *item=list->currentItem();auto *action=item?commands.value(item->data(Qt::UserRole).toString()):nullptr;
+        execute->setEnabled(action && action->isEnabled());
+        state->setText(!item?"Nenhum comando encontrado.":action && !action->isEnabled()?
+            "Comando indisponível no estado atual.":"↑/↓ escolhe · Enter executa · Esc cancela");
+    };
+    auto filter=[&] {
+        list->clear();const auto terms=normalized(input->text()).simplified().split(' ',Qt::SkipEmptyParts);
+        for(auto it=commands.cbegin();it!=commands.cend();++it) {
+            if(it.key()=="search")continue;
+            const auto searchable=normalized(it.value()->text()+" "+it.key());bool match=true;
+            for(const auto &term:terms)if(!searchable.contains(term)){match=false;break;}
+            if(!match)continue;
+            QString label=it.value()->text();
+            if(!it.value()->shortcut().isEmpty())label+="    ["+it.value()->shortcut().toString(QKeySequence::NativeText)+"]";
+            auto *item=new QListWidgetItem(it.value()->icon(),label,list);item->setData(Qt::UserRole,it.key());
+            item->setToolTip(it.value()->toolTip());
+            if(!it.value()->isEnabled())item->setForeground(QColor("#8b98a5"));
+        }
+        list->sortItems();if(list->count())list->setCurrentRow(0);availability();
+    };
+    QString target;
+    auto accept=[&] {
+        auto *item=list->currentItem();if(!item)return;
+        auto *action=commands.value(item->data(Qt::UserRole).toString());
+        if(!action || !action->isEnabled())return;
+        target=item->data(Qt::UserRole).toString();dialog.accept();
+    };
+    connect(input,&QLineEdit::textChanged,&dialog,filter);
+    connect(list,&QListWidget::currentRowChanged,&dialog,availability);
+    connect(input,&QLineEdit::returnPressed,&dialog,accept);
+    connect(list,&QListWidget::itemActivated,&dialog,accept);
+    connect(buttons,&QDialogButtonBox::accepted,&dialog,accept);
+    connect(buttons,&QDialogButtonBox::rejected,&dialog,&QDialog::reject);
+    for(int delta:{-1,1}) {
+        auto *key=new QShortcut(QKeySequence(delta<0?Qt::Key_Up:Qt::Key_Down),&dialog);
+        connect(key,&QShortcut::activated,&dialog,[&,delta] {
+            if(list->count())list->setCurrentRow(std::clamp(list->currentRow()+delta,0,list->count()-1));
+        });
     }
-    names.sort();
-    bool ok;
-    auto text = QInputDialog::getItem(this, "Design Shortcuts", "Search command", names, 0, true, &ok);
-    if (ok && actions.contains(text))
-        actions[text]->trigger();
+    filter();input->setFocus();
+    if(dialog.exec()==QDialog::Accepted && commands.contains(target))commands[target]->trigger();
 }
 void Window::demo() {
     clearRecovery();

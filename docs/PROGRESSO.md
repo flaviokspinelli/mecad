@@ -1,5 +1,22 @@
 # Execução do backlog
 
+## 21/09/2026 — busca de comandos com filtro em tempo real
+
+UX-07: substituída a caixa de seleção por busca filtrável, sem distinção entre
+maiúsculas/acentos e com múltiplos termos em qualquer ordem. Resultados mostram
+ícones e atalhos; ↑/↓ navegam, Enter executa após fechar o painel, Esc cancela.
+Sem resultados não executa; ações desabilitadas são indicadas e bloqueadas.
+Não depende de texto digitado ser exatamente igual ao nome completo da ação.
+
+commandSearchFiltersAndKeyboard e inlineProfileExpressionsAndUnits passaram
+(dois casos funcionais, quatro resultados Qt). Busca valida documento inalterado
+ao cancelar, ação disparada uma vez e ações desabilitadas bloqueadas. Inspecionada
+build/command-search.png; MecaCAD recompilado sem pacote ou nova versão distribuída.
+
+Limites em COMMAND-SEARCH.md: não há sinônimos, favoritos ou atalhos configuráveis;
+exigências geométricas de ações habilitadas continuam validadas pelo próprio
+comando. UX-07 segue parcial, sem mudança artificial na contagem do backlog.
+
 ## 21/09/2026 — mobilidade dos pontos no sketch
 
 SK-04: solver fornece o grau de liberdade local de cada ponto pela projeção do

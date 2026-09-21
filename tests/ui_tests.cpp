@@ -20,6 +20,36 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void commandSearchFiltersAndKeyboard() {
+        QTemporaryDir dir;Window window(dir.filePath("recovery"),false);window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        const auto before=window.model.json();bool searched=false;
+        QTimer::singleShot(100,[&]{
+            auto *dialog=window.findChild<QDialog *>("commandSearch");if(!dialog)return;
+            auto *input=dialog->findChild<QLineEdit *>("commandSearchInput");
+            auto *list=dialog->findChild<QListWidget *>("commandSearchResults");
+            input->setText("RESTRICOES revisar");
+            searched=list->count()==1 && list->item(0)->data(Qt::UserRole).toString()=="constraint_remove";
+            input->setText("zzzz-no-command");QCOMPARE(list->count(),0);
+            QTest::keyClick(input,Qt::Key_Return);QVERIFY(dialog->isVisible());
+            input->clear();QVERIFY(list->count()>2);QTest::keyClick(input,Qt::Key_Down);QCOMPARE(list->currentRow(),1);
+            QTest::keyClick(input,Qt::Key_Up);QCOMPARE(list->currentRow(),0);
+            dialog->grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("command-search.png"));
+            QTest::keyClick(input,Qt::Key_Escape);
+        });
+        window.findChild<QAction *>("search")->trigger();QVERIFY(searched);QCOMPARE(window.model.json(),before);
+        auto *fit=window.findChild<QAction *>("fit");QSignalSpy executed(fit,&QAction::triggered);
+        for(bool enabled:{false,true}) {
+            fit->setEnabled(enabled);
+            QTimer::singleShot(100,[&]{
+                auto *dialog=window.findChild<QDialog *>("commandSearch");auto *input=dialog->findChild<QLineEdit *>("commandSearchInput");
+                input->setText("fit");QTest::keyClick(input,Qt::Key_Return);
+                if(!enabled){QVERIFY(dialog->isVisible());dialog->reject();}
+            });
+            window.findChild<QAction *>("search")->trigger();QCOMPARE(executed.count(),enabled?1:0);
+        }
+        QCOMPARE(window.model.json(),before);
+    }
     void sketchMobilityUpdatesAfterUndo() {
         QTemporaryDir dir;Window window(dir.filePath("recovery"),false);
         auto id=window.model.add("sketch",{{"profile","rectangle"},{"w",30},{"h",20}});
