@@ -25,6 +25,7 @@
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QSaveFile>
+#include <QSet>
 #include <QTemporaryFile>
 #include <QTextStream>
 #include <QUuid>
@@ -61,6 +62,75 @@ double positive(const QJsonObject &p, const char *k, double fallback = 1) {
     double n = value(p, k, fallback);
     require(n > 1e-5, "Dimensões devem ser positivas.");
     return n;
+}
+void validateDocument(const QJsonObject &root) {
+    require(root["format"] == "MecaCAD" && root["version"].isDouble() &&
+                root["version"].toDouble() == 1 && root["units"] == "mm",
+            "Formato, versão ou unidade de projeto não suportado.");
+    const QSet<QString> rootKeys = {"format", "version", "units", "features"};
+    for (auto it = root.begin(); it != root.end(); ++it)
+        require(rootKeys.contains(it.key()), "O projeto contém dados não suportados: " + it.key());
+    require(root["features"].isArray() && root["features"].toArray().size() <= 2000,
+            "Lista de operações inválida.");
+    const QSet<QString> types = {"box", "cylinder", "sphere", "sketch", "extrude", "revolve", "boolean",
+                                "hole", "transform", "copy", "remove", "fillet", "mesh", "import"};
+    const QSet<QString> featureKeys = {"id", "name", "type", "parameters", "visible"};
+    QSet<QString> previous;
+    for (const auto &value : root["features"].toArray()) {
+        require(value.isObject(), "Operação inválida: esperado um objeto.");
+        const auto f = value.toObject();
+        for (auto it = f.begin(); it != f.end(); ++it)
+            require(featureKeys.contains(it.key()), "A operação contém dados não suportados: " + it.key());
+        const auto id = f["id"].toString();
+        const auto type = f["type"].toString();
+        require(!id.isEmpty() && !previous.contains(id), "Identificador de operação vazio ou duplicado.");
+        require(types.contains(type), "Tipo de operação não suportado: " + type);
+        require(f["name"].isUndefined() || f["name"].isString(), "Nome de operação inválido.");
+        require(f["visible"].isUndefined() || f["visible"].isBool(), "Visibilidade de operação inválida.");
+        require(f["parameters"].isObject(), "Parâmetros de operação inválidos.");
+        const auto p = f["parameters"].toObject();
+        auto enumeration = [&](const char *key, const QSet<QString> &allowed) {
+            const auto entry = p[key];
+            require(entry.isUndefined() || (entry.isString() && allowed.contains(entry.toString())),
+                    QString("Valor inválido em %1: %2.").arg(id, key));
+        };
+        if (type == "extrude" || type == "revolve") enumeration("mode", {"join", "cut"});
+        if (type == "boolean") enumeration("mode", {"join", "cut", "common"});
+        if (type == "transform" || type == "copy") enumeration("axis", {"X", "Y", "Z"});
+        if (type == "sketch") {
+            enumeration("profile", {"rectangle", "circle", "polyline", "arc"});
+            require(p["closed"].isUndefined() || p["closed"].isNull() || p["closed"].isBool(),
+                    "O fechamento do perfil deve ser verdadeiro ou falso.");
+        }
+        if (type == "sketch" || type == "hole") {
+            const auto plane = p["plane"];
+            require(plane.isUndefined() || (plane.isString() && (plane == "XY" || plane == "XZ" || plane == "YZ" ||
+                         plane.toString().startsWith("FACE:"))), "Plano de desenho inválido.");
+        }
+        for (const auto *key : {"source", "target", "tool", "support"}) {
+            const auto reference = p[key];
+            require(reference.isUndefined() || reference.isNull() || reference.isString(),
+                    QString("Referência inválida em %1: %2.").arg(id, key));
+            if (!reference.toString().isEmpty())
+                require(previous.contains(reference.toString()),
+                        QString("A operação %1 depende de uma etapa ausente, futura ou circular: %2.")
+                            .arg(id, reference.toString()));
+        }
+        auto requiredReference = [&](const char *key) {
+            require(!p[key].toString().isEmpty(), QString("A operação %1 exige a referência %2.").arg(id, key));
+        };
+        if (type == "extrude" || type == "revolve" || type == "transform" || type == "copy" ||
+            type == "remove" || type == "fillet") requiredReference("source");
+        if (type == "hole" || type == "boolean") requiredReference("target");
+        if (type == "boolean") requiredReference("tool");
+        if (type == "sketch" && !p["support"].toString().isEmpty()) {
+            auto index = p["supportFace"], count = p["supportFaceCount"];
+            require(index.isDouble() && count.isDouble() && index.toDouble() == index.toInt(-1) &&
+                        count.toDouble() == count.toInt(-1) && index.toInt() >= 0 && count.toInt() > index.toInt(),
+                    "Referência de face do sketch inválida.");
+        }
+        previous.insert(id);
+    }
 }
 gp_Pnt planePointExact(const QString &plane, double u, double v, double offset = 0) {
     require(std::isfinite(u) && std::isfinite(v) && std::isfinite(offset) &&
@@ -196,10 +266,7 @@ QJsonObject Model::json() const {
     return {{"format", "MecaCAD"}, {"version", 1}, {"units", "mm"}, {"features", a}};
 }
 void Model::restore(const QJsonObject &root) {
-    require(root["format"] == "MecaCAD" && root["version"].toInt() == 1 && root["units"] == "mm",
-            "Formato ou versão de projeto não suportado.");
-    require(root["features"].isArray() && root["features"].toArray().size() <= 2000,
-            "Lista de operações inválida.");
+    validateDocument(root);
     features.clear();
     for (auto v : root["features"].toArray()) {
         auto o = v.toObject();
@@ -213,6 +280,8 @@ void Model::restore(const QJsonObject &root) {
     rebuild();
 }
 void Model::checkpoint(const QJsonObject &before) {
+    if (before == json())
+        return;
     past.push_back(before);
     if (past.size() > 100)
         past.erase(past.begin());
@@ -250,6 +319,7 @@ QString Model::add(QString type, QJsonObject p, QString name) {
         name = type + QString(" %1").arg(features.size() + 1);
     features.push_back({id, name, type, p, true, {}});
     try {
+        validateDocument(json());
         rebuild();
     } catch (...) {
         restore(before);
@@ -263,6 +333,7 @@ void Model::edit(const QString &id, QJsonObject p, const QString &name) {
     get(id).p = p;
     get(id).name = name;
     try {
+        validateDocument(json());
         rebuild();
     } catch (...) {
         restore(before);
@@ -276,6 +347,7 @@ void Model::toggle(const QString &id) {
     checkpoint(before);
 }
 void Model::remove(const QString &id) {
+    get(id); // Missing targets must not create an empty undo step.
     for (const auto &f : features)
         for (auto k : {"source", "target", "tool", "support"})
             require(
@@ -323,7 +395,7 @@ void Model::rebuild() {
         f.shape.Nullify();
     for (auto &f : features) {
         try {
-            if (f.type == "sketch" && !f.p["support"].toString().isEmpty()) {
+            if (f.type == "sketch" && !f.p.value("support").toString().isEmpty()) {
                 const auto &support = get(f.p["support"].toString());
                 require(!support.shape.IsNull() && !isMesh(support.id), "O plano do sketch depende de um corpo CAD anterior válido.");
                 TopTools_IndexedMapOfShape faces;
@@ -574,6 +646,7 @@ void Model::load(const QString &path) {
     QJsonParseError error;
     auto doc = QJsonDocument::fromJson(f.readAll(), &error);
     require(error.error == QJsonParseError::NoError, error.errorString());
+    require(doc.isObject(), "Projeto inválido: esperado um objeto JSON.");
     loadJson(doc.object());
     filePath = path;
 }

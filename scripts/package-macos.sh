@@ -2,6 +2,10 @@
 set -eu
 project_dir="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 cd "$project_dir"
+destination="dist/MecaCAD-0.2.25.app"
+test ! -e "$destination" || { echo "Package already exists: $destination"; exit 1; }
+# Shipping a consolidated app requires the full validation gate.
+sh "$project_dir/scripts/check.sh" release
 qt_prefix="$(brew --prefix qtbase)"
 package_dir="$(mktemp -d "$project_dir/build/package-0.2.XXXXXX")"
 cmake --install build --prefix "$package_dir"
@@ -16,7 +20,6 @@ done
 codesign --force --deep --sign - "$bundle"
 codesign --verify --deep --strict "$bundle"
 # Keep prior packages intact, including an app that may currently be running.
-destination="dist/MecaCAD-0.2.25.app"
 test ! -e "$destination" || { echo "Package already exists: $destination"; exit 1; }
 mkdir -p dist
 ditto "$bundle" "$destination"

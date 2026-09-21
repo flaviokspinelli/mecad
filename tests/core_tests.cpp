@@ -11,6 +11,115 @@
 class CoreTests : public QObject {
     Q_OBJECT
   private slots:
+    void legacyV1FixtureRoundTrip() {
+        const auto path = QFINDTESTDATA("fixtures/v1-basic.mcad");
+        QVERIFY(!path.isEmpty());
+        QFile fixture(path); QVERIFY(fixture.open(QIODevice::ReadOnly));
+        const auto expected = QJsonDocument::fromJson(fixture.readAll()).object();
+        Model m; m.load(path);
+        QCOMPARE(m.json(), expected);
+        QVERIFY(std::abs(Model::volume(m.get("base-extrude").shape)-6000)<.001);
+        QTemporaryDir dir; QVERIFY(dir.isValid());
+        m.save(dir.filePath("saved.mcad"));
+        Model reopened; reopened.load(dir.filePath("saved.mcad"));
+        QCOMPARE(reopened.json(), expected);
+        QVERIFY(!reopened.dirty);
+    }
+    void invalidOperationModesAreAtomic() {
+        Model m;
+        auto sketch = m.add("sketch", {{"profile","rectangle"},{"w",10},{"h",10}});
+        const auto before = m.json();
+        QVERIFY_THROWS_EXCEPTION(std::exception, m.add("extrude", {{"source",sketch},{"d",10},{"mode","ctu"}}));
+        QCOMPARE(m.json(), before);
+        QVERIFY_THROWS_EXCEPTION(std::exception, m.add("sketch", {{"profile","rectangle"},{"plane","YX"}}));
+        QCOMPARE(m.json(), before);
+        QVERIFY_THROWS_EXCEPTION(std::exception, m.add("sketch", {{"profile","rectangle"},{"closed","false"}}));
+        QCOMPARE(m.json(), before);
+        auto body = m.add("extrude", {{"source",sketch},{"d",10}});
+        const auto solid = m.json();
+        QVERIFY_THROWS_EXCEPTION(std::exception, m.add("transform", {{"source",body},{"angle",90},{"axis","W"}}));
+        QCOMPARE(m.json(), solid);
+        QVERIFY(m.undo()); QCOMPARE(m.json(), before);
+        QVERIFY(m.redo()); QCOMPARE(m.json(), solid);
+    }
+    void rejectedDocumentsPreserveSession() {
+        Model m;
+        auto id = m.add("box", {{"w",10},{"h",20},{"d",30}});
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        m.save(dir.filePath("original.mcad"));
+        const auto original = m.json();
+        const auto path = m.filePath;
+        m.edit(id, {{"w",20},{"h",20},{"d",30}}, "Changed");
+        const auto edited = m.json();
+        QVERIFY(m.undo());
+        const bool dirty = m.dirty;
+        QList<QJsonObject> invalid;
+        auto wrongVersion = original; wrongVersion["version"] = 1.5; invalid.append(wrongVersion);
+        auto future = original; future["version"] = 2; invalid.append(future);
+        auto units = original; units["units"] = "in"; invalid.append(units);
+        auto extra = original; extra["unrecognizedData"] = true; invalid.append(extra);
+        const auto feature = original["features"].toArray().first().toObject();
+        for (const auto &key : {"parameters", "visible", "name"}) {
+            auto changed = feature; changed[key] = QJsonArray{1};
+            auto root = original; root["features"] = QJsonArray{changed}; invalid.append(root);
+        }
+        auto duplicate = original; duplicate["features"] = QJsonArray{feature,feature}; invalid.append(duplicate);
+        for (auto target : {QString("missing"), id}) {
+            auto changed = feature; changed["type"] = "transform";
+            changed["parameters"] = QJsonObject{{"source",target}};
+            auto root = original; root["features"] = QJsonArray{changed}; invalid.append(root);
+        }
+        auto unknown = feature; unknown["newMetadata"] = 1;
+        auto root = original; root["features"] = QJsonArray{unknown}; invalid.append(root);
+        for (const auto &document : invalid) {
+            QVERIFY_THROWS_EXCEPTION(std::exception, m.loadJson(document));
+            QCOMPARE(m.json(), original); QCOMPARE(m.filePath, path); QCOMPARE(m.dirty, dirty);
+            QVERIFY_THROWS_EXCEPTION(std::exception, m.commit(document));
+            QCOMPARE(m.json(), original);
+        }
+        // Failure must preserve redo, not merely the visible shape.
+        QVERIFY(m.redo()); QCOMPARE(m.json(), edited);
+        QVERIFY(m.undo()); QCOMPARE(m.json(), original);
+    }
+    void noOpCommandsPreserveHistory() {
+        Model m;
+        auto id = m.add("box", {{"w",10},{"h",10},{"d",10}}, "Box");
+        QTemporaryDir dir; QVERIFY(dir.isValid());
+        m.save(dir.filePath("part.mcad"));
+        const auto clean = m.json();
+        m.edit(id, m.get(id).p, m.get(id).name);
+        m.commit(clean);
+        QVERIFY(!m.dirty);
+        m.edit(id, {{"w",20},{"h",10},{"d",10}}, "Box");
+        const auto changed = m.json();
+        QVERIFY(m.undo()); QCOMPARE(m.json(), clean);
+        m.edit(id, m.get(id).p, m.get(id).name);
+        QVERIFY_THROWS_EXCEPTION(std::exception, m.remove("missing"));
+        QVERIFY(m.redo()); QCOMPARE(m.json(), changed);
+        QVERIFY(m.undo()); QCOMPARE(m.json(), clean);
+        QVERIFY(m.undo()); QVERIFY(m.features.empty());
+        QVERIFY(!m.undo());
+    }
+    void failedSaveAndParsePreserveSession() {
+        Model m;
+        auto id = m.add("box", {{"w",10}});
+        QTemporaryDir dir; QVERIFY(dir.isValid());
+        const auto path = dir.filePath("original.mcad");
+        m.save(path);
+        QFile original(path); QVERIFY(original.open(QIODevice::ReadOnly));
+        const auto bytes = original.readAll(); original.close();
+        m.edit(id, {{"w",20}}, "Changed");
+        const auto before = m.json();
+        QVERIFY_THROWS_EXCEPTION(std::exception, m.save(dir.filePath("missing/part.mcad")));
+        QCOMPARE(m.json(), before); QCOMPARE(m.filePath, path); QVERIFY(m.dirty);
+        QVERIFY(original.open(QIODevice::ReadOnly)); QCOMPARE(original.readAll(), bytes); original.close();
+        QFile broken(dir.filePath("broken.mcad")); QVERIFY(broken.open(QIODevice::WriteOnly));
+        broken.write("{invalid"); broken.close();
+        QVERIFY_THROWS_EXCEPTION(std::exception, m.load(broken.fileName()));
+        QCOMPARE(m.json(), before); QCOMPARE(m.filePath, path); QVERIFY(m.dirty);
+        QVERIFY(m.undo()); QCOMPARE(m.get(id).p["w"].toDouble(), 10.);
+    }
     void associativeFaceSketchCut() {
         Model model;
         auto body = model.add("box", {{"w",30},{"h",30},{"d",10}});

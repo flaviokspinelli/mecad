@@ -2,6 +2,10 @@
 
 Atualização: 21/09/2026. Base: MecaCAD 0.2.25, macOS Apple Silicon.
 
+Progresso após essa versão: [registro de execução](docs/PROGRESSO.md).
+Política de testes: grupos direcionados e sem janelas durante o desenvolvimento;
+interface somente quando necessária, com aviso; suíte completa antes da entrega consolidada.
+
 ## Objetivo e compromisso de qualidade
 
 Desenvolver um CAD/CAM/CAE paramétrico completo para uso interno em mecatrônica,
@@ -72,7 +76,7 @@ Histórico: [entrega 0.1](docs/ENTREGA-0.1.md), [entrega 0.2](docs/ENTREGA-0.2.m
 | REL-03 | P0 · Parcial | Recuperação automática | Simular encerramento forçado e recuperar alterações; não sobrescrever original nem recuperação de outro documento; explicar o que foi recuperado. |
 | REL-04 | P0 · Parcial | Formato nativo versionado | Migrações verificadas com arquivos de cada versão publicada; recusar formatos incompatíveis sem perda; salvar atomicamente. |
 | REL-05 | P0 · Pendente | Operações assíncronas e canceláveis | Importar/reconstruir/simular sem bloquear UI; progresso, cancelamento e proteção contra resultados obsoletos ou concorrentes. |
-| REL-06 | P0 · Pendente | CI e pacote reproduzível | Executar geometria/UI/arquivos automaticamente; guardar evidências; bloquear empacotamento com regressões; verificar instalação limpa. |
+| REL-06 | P0 · Parcial | CI e pacote reproduzível | Executar geometria/UI/arquivos automaticamente; guardar evidências; bloquear empacotamento com regressões; verificar instalação limpa. |
 | REL-07 | P1 · Parcial | Diagnósticos e suporte | Erro identifica etapa, causa provável e recuperação; log local exportável sem incluir projetos privados automaticamente. |
 | REL-08 | P1 · Pendente | Documentos grandes | Reconstrução incremental, cache, renderização otimizada e limites explícitos; medir memória/latência com conjuntos pequenos, médios e grandes. |
 | REL-09 | P1 · Pendente | Revisões e múltiplos documentos | Abrir vários projetos, recuperar cada um e comparar/restaurar revisões sem sobrescrita acidental; separar revisão de arquivo de histórico geométrico. |

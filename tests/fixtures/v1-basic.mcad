@@ -1,0 +1,21 @@
+{
+    "format": "MecaCAD",
+    "version": 1,
+    "units": "mm",
+    "features": [
+        {
+            "id": "base-profile",
+            "name": "Base profile",
+            "type": "sketch",
+            "visible": true,
+            "parameters": {"profile": "rectangle", "plane": "XY", "w": 20, "h": 30}
+        },
+        {
+            "id": "base-extrude",
+            "name": "Base extrude",
+            "type": "extrude",
+            "visible": true,
+            "parameters": {"source": "base-profile", "d": 10}
+        }
+    ]
+}
