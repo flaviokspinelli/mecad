@@ -1,5 +1,21 @@
 # Execução do backlog
 
+## 21/09/2026 — preferências locais de visualização e encaixe
+
+PROD-05: fundo claro/escuro, arestas visíveis, snap e encaixe inteligente agora
+persistem em preferences.ini, fora do documento. Valores ausentes/inválidos usam
+defaults; falha de sync informa que a preferência vale somente na sessão. A
+interface restaura a seleção dos menus e o estado do canvas ao construir a janela.
+O caminho pode ser isolado nos testes; sessões com recoveryDirectory customizado
+usam essa pasta por padrão, sem tocar preferências normais do usuário.
+
+displayPreferencesPersistWithoutDocumentChanges e displayPreferenceWriteFailureIsReported
+passaram offscreen (dois casos, quatro resultados Qt). Verificados reabrir,
+fallback, escrita recusada, documento/dirty e undo independentes. MecaCAD e ui_tests
+recompilados em build; nenhuma janela de teste ou nova distribuição criada.
+Documentação em PREFERENCES.md. Idioma, unidades, atalhos e presets de navegação
+ainda pendentes; não fecha PROD-05 nem altera contagem de itens completos.
+
 ## 21/09/2026 — busca de comandos com filtro em tempo real
 
 UX-07: substituída a caixa de seleção por busca filtrável, sem distinção entre

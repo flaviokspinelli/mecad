@@ -20,6 +20,38 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void displayPreferencesPersistWithoutDocumentChanges() {
+        QTemporaryDir dir;const auto settings=dir.filePath("preferences.ini");
+        {
+            Window window(dir.filePath("recovery"),false,settings);
+            const auto before=window.model.json();auto *v=window.findChild<Viewport *>();
+            QVERIFY(!v->light);QVERIFY(v->showEdges);QVERIFY(v->snap);QVERIFY(v->smartSnap);
+            window.findChild<QAction *>("lightCanvas")->setChecked(true);
+            for(const auto &key:QStringList{"visibleEdges","gridSnap","smartSnap"})window.findChild<QAction *>(key)->setChecked(false);
+            QVERIFY(v->light);QVERIFY(!v->showEdges);QVERIFY(!v->snap);QVERIFY(!v->smartSnap);
+            QCOMPARE(window.model.json(),before);QVERIFY(!window.model.dirty);
+        }
+        {
+            Window window(dir.filePath("recovery"),false,settings);auto *v=window.findChild<Viewport *>();
+            QVERIFY(v->light);QVERIFY(!v->showEdges);QVERIFY(!v->snap);QVERIFY(!v->smartSnap);
+            window.model.add("box",{{"w",10},{"h",20},{"d",30}});
+            const auto before=window.model.json();window.findChild<QAction *>("lightCanvas")->setChecked(false);
+            QCOMPARE(window.model.json(),before);QVERIFY(window.model.undo());QVERIFY(window.model.features.empty());
+        }
+        QSettings invalid(settings,QSettings::IniFormat);invalid.setValue("sketch/gridSnap","not-a-bool");invalid.sync();
+        Window fallback(dir.filePath("recovery"),false,settings);
+        QVERIFY(fallback.findChild<Viewport *>()->snap);
+        QVERIFY(!fallback.findChild<Viewport *>()->light);
+    }
+    void displayPreferenceWriteFailureIsReported() {
+        QTemporaryDir dir;
+        Window window(dir.filePath("recovery"),false,dir.path());
+        const auto before=window.model.json();window.findChild<QAction *>("lightCanvas")->setChecked(true);
+        QVERIFY(window.findChild<Viewport *>()->light);QCOMPARE(window.model.json(),before);
+        bool warning=false;for(auto *label:window.findChildren<QLabel *>())
+            if(label->text().contains("não foi possível salvá-la"))warning=true;
+        QVERIFY(warning);
+    }
     void commandSearchFiltersAndKeyboard() {
         QTemporaryDir dir;Window window(dir.filePath("recovery"),false);window.show();
         QVERIFY(QTest::qWaitForWindowExposed(&window));

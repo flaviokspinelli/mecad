@@ -11,6 +11,7 @@
 #include <QListWidget>
 #include <QMainWindow>
 #include <QPointer>
+#include <QSettings>
 #include <QTabBar>
 #include <QTimer>
 #include <QTreeWidget>
@@ -19,7 +20,7 @@
 class Window : public QMainWindow {
     Q_OBJECT
   public:
-    explicit Window(QString recoveryDirectory = {}, bool promptRecovery = true);
+    explicit Window(QString recoveryDirectory = {}, bool promptRecovery = true, QString preferencesFile = {});
     void openPath(const QString &path);
     void demo();
     Model model;
@@ -46,6 +47,8 @@ class Window : public QMainWindow {
     QMap<QString, QDoubleSpinBox *> fields;
     QMap<QString, QAction *> commands;
     bool refreshing = false;
+    std::unique_ptr<QSettings> preferences;
+    void savePreference(const QString &key, bool value);
     QPointer<QDialog> activeCommand;
     std::function<void(QString)> commandSelection;
     QString pendingSketchTool = "rectangle";

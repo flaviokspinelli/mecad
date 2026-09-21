@@ -489,7 +489,19 @@ QAction *Window::command(QString key, QString label, QString shortcut, std::func
     commands[key] = a;
     return a;
 }
-Window::Window(QString recoveryDirectory, bool promptRecovery) {
+void Window::savePreference(const QString &key,bool value) {
+    preferences->setValue(key,value);preferences->sync();
+    if(preferences->status()!=QSettings::NoError)
+        status->setText("Preferência aplicada nesta sessão, mas não foi possível salvá-la no disco.");
+}
+Window::Window(QString recoveryDirectory, bool promptRecovery, QString preferencesFile) {
+    if(preferencesFile.isEmpty())preferencesFile=(recoveryDirectory.isEmpty()?
+        QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation):recoveryDirectory)+"/preferences.ini";
+    preferences=std::make_unique<QSettings>(preferencesFile,QSettings::IniFormat);
+    auto preference=[&](const QString &key,bool fallback) {
+        const auto value=preferences->value(key).toString().toLower();
+        return value=="true"?true:value=="false"?false:fallback;
+    };
     setObjectName("MecaCAD");
     resize(1440, 920);
     setMinimumSize(1100, 720);
@@ -947,9 +959,12 @@ Window::Window(QString recoveryDirectory, bool promptRecovery) {
     for (auto name : {"iso", "top", "front", "right"})
         viewMenu->addAction(QString(name).toUpper(), this, [this, name] { canvas->view(name); });
     auto *theme = viewMenu->addAction("Light canvas");
+    theme->setObjectName("lightCanvas");
     theme->setCheckable(true);
+    theme->setChecked(preference("view/light",false));
     connect(theme, &QAction::toggled, this, [this](bool v) {
         canvas->light = v;
+        savePreference("view/light",v);
         canvas->update();
     });
     help->addAction("Quick start", this, [this] {
@@ -1053,6 +1068,7 @@ Window::Window(QString recoveryDirectory, bool promptRecovery) {
     headerBar->setStyleSheet("QToolBar{padding:0;border:0;background:#364353;}");
     headerBar->addWidget(header);
     canvas = new Viewport(&model);
+    canvas->light=theme->isChecked();
     layout->addWidget(canvas, 1);
     navigation = new QWidget(canvas);
     navigation->setObjectName("navigationOverlay");
@@ -1088,10 +1104,12 @@ Window::Window(QString recoveryDirectory, bool promptRecovery) {
     auto *displayMenu = new QMenu(display);
     displayMenu->addAction(theme);
     auto *edges = displayMenu->addAction("Visible edges");
+    edges->setObjectName("visibleEdges");
     edges->setCheckable(true);
-    edges->setChecked(true);
+    canvas->showEdges=preference("view/edges",true);edges->setChecked(canvas->showEdges);
     connect(edges, &QAction::toggled, this, [this](bool yes) {
         canvas->showEdges = yes;
+        savePreference("view/edges",yes);
         canvas->update();
     });
     display->setMenu(displayMenu);
@@ -1099,16 +1117,20 @@ Window::Window(QString recoveryDirectory, bool promptRecovery) {
     auto *grid = navButton("grid", "Grid and snaps", [] {});
     auto *gridMenu = new QMenu(grid);
     auto *snap = gridMenu->addAction("Snap to 1 mm");
+    snap->setObjectName("gridSnap");
     snap->setCheckable(true);
-    snap->setChecked(true);
-    connect(snap, &QAction::toggled, this, [this](bool v) { canvas->snap = v; });
+    canvas->snap=preference("sketch/gridSnap",true);snap->setChecked(canvas->snap);
+    connect(snap, &QAction::toggled, this, [this](bool v) {
+        canvas->snap=v;savePreference("sketch/gridSnap",v);canvas->update();
+    });
     auto *smartSnap = gridMenu->addAction("Encaixe inteligente");
     smartSnap->setObjectName("smartSnap");
     smartSnap->setToolTip("Atrai o cursor a pontos e alinhamentos; não cria restrições permanentes. Use Constraints para manter uma relação.");
     smartSnap->setCheckable(true);
-    smartSnap->setChecked(true);
+    canvas->smartSnap=preference("sketch/smartSnap",true);smartSnap->setChecked(canvas->smartSnap);
     connect(smartSnap, &QAction::toggled, this, [this](bool enabled) {
         canvas->smartSnap = enabled;
+        savePreference("sketch/smartSnap",enabled);
         canvas->update();
     });
     grid->setMenu(gridMenu);
