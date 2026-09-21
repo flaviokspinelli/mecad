@@ -12,6 +12,46 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void areaSelection() {
+        Model model;
+        auto a = model.add("sketch", {{"profile", "rectangle"}, {"plane", "XY"}, {"w", 20}, {"h", 20}});
+        auto b = model.add("sketch", {{"profile", "rectangle"}, {"plane", "XY"}, {"x", 40}, {"w", 20}, {"h", 20}});
+        Viewport v(&model);
+        v.resize(1000, 700);
+        v.view("top");
+        v.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&v));
+        v.fit();
+        auto box = [&](double x1, double y1, double x2, double y2) {
+            return QRectF(v.project({float(x1), float(y1), 0}), v.project({float(x2), float(y2), 0})).normalized();
+        };
+        auto area = box(-2, -2, 22, 22);
+        QCOMPARE(v.pickArea(area, false).size(), 1);
+        QCOMPARE(v.pickArea(area, false).front().feature, a);
+        auto partial = box(19, -2, 22, 22);
+        QVERIFY(v.pickArea(partial, false).empty());
+        QCOMPARE(v.pickArea(partial, true).size(), 1);
+        v.selectionFilter = "edge";
+        QCOMPARE(v.pickArea(area, false).size(), 4);
+        v.selectionFilter = "vertex";
+        QCOMPARE(v.pickArea(area, false).size(), 4);
+        v.selectionFilter = "auto";
+        auto drag = [&](QRectF rect, Qt::KeyboardModifiers modifiers) {
+            auto start = rect.topLeft().toPoint(), end = rect.bottomRight().toPoint();
+            QTest::mousePress(&v, Qt::LeftButton, modifiers, start);
+            QMouseEvent move(QEvent::MouseMove, end, v.mapToGlobal(end), Qt::NoButton, Qt::LeftButton, modifiers);
+            QApplication::sendEvent(&v, &move);
+            QVERIFY(v.areaDragging);
+            v.grab().save(QDir::currentPath() + "/area-selection-test.png");
+            QTest::mouseRelease(&v, Qt::LeftButton, modifiers, end);
+        };
+        drag(area, Qt::NoModifier);
+        QCOMPARE(v.selectedDetails.size(), 1);
+        drag(box(38, -2, 62, 22), Qt::ShiftModifier);
+        QCOMPARE(v.selectedDetails.size(), 2);
+        QTest::keyClick(&v, Qt::Key_Escape);
+        QVERIFY(v.selectedDetails.empty());
+    }
     void shiftSelection() {
         Model model;
         auto id = model.add("sketch", {{"profile", "rectangle"}, {"plane", "XY"}, {"w", 40}, {"h", 30}});

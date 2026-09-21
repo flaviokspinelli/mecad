@@ -6,6 +6,82 @@
 #include <TopoDS.hxx>
 #include <cmath>
 #include <limits>
+#include <QPainterPath>
+
+QVector<Viewport::SelectionTarget> Viewport::pickArea(QRectF area, bool crossing) const {
+    QVector<SelectionTarget> result;
+    QPainterPath region;
+    region.addRect(area);
+    auto matches = [&](const QVector<QVector3D> &points, bool closed) {
+        if (points.empty())
+            return false;
+        bool inside = true;
+        QPainterPath path;
+        path.moveTo(project(points.front()));
+        for (const auto &point : points) {
+            auto pixel = project(point);
+            inside = inside && area.contains(pixel);
+            path.lineTo(pixel);
+        }
+        if (closed)
+            path.closeSubpath();
+        return inside || (crossing && (path.intersects(region) || path.contains(area.center())));
+    };
+    for (const auto &feature : model->features) {
+        if (!feature.visible || feature.type == "remove" || model->consumed(feature.id))
+            continue;
+        if (selectionFilter == "vertex") {
+            if (model->isMesh(feature.id))
+                continue;
+            TopTools_IndexedMapOfShape vertices;
+            TopExp::MapShapes(feature.shape, TopAbs_VERTEX, vertices);
+            for (int i = 1; i <= vertices.Extent(); ++i) {
+                auto p = BRep_Tool::Pnt(TopoDS::Vertex(vertices(i)));
+                QVector3D point(p.X(), p.Y(), p.Z());
+                if (area.contains(project(point)))
+                    result.append({feature.id, "vertex", i - 1, {point}});
+            }
+            continue;
+        }
+        QVector<QVector3D> all;
+        bool hit = false;
+        if (!model->isMesh(feature.id)) {
+            TopTools_IndexedMapOfShape edges;
+            TopExp::MapShapes(feature.shape, TopAbs_EDGE, edges);
+            for (int i = 1; i <= edges.Extent(); ++i) {
+                auto edge = TopoDS::Edge(edges(i));
+                if (BRep_Tool::Degenerated(edge))
+                    continue;
+                BRepAdaptor_Curve curve(edge);
+                if (!std::isfinite(curve.FirstParameter()) || !std::isfinite(curve.LastParameter()))
+                    continue;
+                QVector<QVector3D> points;
+                int steps = curve.GetType() == GeomAbs_Line ? 1 : 128;
+                for (int j = 0; j <= steps; ++j) {
+                    auto p = curve.Value(curve.FirstParameter() + (curve.LastParameter() - curve.FirstParameter()) * j / steps);
+                    points.append({float(p.X()), float(p.Y()), float(p.Z())});
+                }
+                bool match = matches(points, false);
+                if (selectionFilter == "edge" && match)
+                    result.append({feature.id, "edge", i - 1, points});
+                hit = hit || match;
+                all += points;
+            }
+        }
+        if (selectionFilter == "edge")
+            continue;
+        for (const auto &triangle : mesh) {
+            if (model->features[triangle.feature].id != feature.id)
+                continue;
+            QVector<QVector3D> points{triangle.a, triangle.b, triangle.c};
+            hit = hit || matches(points, true);
+            all += points;
+        }
+        if ((!crossing && matches(all, false)) || (crossing && hit))
+            result.append({feature.id, "object", -1, {}});
+    }
+    return result;
+}
 
 Viewport::SelectionTarget Viewport::pickDetail(QPointF pixel, bool objectOnly) const {
     const auto projection = matrix();

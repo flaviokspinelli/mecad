@@ -103,6 +103,9 @@ class Viewport : public QOpenGLWidget, protected QOpenGLFunctions {
     Model *model;
     void paintGrid();
     SelectionTarget pickDetail(QPointF pixel, bool objectOnly = false) const;
+    QVector<SelectionTarget> pickArea(QRectF area, bool crossing) const;
+    bool areaCandidate = false, areaDragging = false;
+    QPointF areaEnd;
     QWidget *overlay;
     std::vector<Triangle> mesh;
     std::vector<QVector3D> vertices;

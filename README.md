@@ -8,7 +8,14 @@ desenvolvida e testada em macOS 14, Apple Silicon.
 
 ## Abrir
 
-Abra `dist/MecaCAD-0.2.20.app`. O pacote local reúne o executável e suas bibliotecas.
+Abra `dist/MecaCAD-0.2.21.app`. O pacote local reúne o executável e suas bibliotecas.
+
+Na 0.2.21, arraste a partir do vazio com a ferramenta de seleção para selecionar
+por área. Da esquerda para a direita inclui somente itens inteiros; da direita
+para a esquerda inclui também os cruzados. Shift acrescenta à seleção. Em modo
+automático seleciona objetos/perfis; os filtros de linhas e vértices selecionam
+subelementos. A caixa considera a projeção da geometria visível no Browser,
+inclusive itens atrás de outros corpos. Não altera os gestos das ferramentas de desenho.
 
 Na 0.2.20, Shift + clique adiciona ou remove itens da seleção, incluindo arestas
 e vértices juntos. Clique sem Shift substitui a seleção; Esc limpa tudo.

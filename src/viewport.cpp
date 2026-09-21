@@ -318,6 +318,7 @@ void Viewport::viewDirection(QVector3D direction, bool animated) {
     cameraAnimation.start();
 }
 void Viewport::setTool(QString name) {
+    areaCandidate = areaDragging = false;
     selectedDetails.clear();
     selectedDetail = {};
     hoveredDetail = {};
@@ -443,6 +444,15 @@ void Viewport::paintGrid() {
 }
 void Viewport::paintOverlay(QPainter &p) {
     p.setRenderHint(QPainter::Antialiasing);
+    if (areaDragging) {
+        bool crossing = areaEnd.x() < pressed.x();
+        QColor color = crossing ? QColor("#62c99e") : QColor("#65ceff");
+        p.setPen(QPen(color, 1, crossing ? Qt::DashLine : Qt::SolidLine));
+        color.setAlpha(35);
+        p.setBrush(color);
+        p.drawRect(QRectF(pressed, areaEnd).normalized());
+        p.setBrush(Qt::NoBrush);
+    }
     for (auto &f : model->features)
         if (f.type == "sketch" && (f.id == selected || (f.visible && !model->consumed(f.id)))) {
             bool chosen = objectSelected(f.id);
@@ -960,6 +970,11 @@ void Viewport::mousePressEvent(QMouseEvent *e) {
         cubeDirectionAt(e->position()).isNull() &&
         !QRect(width() - 84, 100, 50, 20).contains(e->position().toPoint());
     last = pressed = e->position();
+    areaCandidate = e->button() == Qt::LeftButton && tool.isEmpty() && !choosingPlane &&
+                    !onAcceptCommand && !handleActive && !moveHandleActive && navigationMode.isEmpty() &&
+                    !e->modifiers().testFlag(Qt::AltModifier) && pickDetail(pressed).feature.isEmpty();
+    areaDragging = false;
+    areaEnd = pressed;
     if (sketchPressCandidate)
         sketchPressPoint = sketchPoint(pressed);
     draggingHandle = handleActive && e->button() == Qt::LeftButton &&
@@ -1002,6 +1017,13 @@ void Viewport::mousePressEvent(QMouseEvent *e) {
     }
 }
 void Viewport::mouseMoveEvent(QMouseEvent *e) {
+    if (areaCandidate && e->buttons().testFlag(Qt::LeftButton)) {
+        areaEnd = e->position();
+        areaDragging = QLineF(pressed, areaEnd).length() > 4;
+        hoveredDetail = {};
+        update();
+        return;
+    }
     if (e->buttons() == Qt::NoButton && tool.isEmpty() && !choosingPlane && !onAcceptCommand &&
         cubeDirectionAt(e->position()).isNull()) {
         hoveredDetail = pickDetail(e->position());
@@ -1137,6 +1159,31 @@ void Viewport::mouseMoveEvent(QMouseEvent *e) {
     update();
 }
 void Viewport::mouseReleaseEvent(QMouseEvent *e) {
+    if (areaCandidate && e->button() == Qt::LeftButton) {
+        areaCandidate = false;
+        bool dragged = QLineF(pressed, e->position()).length() > 4;
+        areaDragging = false;
+        if (dragged) {
+            auto targets = pickArea(QRectF(pressed, e->position()).normalized(), e->position().x() < pressed.x());
+            if (e->modifiers().testFlag(Qt::ShiftModifier)) {
+                for (const auto &previous : selectedDetails) {
+                    bool exists = std::any_of(targets.begin(), targets.end(), [&](const SelectionTarget &item) {
+                        return item.feature == previous.feature && item.kind == previous.kind && item.index == previous.index;
+                    });
+                    if (!exists)
+                        targets.append(previous);
+                }
+            }
+            auto target = targets.empty() ? SelectionTarget{} : targets.back();
+            selected = target.feature;
+            if (onSelect)
+                onSelect(selected);
+            selectedDetails = targets;
+            selectedDetail = target;
+            update();
+            return;
+        }
+    }
     if (draggingRotation) {
         draggingRotation = false;
         setCursor(Qt::OpenHandCursor);
