@@ -200,6 +200,7 @@ void Viewport::initializeGL() {
         onHint("Falha ao iniciar a visualização OpenGL: " + shader.log());
 }
 void Viewport::refresh() {
+    selectedDetails.clear();
     selectedDetail = {};
     hoveredDetail = {};
     mesh = model->triangles();
@@ -317,6 +318,7 @@ void Viewport::viewDirection(QVector3D direction, bool animated) {
     cameraAnimation.start();
 }
 void Viewport::setTool(QString name) {
+    selectedDetails.clear();
     selectedDetail = {};
     hoveredDetail = {};
     draggingRotation = false;
@@ -374,7 +376,7 @@ void Viewport::paintGL() {
             int end = start + 1;
             while (end < int(mesh.size()) && mesh[end].feature == mesh[start].feature)
                 ++end;
-            bool chosen = model->features[mesh[start].feature].id == selected && !hasSubselection();
+            bool chosen = objectSelected(model->features[mesh[start].feature].id);
             bool hovered = hoveredDetail.feature == model->features[mesh[start].feature].id &&
                            hoveredDetail.kind == "object";
             shader.setUniformValue("color", chosen    ? QVector3D(.42, .77, .94)
@@ -443,7 +445,7 @@ void Viewport::paintOverlay(QPainter &p) {
     p.setRenderHint(QPainter::Antialiasing);
     for (auto &f : model->features)
         if (f.type == "sketch" && (f.id == selected || (f.visible && !model->consumed(f.id)))) {
-            bool chosen = f.id == selected && !hasSubselection();
+            bool chosen = objectSelected(f.id);
             bool hovered = hoveredDetail.feature == f.id && hoveredDetail.kind == "object";
             p.setPen(QPen(chosen    ? QColor("#65ceff")
                           : hovered ? QColor("#ffd080")
@@ -481,8 +483,15 @@ void Viewport::paintOverlay(QPainter &p) {
         }
     };
     drawDetail(hoveredDetail, QColor("#ffd080"));
-    drawDetail(selectedDetail, QColor("#65ceff"));
-    if (hasSubselection()) {
+    if (selectedDetails.empty())
+        drawDetail(selectedDetail, QColor("#65ceff"));
+    else
+        for (const auto &target : selectedDetails)
+            drawDetail(target, QColor("#65ceff"));
+    if (selectedDetails.size() > 1) {
+        p.setPen(QColor("#cceaff"));
+        p.drawText(290, 45, QString("%1 itens selecionados").arg(selectedDetails.size()));
+    } else if (hasSubselection()) {
         p.setPen(QColor("#cceaff"));
         p.drawText(290, 45,
                    (selectedDetail.kind == "vertex" ? QString("Vértice %1 selecionado")
@@ -1269,11 +1278,33 @@ void Viewport::mouseReleaseEvent(QMouseEvent *e) {
         return;
     }
     auto target = pickDetail(s, bool(onAcceptCommand));
+    auto targets = selectedDetails;
+    if (targets.empty() && !selectedDetail.feature.isEmpty())
+        targets.append(selectedDetail);
+    if (!onAcceptCommand && e->modifiers().testFlag(Qt::ShiftModifier)) {
+        if (target.feature.isEmpty())
+            return;
+        auto found = std::find_if(targets.begin(), targets.end(), [&](const SelectionTarget &item) {
+            return item.feature == target.feature && item.kind == target.kind && item.index == target.index;
+        });
+        if (found == targets.end())
+            targets.append(target);
+        else
+            targets.erase(found);
+    } else {
+        targets.clear();
+        if (!target.feature.isEmpty())
+            targets.append(target);
+    }
+    if (!onAcceptCommand)
+        target = targets.empty() ? SelectionTarget{} : targets.back();
     selected = target.feature;
     if (onSelect)
         onSelect(selected);
-    if (!onAcceptCommand)
+    if (!onAcceptCommand) {
         selectedDetail = target;
+        selectedDetails = targets;
+    }
     update();
 }
 void Viewport::leaveEvent(QEvent *event) {

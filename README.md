@@ -8,7 +8,11 @@ desenvolvida e testada em macOS 14, Apple Silicon.
 
 ## Abrir
 
-Abra `dist/MecaCAD-0.2.19.app`. O pacote local reúne o executável e suas bibliotecas.
+Abra `dist/MecaCAD-0.2.20.app`. O pacote local reúne o executável e suas bibliotecas.
+
+Na 0.2.20, Shift + clique adiciona ou remove itens da seleção, incluindo arestas
+e vértices juntos. Clique sem Shift substitui a seleção; Esc limpa tudo.
+Shift no vazio preserva a seleção. Operações em lote ainda não são suportadas.
 
 Na 0.2.19, novas extrusões começam em zero, sem sólido automático. Arraste a seta
 ou digite a distância para ver a prévia; Enter/OK confirma. Confirmar em zero não

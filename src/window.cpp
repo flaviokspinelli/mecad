@@ -426,9 +426,9 @@ QAction *Window::command(QString key, QString label, QString shortcut, std::func
             const QStringList bodyCommands = {"delete", "rollback", "transform", "copy",
                                               "fillet", "hole",     "boolean",   "cut",
                                               "common", "extrude",  "revolve",   "dimension"};
-            if (canvas->hasSubselection() && bodyCommands.contains(key))
+            if ((canvas->hasSubselection() || canvas->selectedDetails.size() > 1) && bodyCommands.contains(key))
                 throw std::runtime_error(
-                    "Uma aresta ou vértice está selecionado. Esta ferramenta ainda atua no objeto inteiro; "
+                    "Há subelementos ou vários itens selecionados. Esta ferramenta ainda atua em um objeto inteiro; "
                     "selecione o objeto no Browser ou use o filtro Objetos / perfis.");
             fn();
         });
@@ -615,6 +615,7 @@ Window::Window() {
                                                      {"vertex", "Vértices"}}) {
         auto *action = command("select_" + entry.first, entry.second, "", [this, mode = entry.first] {
             canvas->selectionFilter = mode;
+            canvas->selectedDetails.clear();
             canvas->selectedDetail = {};
             canvas->hoveredDetail = {};
             canvas->setTool({});
@@ -1237,6 +1238,7 @@ void Window::select(const QString &id) {
         return;
     }
     properties->hide();
+    canvas->selectedDetails.clear();
     canvas->selectedDetail = {};
     canvas->hoveredDetail = {};
     tree->clearSelection();
@@ -1757,6 +1759,11 @@ void Window::fillet() {
     }
 }
 void Window::measure() {
+    if (canvas->selectedDetails.size() > 1) {
+        QMessageBox::information(this, "Seleção múltipla",
+                                 "Selecione somente uma aresta, vértice ou objeto para medir.");
+        return;
+    }
     if (canvas->hasSubselection()) {
         const auto &detail = canvas->selectedDetail;
         if (detail.kind == "vertex" && !detail.geometry.empty()) {

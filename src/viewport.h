@@ -25,9 +25,19 @@ class Viewport : public QOpenGLWidget, protected QOpenGLFunctions {
         QVector<QVector3D> geometry;
     };
     SelectionTarget selectedDetail, hoveredDetail;
+    QVector<SelectionTarget> selectedDetails;
     QString selectionFilter = "auto";
     bool hasSubselection() const {
+        for (const auto &target : selectedDetails)
+            if (target.kind == "edge" || target.kind == "vertex")
+                return true;
         return selectedDetail.kind == "edge" || selectedDetail.kind == "vertex";
+    }
+    bool objectSelected(const QString &id) const {
+        for (const auto &target : selectedDetails)
+            if (target.feature == id && target.kind == "object")
+                return true;
+        return selectedDetails.empty() && selected == id && !hasSubselection();
     }
     bool sketchMode = false, snap = true, light = false;
     bool showEdges = true;

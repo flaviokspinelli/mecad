@@ -12,12 +12,55 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void shiftSelection() {
+        Model model;
+        auto id = model.add("sketch", {{"profile", "rectangle"}, {"plane", "XY"}, {"w", 40}, {"h", 30}});
+        Viewport v(&model);
+        v.resize(1000, 700);
+        v.view("top");
+        v.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&v));
+        v.fit();
+        auto click = [&](double x, double y, Qt::KeyboardModifiers modifiers) {
+            QTest::mouseClick(&v, Qt::LeftButton, modifiers, v.project({float(x), float(y), 0}).toPoint());
+        };
+        // Emulate the Browser callback clearing its single selection state.
+        v.onSelect = [&](QString owner) {
+            v.selected = owner;
+            v.selectedDetail = {};
+            v.selectedDetails.clear();
+        };
+        click(20, 0, Qt::NoModifier);
+        click(40, 15, Qt::ShiftModifier);
+        click(0, 0, Qt::ShiftModifier);
+        QCOMPARE(v.selectedDetails.size(), 3);
+        QCOMPARE(v.selectedDetails[0].kind, QString("edge"));
+        QCOMPARE(v.selectedDetails[1].kind, QString("edge"));
+        QCOMPARE(v.selectedDetails[2].kind, QString("vertex"));
+        v.grab().save(QDir::currentPath() + "/shift-selection-test.png");
+        click(40, 15, Qt::ShiftModifier);
+        QCOMPARE(v.selectedDetails.size(), 2);
+        QTest::mouseClick(&v, Qt::LeftButton, Qt::ShiftModifier, QPoint(10, 400));
+        QCOMPARE(v.selectedDetails.size(), 2);
+        click(40, 30, Qt::NoModifier);
+        QCOMPARE(v.selectedDetails.size(), 1);
+        QCOMPARE(v.selectedDetail.kind, QString("vertex"));
+        click(40, 30, Qt::ShiftModifier);
+        QVERIFY(v.selectedDetails.empty());
+        QVERIFY(v.selected.isEmpty());
+        click(0, 0, Qt::ShiftModifier);
+        click(20, 0, Qt::ShiftModifier);
+        QTest::keyClick(&v, Qt::Key_Escape);
+        QVERIFY(v.selectedDetails.empty());
+    }
     void extrusionStartsAtZero() {
         Window window;
         auto sketch = window.model.add("sketch", {{"profile", "rectangle"}, {"plane", "XY"},
                                                   {"w", 40}, {"h", 30}});
         window.show();
         QVERIFY(QTest::qWaitForWindowExposed(&window));
+        window.activateWindow();
+        QVERIFY(QTest::qWaitForWindowActive(&window));
         auto *v = window.findChild<Viewport *>();
         v->refresh();
         v->fit();
@@ -884,6 +927,7 @@ int main(int argc, char **argv) {
     f.setStencilBufferSize(8);
     QSurfaceFormat::setDefaultFormat(f);
     QApplication app(argc, argv);
+    app.setQuitOnLastWindowClosed(false);
     app.setOrganizationName("MecaCADTests");
     app.setApplicationName("MecaCADTests");
     UiTests tests;
