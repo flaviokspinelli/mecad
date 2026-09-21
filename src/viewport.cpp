@@ -1,4 +1,5 @@
 #include "viewport.h"
+#include "snap_intersections.h"
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepBndLib.hxx>
 #include <Bnd_Box.hxx>
@@ -97,6 +98,11 @@ QPointF Viewport::sketchPoint(QPointF pixel) {
         return result;
     QVector<QPair<QPointF, QString>> targets = {{{0, 0}, "Origem"}};
     QVector<QLineF> segments;
+    struct CircularTarget {
+        snapping::Circle shape;bool full=true;QPointF start,middle,end;
+        bool accepts(QPointF point)const{return full || snapping::onArc(shape,start,middle,end,point);}
+    };
+    QVector<CircularTarget> circles;
     auto screen = [&](QPointF p) { return project(Model::planePoint(plane, p.x(), p.y(), planeOffset)); };
     auto local = [&](const gp_Pnt &p) {
         return Model::planeCoordinates(plane, {float(p.X()),float(p.Y()),float(p.Z())});
@@ -109,6 +115,7 @@ QPointF Viewport::sketchPoint(QPointF pixel) {
             BRepAdaptor_Curve edge(TopoDS::Edge(it.Current()));
             double first = edge.FirstParameter(), last = edge.LastParameter();
             if (edge.GetType() == GeomAbs_Circle && std::abs(last - first - 2 * M_PI) < 1e-7) {
+                circles.append(CircularTarget{{local(edge.Circle().Location()),edge.Circle().Radius()}});
                 targets.append({local(edge.Circle().Location()), "Centro"});
                 for (int quadrant = 0; quadrant < 4; ++quadrant)
                     targets.append({local(edge.Value(first + (last - first) * quadrant / 4)), "Quadrante"});
@@ -120,16 +127,25 @@ QPointF Viewport::sketchPoint(QPointF pixel) {
             targets.append({local(edge.Value((first + last) / 2)), "Ponto médio"});
             if (edge.GetType() == GeomAbs_Line)
                 segments.append(QLineF(a, b));
-            if (edge.GetType() == GeomAbs_Circle)
+            if (edge.GetType() == GeomAbs_Circle) {
                 targets.append({local(edge.Circle().Location()), "Centro"});
+                circles.append(CircularTarget{{local(edge.Circle().Location()),edge.Circle().Radius()},false,a,
+                    local(edge.Value((first+last)/2)),b});
+            }
         }
     }
     for (auto point : draft)
         targets.append({point, "Extremidade"});
+    // Only intersect circles close enough to the cursor to be eligible for snap.
+    const double reach=1.5*std::max(QLineF(raw,planeAt(pixel+QPointF(15,0),false)).length(),
+                                    QLineF(raw,planeAt(pixel+QPointF(0,15),false)).length());
+    circles.erase(std::remove_if(circles.begin(),circles.end(),[&](const auto &circle){
+        return std::abs(QLineF(raw,circle.shape.center).length()-circle.shape.radius)>reach;
+    }),circles.end());
     for (int i = 0; i < segments.size(); ++i) {
         if (!QRectF(screen(segments[i].p1()), screen(segments[i].p2()))
                  .normalized()
-                 .adjusted(-12, -12, 12, 12)
+                 .adjusted(-15, -15, 15, 15)
                  .contains(pixel))
             continue;
         for (int j = i + 1; j < segments.size(); ++j) {
@@ -137,7 +153,13 @@ QPointF Viewport::sketchPoint(QPointF pixel) {
             if (segments[i].intersects(segments[j], &intersection) == QLineF::BoundedIntersection)
                 targets.append({intersection, "Interseção"});
         }
+        for(const auto &circle:circles)
+            for(const auto &intersection:snapping::intersections(segments[i],circle.shape))
+                if(circle.accepts(intersection))targets.append({intersection,"Interseção"});
     }
+    for(int i=0;i<circles.size();++i)for(int j=i+1;j<circles.size();++j)
+        for(const auto &intersection:snapping::intersections(circles[i].shape,circles[j].shape))
+            if(circles[i].accepts(intersection) && circles[j].accepts(intersection))targets.append({intersection,"Interseção"});
     double best = 1e10;
     for (const auto &target : targets) {
         double distance = QLineF(pixel, screen(target.first)).length();

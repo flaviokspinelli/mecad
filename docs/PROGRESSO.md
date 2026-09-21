@@ -1,5 +1,22 @@
 # Execução do backlog
 
+## 21/09/2026 — interseções curvas no encaixe inteligente
+
+SK-11: atração a cruzamentos entre segmentos/círculos/arcos. Tangências produzem
+um alvo; círculos coincidentes não inventam interseção. Arcos são filtrados pelo
+trecho real, incluindo orientação inversa e arco maior que meia volta. Busca de
+candidatos circulares limitada à vizinhança do cursor; histerese continua até
+15 pixels. Tooltip distingue encaixe temporário de restrição permanente.
+
+Evidências: snap_tests passou com quatro casos matemáticos e setup/cleanup;
+UI arcIntersectionDoesNotExtendArc, curvedIntersectionsSnapOnSketchPlanes e
+smartSketchSnapping passaram. Verificadas coordenadas nos planos XY/XZ/YZ,
+dois zooms, desativação e ausência de alterações no documento. Comando
+`sh scripts/check.sh snapping` disponível sem janelas; registrado no CTest.
+
+MecaCAD recompilado somente em build/. Distribuição e desenhos preservados.
+Este avanço não fecha os 38 itens nem declara suporte a splines/elipses.
+
 ## 21/09/2026 — cotas X/Y com fórmulas no canvas
 
 PAR-04/SK-03: cotas de distância X/Y do solver aceitam parâmetros nomeados.

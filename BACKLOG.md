@@ -143,7 +143,7 @@ Não substituir o solver por correções específicas de cada figura.
 | SK-08 | P1 · Pendente | Trim/extend/split | Aparar, estender e dividir linhas/arcos/círculos com prévia do trecho; preservar relações válidas e explicar relações removidas. |
 | SK-09 | P1 · Pendente | Offset, espelho e padrões 2D | Cópias associativas editáveis; tratar auto-interseções, colapso de offset e quantidades inválidas. |
 | SK-10 | P1 · Pendente | Projeção e construção | Projetar geometria com vínculo ao suporte; linhas de construção não geram regiões; referências rompidas ficam identificadas. |
-| SK-11 | P1 · Parcial | Snapping e inferências | Extremidade, centro, meio, interseção e alinhamento; feedback visual e distinção entre snap temporário e restrição permanente. |
+| SK-11 | P1 · Parcial | Snapping e inferências | Extremidade, centro, meio, interseção e alinhamento; feedback visual e distinção entre snap temporário e restrição permanente. Interseções entre segmentos, círculos e arcos integradas e testadas nos três planos; limites e evidências em docs/SNAPPING.md. |
 | SK-12 | P1 · Pendente | Geometria de sketch ampliada | Slots, retângulos orientados, elipses, splines e texto; edição por alças/cotas, fontes previsíveis e contornos válidos. |
 | SK-13 | P2 · Pendente | Sketch 3D | Entidades espaciais, projeções e restrições compatíveis; caminhos utilizáveis em sweep sem saltos de coordenadas. |
 

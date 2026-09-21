@@ -20,6 +20,42 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void arcIntersectionDoesNotExtendArc() {
+        for(const auto &plane:QStringList{"XY","XZ","YZ"}) {
+            Model model;
+            model.add("sketch",{{"profile","arc"},{"plane",plane},{"x1",5},{"y1",0},{"xm",0},{"ym",5},{"x2",-5},{"y2",0}});
+            model.add("sketch",{{"profile","circle"},{"plane",plane},{"x",6},{"r",5}});
+            Viewport v(&model);v.resize(1000,700);v.sketchMode=true;v.plane=plane;v.snap=false;v.span=40;v.view("top");
+            const auto pixel=v.project(Model::planePoint(plane,3,4));
+            QVERIFY(QLineF(v.sketchPoint(pixel+QPointF(.5,-.5)),{3,4}).length()<1e-5);QCOMPARE(v.magnetLabel,QString("Interseção"));
+            v.magnetLabel.clear();v.sketchPoint(v.project(Model::planePoint(plane,3,-4)));
+            QVERIFY(v.magnetLabel!=QString("Interseção"));
+        }
+    }
+    void curvedIntersectionsSnapOnSketchPlanes() {
+        for(const auto &plane:QStringList{"XY","XZ","YZ"}) {
+            Model model;
+            model.add("sketch",{{"profile","circle"},{"plane",plane},{"offset",8},{"r",5}});
+            model.add("sketch",{{"profile","circle"},{"plane",plane},{"offset",8},{"x",6},{"r",5}});
+            model.add("sketch",{{"profile","polyline"},{"plane",plane},{"offset",8},
+                {"points",QJsonArray{QJsonArray{-10,3},QJsonArray{10,3}}}});
+            Viewport v(&model);v.resize(1000,700);v.sketchMode=true;v.plane=plane;v.planeOffset=8;v.snap=false;v.smartSnap=true;
+            const auto before=model.json();
+            v.view("top");
+            for(float span:{40.f,120.f}) {
+                v.span=span;
+                for(const auto &point:QList<QPointF>{{3,4},{3,-4},{-4,3},{4,3}}) {
+                    v.magnetLabel.clear();const auto pixel=v.project(Model::planePoint(plane,point.x(),point.y(),8));
+                    QVERIFY(QLineF(v.sketchPoint(pixel+QPointF(.5,-.5)),point).length()<1e-5);
+                    QCOMPARE(v.magnetLabel,QString("Interseção"));
+                }
+            }
+            v.smartSnap=false;v.magnetLabel.clear();const auto point=QPointF(3,4);
+            const auto pixel=v.project(Model::planePoint(plane,3,4,8));
+            QVERIFY(QLineF(v.sketchPoint(pixel+QPointF(3,2)),point).length()>1e-3);QVERIFY(v.magnetLabel.isEmpty());
+            QCOMPARE(model.json(),before);
+        }
+    }
     void namedSketchDimensionFromSelection() {
         QTemporaryDir dir;Model source;source.setParameters({{"largura","30 mm"}});
         const auto sk=source.add("sketch",{{"profile","rectangle"},{"w",20},{"h",10},{"plane","XY"}});

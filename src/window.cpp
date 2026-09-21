@@ -1057,6 +1057,7 @@ Window::Window(QString recoveryDirectory, bool promptRecovery) {
     connect(snap, &QAction::toggled, this, [this](bool v) { canvas->snap = v; });
     auto *smartSnap = gridMenu->addAction("Encaixe inteligente");
     smartSnap->setObjectName("smartSnap");
+    smartSnap->setToolTip("Atrai o cursor a pontos e alinhamentos; não cria restrições permanentes. Use Constraints para manter uma relação.");
     smartSnap->setCheckable(true);
     smartSnap->setChecked(true);
     connect(smartSnap, &QAction::toggled, this, [this](bool enabled) {
