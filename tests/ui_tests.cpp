@@ -20,6 +20,25 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void sketchMobilityUpdatesAfterUndo() {
+        QTemporaryDir dir;Window window(dir.filePath("recovery"),false);
+        auto id=window.model.add("sketch",{{"profile","rectangle"},{"w",30},{"h",20}});
+        window.model.constrainSketch(id,sketch::Relation::Fixed,"p0",{},{0,0});
+        window.show();QVERIFY(QTest::qWaitForWindowExposed(&window));auto *v=window.findChild<Viewport *>();
+        v->onEditSketch(id);v->refresh();v->fit();
+        QCOMPARE(v->constraintDiagnostics[id].degreesOfFreedom,2);
+        QCOMPARE(v->constraintDiagnostics[id].pointDegreesOfFreedom["p0"],0);
+        QCOMPARE(v->constraintDiagnostics[id].pointDegreesOfFreedom["p2"],2);
+        window.model.constrainSketch(id,sketch::Relation::DistanceX,"p1","p0",{30,0});
+        window.model.constrainSketch(id,sketch::Relation::DistanceY,"p3","p0",{0,20});v->refresh();
+        QCOMPARE(v->constraintDiagnostics[id].degreesOfFreedom,0);
+        for(auto freedom:v->constraintDiagnostics[id].pointDegreesOfFreedom)QCOMPARE(freedom,0);
+        window.findChild<QAction *>("undo")->trigger();v->onEditSketch(id);
+        QCOMPARE(v->constraintDiagnostics[id].degreesOfFreedom,1);
+        QCOMPARE(v->constraintDiagnostics[id].pointDegreesOfFreedom["p2"],1);
+        v->grab().save(QDir(QCoreApplication::applicationDirPath()).filePath("sketch-mobility.png"));
+        window.findChild<QAction *>("redo")->trigger();QCOMPARE(v->constraintDiagnostics[id].degreesOfFreedom,0);
+    }
     void inlineProfileExpressionsAndUnits() {
         QTemporaryDir dir;Window window(dir.filePath("recovery"),false);window.show();
         QVERIFY(QTest::qWaitForWindowExposed(&window));auto *v=window.findChild<Viewport *>();

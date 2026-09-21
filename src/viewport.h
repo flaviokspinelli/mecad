@@ -108,6 +108,7 @@ class Viewport : public QOpenGLWidget, protected QOpenGLFunctions {
   private:
     friend class UiTests;
     Model *model;
+    QMap<QString, sketch::Solution> constraintDiagnostics;
     void paintGrid();
     SelectionTarget pickDetail(QPointF pixel, bool objectOnly = false) const;
     QVector<SelectionTarget> pickArea(QRectF area, bool crossing) const;

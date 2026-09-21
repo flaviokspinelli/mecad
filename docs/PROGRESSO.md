@@ -1,5 +1,24 @@
 # Execução do backlog
 
+## 21/09/2026 — mobilidade dos pontos no sketch
+
+SK-04: solver fornece o grau de liberdade local de cada ponto pela projeção do
+espaço livre sobre suas coordenadas. Detecta fixação indireta por cotas/relações,
+não apenas relação Fixed. Mobilidades locais não são aditivas (movimento acoplado
+é compartilhado). Soluções incompatíveis não retornam classificação parcial.
+
+Canvas de sketches com constraintSystem mostra pontos presos em dourado e móveis
+em azul, legenda e grau de liberdade global. Diagnóstico é armazenado no refresh,
+sem solver por quadro, e invalidado junto com a atualização de geometria.
+Não modifica arquivo nativo nem adiciona novos gestos de arraste.
+
+Nove casos do solver passaram (11 resultados Qt); quatro casos de UI passaram
+(seis resultados Qt): sketchMobilityUpdatesAfterUndo, reviewRedundantSketchConstraints,
+conflictingSketchConstraintIsExplained e namedSketchDimensionFromSelection.
+Inspecionada build/sketch-mobility.png: pontos presos/móveis distintos. Build
+existente recompilado, dist e arquivos do usuário preservados. Classificação não
+cobre curvas fora do solver atual; SK-04 continua parcial.
+
 ## 21/09/2026 — unidades e fórmulas nas cotas dos perfis
 
 SK-03/PAR-04: largura/altura de retângulo e diâmetro de círculo no canvas aceitam

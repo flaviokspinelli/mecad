@@ -187,6 +187,14 @@ Solution System::solve() const {
         QPointF p(solution[i*2],solution[i*2+1]);
         check(finite(p), "Solução fora do intervalo permitido; geometria não aplicada.");
         result.positions.insert(points[i].id,p);
+        double xx=1, yy=1, xy=0;
+        for(const auto &row:basis) {
+            xx-=row.a[2*i]*row.a[2*i]; yy-=row.a[2*i+1]*row.a[2*i+1];
+            xy-=row.a[2*i]*row.a[2*i+1];
+        }
+        const double trace=xx+yy, gap=std::sqrt(std::max(0.,(xx-yy)*(xx-yy)+4*xy*xy));
+        result.pointDegreesOfFreedom.insert(points[i].id,
+            int((trace+gap)/2>1e-9)+int((trace-gap)/2>1e-9));
     }
     for (const auto &c : constraints) if (independentRows.value(c.id) == 0) result.redundantConstraints.append(c.id);
     result.consistent = true; result.degreesOfFreedom = n-basis.size();

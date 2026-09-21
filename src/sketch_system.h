@@ -19,6 +19,8 @@ struct Solution {
     bool consistent = false;
     int degreesOfFreedom = -1;
     QMap<QString, QPointF> positions;
+    // Rank of the solution-space projection onto each point (not additive).
+    QMap<QString, int> pointDegreesOfFreedom;
     QStringList conflictCandidates; // Contributors, not a minimal conflict set.
     QStringList redundantConstraints;
     double maximumResidual = 0;

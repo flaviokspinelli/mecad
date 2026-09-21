@@ -23,6 +23,21 @@ class SketchSystemTests : public QObject {
         return std::hypot(actual.x()-expected.x(),actual.y()-expected.y()) < 1e-8;
     }
 private slots:
+    void localPointMobility() {
+        System s;s.points={{"a",{0,0}},{"b",{10,0}}};s.lines={{"ab","a","b"}};
+        auto result=s.solve();QCOMPARE(result.pointDegreesOfFreedom["a"],2);QCOMPARE(result.pointDegreesOfFreedom["b"],2);
+        s.constraints={{"fixed",Relation::Fixed,"a",{},{0,0}},{"horizontal",Relation::Horizontal,"ab",{},{}}};
+        result=s.solve();QCOMPARE(result.degreesOfFreedom,1);
+        QCOMPARE(result.pointDegreesOfFreedom["a"],0);QCOMPARE(result.pointDegreesOfFreedom["b"],1);
+        s.constraints.append({"width",Relation::DistanceX,"b","a",{10,0}});
+        result=s.solve();QCOMPARE(result.degreesOfFreedom,0);QCOMPARE(result.pointDegreesOfFreedom["b"],0);
+        s.constraints={{"coincident",Relation::Coincident,"a","b",{}}};
+        result=s.solve();QCOMPARE(result.degreesOfFreedom,2);
+        QCOMPARE(result.pointDegreesOfFreedom["a"],2);QCOMPARE(result.pointDegreesOfFreedom["b"],2);
+        s.constraints.append({"fixedA",Relation::Fixed,"a",{},{0,0}});
+        s.constraints.append({"fixedB",Relation::Fixed,"b",{},{1,0}});
+        result=s.solve();QVERIFY(!result.consistent);QVERIFY(result.pointDegreesOfFreedom.empty());
+    }
     void unconstrainedAndEmpty() {
         System empty;
         auto result = empty.solve(); QVERIFY(result.consistent); QCOMPARE(result.degreesOfFreedom,0);

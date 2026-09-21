@@ -223,6 +223,10 @@ void Viewport::initializeGL() {
         onHint("Falha ao iniciar a visualização OpenGL: " + shader.log());
 }
 void Viewport::refresh() {
+    constraintDiagnostics.clear();
+    for(const auto &feature:model->features)
+        if(!feature.inactive && feature.type=="sketch" && feature.p.contains("constraintSystem"))
+            constraintDiagnostics.insert(feature.id,model->sketchSystem(feature.id).solve());
     selectedDetails.clear();
     selectedDetail = {};
     hoveredDetail = {};
@@ -578,6 +582,18 @@ void Viewport::paintOverlay(QPainter &p) {
                           "r", 2);
             } else if(params.contains("constraintSystem")) {
                 const auto system=sketch::System::fromJson(params["constraintSystem"].toObject());
+                if(constraintDiagnostics.contains(f.id)) {
+                    const auto &diagnostic=constraintDiagnostics[f.id];
+                    for(const auto &entry:system.points) {
+                        const bool fixed=diagnostic.pointDegreesOfFreedom.value(entry.id,2)==0;
+                        p.setPen(QPen(QColor("#1d2e3d"),1));
+                        p.setBrush(fixed?QColor("#e7d7a2"):QColor("#51c9ed"));
+                        p.drawEllipse(point(entry.position.x(),entry.position.y()),4,4);
+                    }
+                    p.setPen(QColor("#dce6ed"));
+                    p.drawText(290,65,QString("%1 · %2 graus de liberdade · pontos: dourado = preso, azul = móvel")
+                        .arg(diagnostic.degreesOfFreedom==0?"Totalmente restrito":"Sub-restrito").arg(diagnostic.degreesOfFreedom));
+                }
                 QMap<QString,QPointF> points;for(const auto &entry:system.points)points[entry.id]=entry.position;
                 int horizontal=0,vertical=0;
                 for(const auto &constraint:system.constraints) {

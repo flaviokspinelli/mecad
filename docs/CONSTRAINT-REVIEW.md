@@ -17,6 +17,21 @@ condição. Não há remoção automática. Este painel inspeciona relações j�
 não adiciona suporte a restrições de curvas. O realce é temporário, não é uma nova
 seleção editável no documento.
 
+## Pontos presos e móveis
+
+Ao editar um sketch com sistema de restrições persistido, pontos dourados estão
+totalmente presos; pontos azuis ainda têm uma ou duas direções independentes de
+movimento. A legenda mostra se o conjunto está sub-restrito ou totalmente restrito
+e informa os graus de liberdade globais. Isso é calculado pela solução combinada:
+um ponto pode ficar preso por cotas e outras relações, sem uma relação Fixar.
+
+Os graus de liberdade locais não devem ser somados: dois pontos coincidentes
+podem mover-se juntos e compartilhar os mesmos graus de liberdade. O diagnóstico
+é recalculado quando a geometria é atualizada, não em cada quadro da pintura.
+O indicador cobre o solver afim de linhas atual; círculos/arcos e restrições
+angulares não recebem uma classificação fictícia. As cores não alteram seleção,
+geometria, restrições ou comportamento do arraste.
+
 ## Ao tentar adicionar uma restrição incompatível
 
 Nos comandos horizontal, vertical, fixação e cotas X/Y, o solver verifica a
