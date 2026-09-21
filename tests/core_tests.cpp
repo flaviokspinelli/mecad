@@ -4,6 +4,8 @@
 #include <GProp_GProps.hxx>
 #include <TopExp.hxx>
 #include <TopTools_IndexedMapOfShape.hxx>
+#include <BRepBndLib.hxx>
+#include <Bnd_Box.hxx>
 #include <QFile>
 #include <QJsonDocument>
 #include <QTemporaryDir>
@@ -15,6 +17,30 @@
 class CoreTests : public QObject {
     Q_OBJECT
   private slots:
+    void expressionsDriveSketchAndAngles() {
+        Model m;m.setParameters({{"width","20 mm"},{"turn","90 deg"}});
+        auto sk=m.add("sketch",{{"profile","rectangle"},{"w",20},{"h",10}});
+        m.setExpression(sk,"w","width");
+        m.edit(sk,m.get(sk).p,m.get(sk).name);
+        auto body=m.add("extrude",{{"source",sk},{"d",5}});
+        auto rotated=m.add("transform",{{"source",body},{"axis","Z"},{"angle",0}});
+        m.setExpression(rotated,"angle","turn");
+        QVERIFY(std::abs(m.get(rotated).p["angle"].toDouble()-90)<1e-10);
+        Bnd_Box bounds;BRepBndLib::Add(m.get(rotated).shape,bounds);
+        double x0,y0,z0,x1,y1,z1;bounds.Get(x0,y0,z0,x1,y1,z1);
+        QVERIFY(std::abs((x1-x0)-10)<1e-5);QVERIFY(std::abs((y1-y0)-20)<1e-5);
+        const auto before=m.json();
+        QVERIFY_THROWS_EXCEPTION(std::exception,m.setExpression(rotated,"angle","2 mm"));
+        QVERIFY_THROWS_EXCEPTION(std::exception,m.setExpression(sk,"w","pi * rad"));QCOMPARE(m.json(),before);
+        m.setParameters({{"width","30 mm"},{"turn","pi * rad"}});
+        QVERIFY(std::abs(Model::volume(m.get(rotated).shape)-1500)<1e-6);
+        QCOMPARE(m.get(rotated).p["angle"].toDouble(),180.);
+        Model loaded;loaded.loadJson(m.json());QCOMPARE(loaded.json(),m.json());
+        QVERIFY(m.undo());QCOMPARE(m.json(),before);
+        const auto circle=m.add("sketch",{{"profile","circle"},{"r",2}});
+        m.setExpression(circle,"r","width/4");QCOMPARE(m.get(circle).p["r"].toDouble(),5.);
+        QVERIFY_THROWS_EXCEPTION(std::exception,m.setExpression(circle,"w","1 mm"));
+    }
     void nativeVersionFixtures() {
         const QStringList paths{QFINDTESTDATA("fixtures/v1-basic.mcad"),QFINDTESTDATA("fixtures/v2-constrained.mcad"),QFINDTESTDATA("fixtures/v3-parameters.mcad")};
         const QVector<double> volumes{6000,500,2000};

@@ -48,7 +48,7 @@ class Model {
     QMap<QString, QString> parameters() const { return namedParameters; }
     void setParameters(const QMap<QString, QString> &definitions);
     void setExpression(const QString &id, const QString &field, const QString &expression);
-    static QStringList expressionFields(const QString &type);
+    static QStringList expressionFields(const QString &type, const QJsonObject &parameters = {});
     Feature &get(const QString &id);
     const Feature &get(const QString &id) const;
     bool consumed(const QString &id) const;

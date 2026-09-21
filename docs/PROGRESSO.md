@@ -1,5 +1,26 @@
 # Execução do backlog
 
+## 21/09/2026 — fórmulas em sketches/ângulos e reedição de extrusão
+
+Escopo congelado nos 38 parciais. Nenhum pacote gerado ou distribuição alterada.
+
+- PAR-04: vínculos de comprimento ampliados para sketches básicos, posições,
+  furos e pivôs; ângulos de revolução, movimento e chanfro aceitam deg/rad.
+  Tipos dimensionais incompatíveis são recusados sem alterar o documento.
+- REL-01/02 e GEO-01: reabrir e confirmar extrusão vinculada preserva precisão,
+  fórmula, campos opcionais ausentes e estado limpo. Manipulador e campo numérico
+  não sobrescrevem a fórmula. Prévia e confirmação usam os mesmos parâmetros.
+- Testes direcionados: core expressionsDriveSketchAndAngles,
+  namedParametersDriveGeometry e expressionsOnSupportedFeatures passaram;
+  UI expressionBoundExtrusionEditIsNoOp, namedParametersEditing,
+  extrusionStartsAtZero, repeatExtrudeEditsExistingBody e extrudeCutPreview passaram.
+  Foram abertas somente as janelas necessárias para esses cenários.
+- O novo teste de UI detectou arredondamento/alteração de campos opcionais no
+  caminho de reedição. Corrigido e repetido com sucesso; não foi removido do aceite.
+
+Ainda não há vínculo de fórmulas com cotas do solver nem fechamento dos 38.
+Os testes acima são evidência destas mudanças, não equivalência com Fusion.
+
 ## Política de disco — 21/09/2026
 
 Por solicitação do usuário, não gerar novos pacotes ou arquivos versionados do

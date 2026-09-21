@@ -17,8 +17,11 @@ Expression**. Escolha o campo e informe a fórmula. Vazio remove o vínculo e ma
 o valor resolvido. A medida vinculada é somente leitura no painel de propriedades;
 o tooltip identifica a fórmula. Não é necessário editar o arquivo manualmente.
 
-Campos atuais: bloco w/h/d, cilindro r/d, esfera r, extrusão d, filete r e chanfro d/d2.
-Todos exigem comprimento explícito. Uma fórmula negativa só é aceita quando a
+Campos atuais: dimensões e posições de primitivas, extrusão d, filete r,
+chanfro d/d2/angle, revolução angle/axis, deslocamentos/pivô/ângulo de movimento
+e cópia, medidas do furo e coordenadas/medidas de sketches retangulares,
+circulares e de arco. Polilinhas aceitam offset; suas cotas restritas ainda não.
+Campos angle exigem ângulo explícito; os demais exigem comprimento. Uma fórmula negativa só é aceita quando a
 operação geométrica permite, por exemplo extrusão em sentido contrário.
 
 ## Gramática e unidades
@@ -26,7 +29,8 @@ operação geométrica permite, por exemplo extrusão em sentido contrário.
 - Nomes ASCII iniciados por letra ou sublinhado, até 64 caracteres, sem espaços.
 - Operadores `+ - * /`, sinais unários e parênteses; precedência aritmética comum.
 - Decimal com ponto ou vírgula, sem separadores de milhar; notação científica.
-- Comprimentos: mm, cm, m, in. Ângulos no avaliador: deg, rad. Constante pi.
+- Comprimentos: mm, cm, m, in. Ângulos: deg, rad. Constante pi.
+- Exemplos angulares: `90 deg` ou `pi * rad` (multiplicação explícita após pi).
 - Multiplicação explícita entre variáveis: `2 * parede`, não `2parede`.
 - Conversão interna para mm/radianos; dimensões verificadas em cada operação.
 - Não há funções, scripts, acesso a arquivos, atribuições ou avaliação de código.
@@ -49,11 +53,12 @@ Nenhum novo pacote do aplicativo é criado para mudar a versão do documento.
 ## Limitações e próximos aceites
 
 Ainda não cobre cotas/restrições de sketches, referências entre medidas de
-recursos, campos de ângulo, renomeação com atualização automática de fórmulas,
+recursos, renomeação com atualização automática de fórmulas,
 funções matemáticas, autocomplete ou gráfico visual de dependências. O editor de
 extrusão não aceita sobrescrever numericamente uma distância vinculada: edite ou
 remova a fórmula no comando próprio. A tabela ainda não mostra coluna de valores
 resolvidos. Portanto PAR-04 não está concluído.
 
 Testes: `sh scripts/check.sh parameters`, core `namedParametersDriveGeometry`,
-UI `namedParametersEditing`. UI abre janelas; os outros testes não.
+`expressionsDriveSketchAndAngles`, UI `namedParametersEditing` e
+`expressionBoundExtrusionEditIsNoOp`. UI abre janelas; os outros testes não.

@@ -1,12 +1,23 @@
 #include "model.h"
 #include <stdexcept>
 
-QStringList Model::expressionFields(const QString &type) {
-    if(type=="box") return {"w","h","d"};
-    if(type=="cylinder") return {"r","d"};
-    if(type=="sphere" || type=="fillet") return {"r"};
+QStringList Model::expressionFields(const QString &type,const QJsonObject &p) {
+    if(type=="box") return {"w","h","d","x","y","z"};
+    if(type=="cylinder") return {"r","d","x","y","z"};
+    if(type=="sphere") return {"r","x","y","z"};
+    if(type=="fillet") return {"r"};
     if(type=="extrude") return {"d"};
-    if(type=="chamfer") return {"d","d2"};
+    if(type=="revolve") return {"angle","axis"};
+    if(type=="chamfer") return {"d","d2","angle"};
+    if(type=="transform" || type=="copy") return {"x","y","z","px","py","pz","angle"};
+    if(type=="hole")return {"u","v","offset","r","d"};
+    if(type=="sketch") {
+        const auto profile=p["profile"].toString();
+        if(profile=="rectangle")return {"x","y","w","h","offset"};
+        if(profile=="circle")return {"x","y","r","offset"};
+        if(profile=="arc")return {"x1","y1","xm","ym","x2","y2","offset"};
+        if(profile=="polyline")return {"offset"};
+    }
     return {};
 }
 void Model::setParameters(const QMap<QString,QString> &definitions) {
@@ -18,7 +29,7 @@ void Model::setParameters(const QMap<QString,QString> &definitions) {
 }
 void Model::setExpression(const QString &id,const QString &field,const QString &expression) {
     const auto &feature=get(id);
-    if(!expressionFields(feature.type).contains(field))
+    if(!expressionFields(feature.type,feature.p).contains(field))
         throw std::runtime_error("Este campo ainda não aceita expressões.");
     auto p=feature.p;auto bindings=p["expressions"].toObject();
     if(expression.trimmed().isEmpty()) bindings.remove(field);

@@ -156,7 +156,7 @@ PAR-01/02 sustentam projeções, recursos avançados e montagens associativas.
 | PAR-01 | P0 · Parcial | Identificação persistente de topologia | Preservar intenção após mudanças testadas em faces/arestas; ambiguidade pede reparo, nunca aponta silenciosamente para outra entidade. |
 | PAR-02 | P0 · Parcial | Grafo explícito de dependências | Detectar ciclos e entradas inválidas; reconstruir na ordem correta; falha não corrompe o último estado válido. |
 | PAR-03 | P0 · Parcial | Diagnóstico e reparo do histórico | Identificar etapa quebrada e dependentes; substituir referência/perfil; separar excluir, suprimir e rollback. |
-| PAR-04 | P1 · Parcial | Parâmetros e expressões | Nomes, fórmulas e unidades reutilizáveis; validar ciclos, tipos e expressões sem execução arbitrária de código. Tabela e vínculos de comprimentos em sólidos básicos integrados; expansão para cotas/restrições e campos angulares pendente. |
+| PAR-04 | P1 · Parcial | Parâmetros e expressões | Nomes, fórmulas e unidades reutilizáveis; validar ciclos, tipos e expressões sem execução arbitrária de código. Tabela e vínculos de comprimentos/ângulos em operações e sketches básicos integrados; vínculos com cotas/restrições do solver pendentes. |
 | PAR-05 | P1 · Parcial | Reordenar e suprimir recursos | Recusar ordem impossível; reativar etapas e manter estado após salvar/reabrir. |
 | PAR-06 | P1 · Parcial | Editar recurso existente | Reabrir parâmetros/seleções originais sem duplicar peça; cancelar restaura integralmente; histórico e canvas permanecem coerentes. |
 | PAR-07 | P2 · Pendente | Configurações de projeto | Variantes por parâmetros/supressões com identificação clara; exportar configuração escolhida e reconstruir cada variante. |

@@ -784,16 +784,16 @@ Window::Window(QString recoveryDirectory, bool promptRecovery) {
         if(dialog.exec()==QDialog::Accepted)refresh();
     });
     command("expression", "Link Dimension to Expression", "", [this] {
-        if(selected.isEmpty() || Model::expressionFields(model.get(selected).type).isEmpty())
-            throw std::runtime_error("Selecione um bloco, cilindro, esfera, extrusão ou filete no Browser.");
+        if(selected.isEmpty() || Model::expressionFields(model.get(selected).type,model.get(selected).p).isEmpty())
+            throw std::runtime_error("Selecione no Browser um recurso com medidas editáveis.");
         const auto id=selected;
         QDialog dialog(this);dialog.setObjectName("expressionEditor");dialog.setWindowTitle("Expressão da medida");
         auto *layout=new QVBoxLayout(&dialog);auto *field=new QComboBox(&dialog);field->setObjectName("expressionField");
-        field->addItems(Model::expressionFields(model.get(id).type));layout->addWidget(field);
+        field->addItems(Model::expressionFields(model.get(id).type,model.get(id).p));layout->addWidget(field);
         auto *input=new QLineEdit(&dialog);input->setObjectName("expressionInput");layout->addWidget(input);
         auto load=[&]{input->setText(model.get(id).p.value("expressions").toObject().value(field->currentText()).toString());};
         connect(field,&QComboBox::currentTextChanged,&dialog,load);load();
-        layout->addWidget(new QLabel("Resultado em comprimento. Ex.: largura / 2.\nDeixe vazio para desvincular e manter a medida atual.",&dialog));
+        layout->addWidget(new QLabel("Comprimentos em mm/cm/m/in; ângulos em deg/rad.\nEx.: largura / 2 ou 90 deg.\nVazio desvincula e mantém a medida atual.",&dialog));
         auto *buttons=new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel,&dialog);layout->addWidget(buttons);
         connect(buttons,&QDialogButtonBox::rejected,&dialog,&QDialog::reject);
         connect(buttons,&QDialogButtonBox::accepted,&dialog,[&]{
@@ -1726,6 +1726,20 @@ void Window::extrude(bool revolve) {
     panel.choice("target", "Target body", bodies, originalTarget);
     panel.choice("mode", "Operation", {{"New Body / Join", "join"}, {"Cut", "cut"}},
                  initial["mode"].toString("join"));
+    const auto bindings=initial["expressions"].toObject();
+    const auto initialFormValues=panel.values();
+    for(auto it=panel.nums.begin();it!=panel.nums.end();++it)if(bindings.contains(it.key())) {
+        it.value()->setReadOnly(true);it.value()->setToolTip("Controlado por: "+bindings[it.key()].toString());
+    }
+    auto commandParameters=[&]{
+        auto p=initial;const auto values=panel.values();
+        for(auto it=values.begin();it!=values.end();++it) {
+            if(bindings.contains(it.key()))continue;
+            if(!editing.isEmpty() && !initial.contains(it.key()) && initialFormValues[it.key()]==it.value())continue;
+            p[it.key()]=it.value();
+        }
+        return p;
+    };
     auto chooseCutTarget = [&] {
         if (panel.combos["mode"]->currentData() == "cut" &&
             panel.combos["target"]->currentData().toString().isEmpty() && bodies.size() == 2)
@@ -1734,7 +1748,9 @@ void Window::extrude(bool revolve) {
     connect(panel.combos["mode"], qOverload<int>(&QComboBox::currentIndexChanged), &panel, chooseCutTarget);
     chooseCutTarget();
     panel.note(
-        revolve
+        bindings.contains("d")
+            ? "Distância controlada por fórmula. Use Link Dimension to Expression para editar ou remover o vínculo."
+            : revolve
             ? "Selecione o perfil na área de desenho."
             : "Arraste a seta azul para definir a distância.\nClique em outro perfil para trocar a seleção.");
     auto *feedback = new QLabel;
@@ -1752,7 +1768,7 @@ void Window::extrude(bool revolve) {
     activeCommand = &panel;
     auto updatePreview = [&] {
         try {
-            auto parameters = panel.values();
+            const auto parameters = commandParameters();
             if (parameters["source"].toString().isEmpty()) {
                 canvas->handleActive = false;
                 canvas->selected = previousSelection;
@@ -1768,7 +1784,7 @@ void Window::extrude(bool revolve) {
             canvas->handleOrigin = QVector3D((x + X) / 2, (y + Y) / 2, (z + Z) / 2);
             canvas->handleAxis = Model::planeNormal(sketch.p["plane"].toString("XY"));
             canvas->handleDistance = parameters["d"].toDouble();
-            canvas->handleActive = !revolve;
+            canvas->handleActive = !revolve && !bindings.contains("d");
             if (!revolve && std::abs(canvas->handleDistance) < 1e-7) {
                 canvas->selected = sketch.id;
                 canvas->setModel(&model);
@@ -1822,9 +1838,9 @@ void Window::extrude(bool revolve) {
                 panel.combos["target"]->setCurrentIndex(target);
         }
     };
-    canvas->onHandleDistance = [&](double distance) { panel.nums["d"]->setValue(distance); };
+    canvas->onHandleDistance = [&](double distance) { if(!revolve && !bindings.contains("d"))panel.nums["d"]->setValue(distance); };
     panel.validate = [&] {
-        const auto p = panel.values();
+        const auto p = commandParameters();
         if (p["source"].toString().isEmpty() || (!revolve && std::abs(p["d"].toDouble()) < 1e-7))
             return true;
         try {
@@ -1851,7 +1867,7 @@ void Window::extrude(bool revolve) {
     canvas->selected = previousSelection;
     canvas->setModel(&model);
     if (accepted) {
-        auto p = panel.values();
+        const auto p = commandParameters();
         if (p["source"].toString().isEmpty() || (!revolve && std::abs(p["d"].toDouble()) < 1e-7)) {
             selected = previousSelection;
             refresh();

@@ -20,6 +20,25 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void expressionBoundExtrusionEditIsNoOp() {
+        QTemporaryDir dir;Model source;
+        auto sketch=source.add("sketch",{{"profile","rectangle"},{"w",10},{"h",10}});
+        auto body=source.add("extrude",{{"source",sketch},{"d",1}});
+        source.setExpression(body,"d","3 mm / 7");source.save(dir.filePath("source.mcad"));
+        Window window(dir.filePath("recovery"),false);window.openPath(source.filePath);window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));auto *v=window.findChild<Viewport *>();v->onSelect(body);
+        bool previewCreated=false,handleDisabled=false;double previewDistance=0;QString feedback;
+        QTimer watchdog;watchdog.setInterval(4000);connect(&watchdog,&QTimer::timeout,[&]{if(v->onCancelCommand)v->onCancelCommand();});watchdog.start();
+        QTimer::singleShot(200,[&]{
+            previewCreated=v->model!=&window.model;handleDisabled=!v->handleActive;
+            previewDistance=v->model->get(body).p["d"].toDouble();
+            for(auto *label:window.findChildren<QLabel *>())if(label->isVisible())feedback+=label->text()+"\n";
+            if(v->onAcceptCommand)v->onAcceptCommand();
+        });
+        window.findChild<QAction *>("extrude")->trigger();QVERIFY2(previewCreated,qPrintable(feedback));QVERIFY(handleDisabled);
+        QVERIFY(std::abs(previewDistance-3./7)<1e-14);
+        QCOMPARE(window.model.json(),source.json());QVERIFY(!window.model.dirty);QVERIFY(window.close());
+    }
     void autosaveTimerSurvivesProcessCrash() {
         QTemporaryDir dir;QVERIFY(dir.isValid());QProcess child;
         child.start(QCoreApplication::applicationFilePath(),{"--recovery-ui-writer",dir.path()});

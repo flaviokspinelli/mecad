@@ -102,7 +102,7 @@ void validateDocument(const QJsonObject &root) {
             require(root["version"].toInt()==3 && p["expressions"].isObject(),"Expressões exigem documento v3.");
             const auto expressions=p["expressions"].toObject();
             for(auto it=expressions.begin();it!=expressions.end();++it)
-                require(Model::expressionFields(type).contains(it.key()) && it.value().isString(),
+                require(Model::expressionFields(type,p).contains(it.key()) && it.value().isString(),
                         "Campo de expressão inválido: "+it.key());
         }
         auto enumeration = [&](const char *key, const QSet<QString> &allowed) {
@@ -467,8 +467,10 @@ void Model::rebuildGeometry() {
             const auto expressions=f.p.value("expressions").toObject();
             for(auto it=expressions.begin();it!=expressions.end();++it) {
                 const auto quantity=parameters::evaluate(it.value().toString(),values);
-                require(quantity.length==1 && quantity.angle==0,"A expressão de "+it.key()+" deve resultar em comprimento (use mm, cm, m ou in).");
-                f.p[it.key()]=quantity.value;
+                const bool angular=it.key()=="angle";
+                require(quantity.length==(angular?0:1) && quantity.angle==(angular?1:0),
+                        "A expressão de "+it.key()+(angular?" deve resultar em ângulo (use deg ou rad).":" deve resultar em comprimento (use mm, cm, m ou in)."));
+                f.p[it.key()]=angular?quantity.value*180/M_PI:quantity.value;
             }
             if (f.type == "sketch" && f.p.contains("constraintSystem")) resolveSketch(f);
             if (f.type == "sketch" && !f.p.value("support").toString().isEmpty()) {
