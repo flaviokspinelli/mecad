@@ -19,6 +19,16 @@ class Viewport : public QOpenGLWidget, protected QOpenGLFunctions {
     explicit Viewport(Model *model, QWidget *parent = nullptr);
     ~Viewport();
     QString selected, plane = "XY", tool;
+    struct SelectionTarget {
+        QString feature, kind;
+        int index = -1;
+        QVector<QVector3D> geometry;
+    };
+    SelectionTarget selectedDetail, hoveredDetail;
+    QString selectionFilter = "auto";
+    bool hasSubselection() const {
+        return selectedDetail.kind == "edge" || selectedDetail.kind == "vertex";
+    }
     bool sketchMode = false, snap = true, light = false;
     bool showEdges = true;
     bool smartSnap = true;
@@ -70,6 +80,7 @@ class Viewport : public QOpenGLWidget, protected QOpenGLFunctions {
     void paintGL() override;
     void mousePressEvent(QMouseEvent *) override;
     void mouseDoubleClickEvent(QMouseEvent *) override;
+    void leaveEvent(QEvent *) override;
     bool eventFilter(QObject *, QEvent *) override;
     void mouseMoveEvent(QMouseEvent *) override;
     void mouseReleaseEvent(QMouseEvent *) override;
@@ -80,6 +91,7 @@ class Viewport : public QOpenGLWidget, protected QOpenGLFunctions {
   private:
     friend class UiTests;
     Model *model;
+    SelectionTarget pickDetail(QPointF pixel, bool objectOnly = false) const;
     QWidget *overlay;
     std::vector<Triangle> mesh;
     std::vector<QVector3D> vertices;

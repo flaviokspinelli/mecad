@@ -12,6 +12,82 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void preciseSubelementSelection() {
+        Model model;
+        Viewport v(&model);
+        v.resize(1000, 700);
+        v.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&v));
+        for (auto plane : {"XY", "XZ", "YZ"}) {
+            model.clear();
+            v.selected.clear();
+            v.sketchMode = true;
+            v.plane = plane;
+            v.view("top");
+            auto id = model.add(
+                "sketch", {{"profile", "rectangle"}, {"plane", plane}, {"w", 40}, {"h", 30}, {"offset", 7}});
+            v.refresh();
+            v.fit();
+            auto pixel = [&](double x, double y) { return v.project(Model::planePoint(plane, x, y, 7)); };
+            auto vertex = v.pickDetail(pixel(0, 0) + QPointF(2, 2));
+            QCOMPARE(vertex.feature, id);
+            QCOMPARE(vertex.kind, QString("vertex"));
+            auto edge = v.pickDetail(pixel(20, 0) + QPointF(0, 2));
+            QCOMPARE(edge.feature, id);
+            QCOMPARE(edge.kind, QString("edge"));
+            QCOMPARE(v.pickDetail(pixel(20, 15)).kind, QString("object"));
+            QTest::mouseClick(&v, Qt::LeftButton, Qt::NoModifier, pixel(20, 0).toPoint());
+            QCOMPARE(v.selectedDetail.kind, QString("edge"));
+            QVERIFY(v.hasSubselection());
+            v.grab().save(QDir::currentPath() + "/selected-edge-test.png");
+            QTest::mouseClick(&v, Qt::LeftButton, Qt::NoModifier, pixel(0, 0).toPoint());
+            QCOMPARE(v.selectedDetail.kind, QString("vertex"));
+            v.grab().save(QDir::currentPath() + "/selected-vertex-test.png");
+            v.selectionFilter = "edge";
+            QVERIFY(v.pickDetail(pixel(20, 15)).feature.isEmpty());
+            v.selectionFilter = "object";
+            QCOMPARE(v.pickDetail(pixel(0, 0)).kind, QString("object"));
+            v.selectionFilter = "auto";
+            v.sketchMode = false;
+            v.view("iso");
+            QCOMPARE(v.pickDetail(pixel(0, 0)).kind, QString("vertex"));
+            QCOMPARE(v.pickDetail(pixel(20, 0)).kind, QString("edge"));
+            v.zoomBy(2);
+            QCOMPARE(v.pickDetail(pixel(20, 0) + QPointF(0, 2)).kind, QString("edge"));
+            QTest::keyClick(&v, Qt::Key_Escape);
+            QVERIFY(v.selected.isEmpty());
+        }
+        model.clear();
+        v.selected.clear();
+        v.sketchMode = false;
+        v.view("top");
+        auto behind = model.add("sketch", {{"profile", "rectangle"},
+                                           {"plane", "XY"},
+                                           {"x", 5},
+                                           {"y", 5},
+                                           {"w", 20},
+                                           {"h", 20},
+                                           {"offset", -5}});
+        auto box = model.add("box", {{"w", 40}, {"h", 30}, {"d", 10}});
+        v.refresh();
+        v.fit();
+        auto center = v.project({15, 15, 10});
+        QCOMPARE(v.pickDetail(center).feature, box);
+        // Hidden sketch vertices and bottom edges cannot steal the click.
+        QCOMPARE(v.pickDetail(v.project({5, 5, -5})).feature, box);
+        auto corner = v.pickDetail(v.project({0, 0, 10}));
+        QCOMPARE(corner.kind, QString("vertex"));
+        QVERIFY(std::abs(corner.geometry[0].z() - 10) < .001);
+        auto edge = v.pickDetail(v.project({20, 0, 10}));
+        QCOMPARE(edge.kind, QString("edge"));
+        auto front = model.add(
+            "sketch", {{"profile", "rectangle"}, {"plane", "XY"}, {"w", 40}, {"h", 30}, {"offset", 20}});
+        v.refresh();
+        QCOMPARE(v.pickDetail(center).feature, front);
+        model.toggle(front);
+        v.refresh();
+        QCOMPARE(v.pickDetail(center).feature, box);
+    }
     void separateDeleteAndRollback() {
         QTemporaryDir dir;
         Window window;

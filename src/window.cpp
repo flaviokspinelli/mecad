@@ -1,6 +1,7 @@
 #include "window.h"
 #include <BRepBndLib.hxx>
 #include <Bnd_Box.hxx>
+#include <QActionGroup>
 #include <QApplication>
 #include <QCheckBox>
 #include <QCloseEvent>
@@ -421,7 +422,16 @@ QAction *Window::command(QString key, QString label, QString shortcut, std::func
                     dialog->raise();
                     return;
                 }
-        run(fn);
+        run([&] {
+            const QStringList bodyCommands = {"delete", "rollback", "transform", "copy",
+                                              "fillet", "hole",     "boolean",   "cut",
+                                              "common", "extrude",  "revolve",   "dimension"};
+            if (canvas->hasSubselection() && bodyCommands.contains(key))
+                throw std::runtime_error(
+                    "Uma aresta ou vértice está selecionado. Esta ferramenta ainda atua no objeto inteiro; "
+                    "selecione o objeto no Browser ou use o filtro Objetos / perfis.");
+            fn();
+        });
     });
     addAction(a);
     commands[key] = a;
@@ -597,6 +607,25 @@ Window::Window() {
     command("fillet", "Fillet", "", [this] { fillet(); });
     command("measure", "Measure", "I", [this] { measure(); });
     command("search", "Design Shortcuts", "S", [this] { search(); });
+    auto *selectionMenu = viewMenu->addMenu("Seleção");
+    auto *selectionGroup = new QActionGroup(this);
+    for (auto entry : QList<QPair<QString, QString>>{{"auto", "Automático"},
+                                                     {"object", "Objetos / perfis"},
+                                                     {"edge", "Linhas / arestas"},
+                                                     {"vertex", "Vértices"}}) {
+        auto *action = command("select_" + entry.first, entry.second, "", [this, mode = entry.first] {
+            canvas->selectionFilter = mode;
+            canvas->selectedDetail = {};
+            canvas->hoveredDetail = {};
+            canvas->setTool({});
+            select({});
+            canvas->update();
+        });
+        action->setCheckable(true);
+        action->setChecked(entry.first == "auto");
+        selectionGroup->addAction(action);
+        selectionMenu->addAction(action);
+    }
     command("fit", "Fit", "F", [this] { canvas->fit(); });
     viewMenu->addAction(commands["fit"]);
     for (auto name : {"iso", "top", "front", "right"})
@@ -1130,7 +1159,8 @@ void Window::buildRibbon() {
         group("CONSTRUCT", {}, {}, {"Offset Plane", "Midplane", "Axis"}, {"plane"});
         group("INSPECT", {"measure"}, {"measure"}, {"Section Analysis", "Interference"});
         group("INSERT", {"import"}, {"import"}, {"Canvas"});
-        group("SELECT", {"search"}, {"search"});
+        group("SELECT", {"search"},
+              {"select_auto", "select_object", "select_edge", "select_vertex", "search"});
         group("POSITION", {"transform"}, {"transform", "copy"});
         row->addStretch();
     }
@@ -1207,6 +1237,9 @@ void Window::select(const QString &id) {
         return;
     }
     properties->hide();
+    canvas->selectedDetail = {};
+    canvas->hoveredDetail = {};
+    tree->clearSelection();
     selected = id;
     canvas->selected = id;
     canvas->update();
@@ -1718,6 +1751,24 @@ void Window::fillet() {
     }
 }
 void Window::measure() {
+    if (canvas->hasSubselection()) {
+        const auto &detail = canvas->selectedDetail;
+        if (detail.kind == "vertex" && !detail.geometry.empty()) {
+            auto p = detail.geometry[0];
+            QMessageBox::information(this, "Vértice",
+                                     QString("X: %1 mm\nY: %2 mm\nZ: %3 mm")
+                                         .arg(p.x(), 0, 'f', 3)
+                                         .arg(p.y(), 0, 'f', 3)
+                                         .arg(p.z(), 0, 'f', 3));
+        } else {
+            double length = 0;
+            for (int i = 1; i < detail.geometry.size(); ++i)
+                length += (detail.geometry[i] - detail.geometry[i - 1]).length();
+            QMessageBox::information(this, "Aresta",
+                                     QString("Comprimento aproximado: %1 mm").arg(length, 0, 'f', 3));
+        }
+        return;
+    }
     if (selected.isEmpty())
         throw std::runtime_error("Selecione um objeto para medir.");
     auto &f = model.get(selected);

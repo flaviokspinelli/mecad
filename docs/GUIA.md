@@ -158,6 +158,19 @@ Ela não substitui salvar regularmente; o intervalo mais recente pode não ter s
 
 ## Editar medidas no desenho
 
+### Selecionar linhas e vértices
+
+No modo automático, clique próximo de um canto para selecionar o vértice, no meio
+de uma linha para selecionar a aresta, ou no interior para selecionar o perfil.
+O alvo sob o mouse fica amarelo; a seleção confirmada fica azul. Use **View → Seleção**
+ou **SELECT** para filtrar por tipo. O Browser seleciona o objeto inteiro. Esc ou
+um clique vazio limpa a seleção. Funciona em sketches e sólidos CAD; malhas STL
+ainda são selecionadas por inteiro. **Measure** mostra coordenadas de vértices ou
+comprimento aproximado de arestas. Selecionar não permite ainda arrastar/excluir
+vértices individualmente; comandos de corpo pedem seleção do objeto completo.
+
+### Alterar cotas
+
 No sketch, selecione o perfil e clique no número dourado da cota. Digite a
 medida em milímetros (vírgula ou ponto decimal) e pressione Enter. Esc cancela;
 clicar fora também cancela. Retângulos permitem largura e altura; círculos,

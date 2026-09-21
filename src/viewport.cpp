@@ -198,6 +198,8 @@ void Viewport::initializeGL() {
         onHint("Falha ao iniciar a visualização OpenGL: " + shader.log());
 }
 void Viewport::refresh() {
+    selectedDetail = {};
+    hoveredDetail = {};
     mesh = model->triangles();
     vertices.clear();
     for (auto &t : mesh) {
@@ -313,6 +315,8 @@ void Viewport::viewDirection(QVector3D direction, bool animated) {
     cameraAnimation.start();
 }
 void Viewport::setTool(QString name) {
+    selectedDetail = {};
+    hoveredDetail = {};
     draggingRotation = false;
     draggingMoveFree = draggingHandle = false;
     magnetLabel.clear();
@@ -364,8 +368,12 @@ void Viewport::paintGL() {
             int end = start + 1;
             while (end < int(mesh.size()) && mesh[end].feature == mesh[start].feature)
                 ++end;
-            bool chosen = model->features[mesh[start].feature].id == selected;
-            shader.setUniformValue("color", chosen ? QVector3D(.42, .77, .94) : QVector3D(.83, .86, .89));
+            bool chosen = model->features[mesh[start].feature].id == selected && !hasSubselection();
+            bool hovered = hoveredDetail.feature == model->features[mesh[start].feature].id &&
+                           hoveredDetail.kind == "object";
+            shader.setUniformValue("color", chosen    ? QVector3D(.42, .77, .94)
+                                            : hovered ? QVector3D(.97, .80, .50)
+                                                      : QVector3D(.83, .86, .89));
             glDrawArrays(GL_TRIANGLES, start * 3, (end - start) * 3);
             start = end;
         }
@@ -406,8 +414,12 @@ void Viewport::paintOverlay(QPainter &p) {
     }
     for (auto &f : model->features)
         if (f.type == "sketch" && (f.id == selected || (f.visible && !model->consumed(f.id)))) {
-            p.setPen(
-                QPen(f.id == selected ? QColor("#65ceff") : QColor("#e8b66d"), f.id == selected ? 2.5 : 1.7));
+            bool chosen = f.id == selected && !hasSubselection();
+            bool hovered = hoveredDetail.feature == f.id && hoveredDetail.kind == "object";
+            p.setPen(QPen(chosen    ? QColor("#65ceff")
+                          : hovered ? QColor("#ffd080")
+                                    : QColor("#aec3d3"),
+                          chosen ? 2.5 : 1.7));
             for (TopExp_Explorer it(f.shape, TopAbs_EDGE); it.More(); it.Next()) {
                 BRepAdaptor_Curve c(TopoDS::Edge(it.Current()));
                 QPainterPath path;
@@ -424,6 +436,30 @@ void Viewport::paintOverlay(QPainter &p) {
                 p.drawPath(path);
             }
         }
+    auto drawDetail = [&](const SelectionTarget &target, QColor color) {
+        if (target.geometry.empty() || (target.kind != "edge" && target.kind != "vertex"))
+            return;
+        p.setPen(QPen(color, 3, Qt::SolidLine, Qt::RoundCap));
+        if (target.kind == "vertex") {
+            p.setBrush(color);
+            p.drawEllipse(project(target.geometry[0]), 5, 5);
+        } else {
+            p.setBrush(Qt::NoBrush);
+            QPolygonF line;
+            for (auto point : target.geometry)
+                line << project(point);
+            p.drawPolyline(line);
+        }
+    };
+    drawDetail(hoveredDetail, QColor("#ffd080"));
+    drawDetail(selectedDetail, QColor("#65ceff"));
+    if (hasSubselection()) {
+        p.setPen(QColor("#cceaff"));
+        p.drawText(290, 45,
+                   (selectedDetail.kind == "vertex" ? QString("Vértice %1 selecionado")
+                                                    : QString("Aresta %1 selecionada"))
+                       .arg(selectedDetail.index + 1));
+    }
     dimensions.clear();
     if (sketchMode && !selected.isEmpty()) {
         const auto &f = model->get(selected);
@@ -729,84 +765,7 @@ void Viewport::paintOverlay(QPainter &p) {
     }
 }
 QString Viewport::pick(QPointF pixel) const {
-    for (auto &feature : model->features)
-        if (feature.type == "sketch" && feature.visible && !model->consumed(feature.id)) {
-            const auto &p = feature.p;
-            QString plane = p["plane"].toString("XY"), kind = p["profile"].toString();
-            QPolygonF region;
-            auto add = [&](double u, double v) {
-                region << project(Model::planePoint(plane, u, v, p["offset"].toDouble()));
-            };
-            double x = p["x"].toDouble(), y = p["y"].toDouble();
-            if (kind == "rectangle") {
-                double w = p["w"].toDouble(), h = p["h"].toDouble();
-                add(x, y);
-                add(x + w, y);
-                add(x + w, y + h);
-                add(x, y + h);
-            } else if (kind == "circle") {
-                for (int i = 0; i < 64; ++i) {
-                    double a = i * 2 * M_PI / 64, r = p["r"].toDouble();
-                    add(x + r * std::cos(a), y + r * std::sin(a));
-                }
-            } else if (kind == "polyline" && p["closed"].toBool()) {
-                for (auto vertex : p["points"].toArray()) {
-                    auto a = vertex.toArray();
-                    add(a[0].toDouble(), a[1].toDouble());
-                }
-            }
-            if (region.size() > 2 && region.containsPoint(pixel, Qt::OddEvenFill))
-                return feature.id;
-        }
-    for (auto &f : model->features)
-        if (f.type == "sketch" && f.visible && (!model->consumed(f.id) || f.id == selected)) {
-            for (TopExp_Explorer it(f.shape, TopAbs_EDGE); it.More(); it.Next()) {
-                BRepAdaptor_Curve c(TopoDS::Edge(it.Current()));
-                int steps = c.GetType() == GeomAbs_Line ? 1 : 64;
-                QPointF previous;
-                for (int i = 0; i <= steps; ++i) {
-                    auto p =
-                        c.Value(c.FirstParameter() + (c.LastParameter() - c.FirstParameter()) * i / steps);
-                    auto current = project(QVector3D(p.X(), p.Y(), p.Z()));
-                    if (i) {
-                        auto segment = current - previous;
-                        double length = QPointF::dotProduct(segment, segment);
-                        if (length > 0) {
-                            double t =
-                                std::clamp(QPointF::dotProduct(pixel - previous, segment) / length, 0., 1.);
-                            if (QLineF(pixel, previous + segment * t).length() < 8)
-                                return f.id;
-                        }
-                    }
-                    previous = current;
-                }
-            }
-        }
-    QVector3D o, d;
-    ray(pixel, o, d);
-    float closest = std::numeric_limits<float>::max();
-    QString result;
-    for (auto &t : mesh) {
-        auto e1 = t.b - t.a, e2 = t.c - t.a, h = QVector3D::crossProduct(d, e2);
-        float det = QVector3D::dotProduct(e1, h);
-        if (std::abs(det) < 1e-8)
-            continue;
-        float inv = 1 / det;
-        auto s = o - t.a;
-        float u = inv * QVector3D::dotProduct(s, h);
-        if (u < 0 || u > 1)
-            continue;
-        auto q = QVector3D::crossProduct(s, e1);
-        float v = inv * QVector3D::dotProduct(d, q);
-        if (v < 0 || u + v > 1)
-            continue;
-        float dist = inv * QVector3D::dotProduct(e2, q);
-        if (dist > 0 && dist < closest) {
-            closest = dist;
-            result = model->features[t.feature].id;
-        }
-    }
-    return result;
+    return pickDetail(pixel, true).feature;
 }
 void Viewport::submit(QJsonObject p) {
     magnetLabel.clear();
@@ -1005,6 +964,12 @@ void Viewport::mousePressEvent(QMouseEvent *e) {
     }
 }
 void Viewport::mouseMoveEvent(QMouseEvent *e) {
+    if (e->buttons() == Qt::NoButton && tool.isEmpty() && !choosingPlane && !onAcceptCommand &&
+        cubeDirectionAt(e->position()).isNull()) {
+        hoveredDetail = pickDetail(e->position());
+        update();
+    } else
+        hoveredDetail = {};
     if (draggingRotation) {
         double angle =
             std::atan2(e->position().y() - rotationCenter.y(), e->position().x() - rotationCenter.x());
@@ -1274,10 +1239,18 @@ void Viewport::mouseReleaseEvent(QMouseEvent *e) {
         update();
         return;
     }
-    selected = pick(s);
+    auto target = pickDetail(s, bool(onAcceptCommand));
+    selected = target.feature;
     if (onSelect)
         onSelect(selected);
+    if (!onAcceptCommand)
+        selectedDetail = target;
     update();
+}
+void Viewport::leaveEvent(QEvent *event) {
+    hoveredDetail = {};
+    update();
+    QOpenGLWidget::leaveEvent(event);
 }
 void Viewport::wheelEvent(QWheelEvent *e) {
     cameraAnimation.stop();
@@ -1326,6 +1299,11 @@ void Viewport::keyPressEvent(QKeyEvent *e) {
         choosingPlane = false;
         if (onCancelCommand)
             onCancelCommand();
+        else if (tool.isEmpty()) {
+            selected.clear();
+            if (onSelect)
+                onSelect({});
+        }
         setTool({});
     } else if (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter) {
         draggingRotation = false;
