@@ -6,6 +6,11 @@ cd "$project_dir"
 mode="${1:-core}"
 if test "$#" -gt 0; then shift; fi
 case "$mode" in
+    sketch)
+        cmake --build build --target sketch_system_tests -j "${MECACAD_BUILD_JOBS:-6}"
+        cd build
+        exec ./sketch_system_tests "$@"
+        ;;
     core)
         cmake --build build --target core_tests -j "${MECACAD_BUILD_JOBS:-6}"
         if test "$#" -eq 0; then
@@ -38,7 +43,7 @@ case "$mode" in
         exec ctest --test-dir build --output-on-failure --timeout 120
         ;;
     *)
-        echo 'Uso: sh scripts/check.sh [core [teste... ] | recovery [teste... ] | ui teste... | release]' >&2
+        echo 'Uso: sh scripts/check.sh [core [teste... ] | sketch [teste... ] | recovery [teste... ] | ui teste... | release]' >&2
         exit 2
         ;;
 esac

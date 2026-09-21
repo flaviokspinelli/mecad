@@ -137,3 +137,32 @@ Limites: PAR-02 e PAR-05 permanecem parciais. A reconstrução ainda recalcula t
 as etapas; não há cache incremental, supressão/reativação ou arraste da timeline.
 O relatório não substitui editor de reparo de referências. As referências de
 faces/arestas ainda dependem da topologia descrita nas limitações anteriores.
+
+## 21/09/2026 — domínio de sketch e solver afim interno
+
+Responsável: Codex. Itens SK-01/02/04 e PROD-03/04. Dependência para integração:
+migração do documento nativo, validade dos contornos e comandos transacionais.
+Risco principal: confundir convergência algébrica com geometria CAD utilizável.
+
+- Novo módulo mecasketch, independente de Widgets e Open CASCADE, com IDs de
+  pontos/linhas/restrições e serialização interna estrita.
+- Solver geral de equações afins para coincidência, horizontal/vertical, fixação
+  e diferenças assinadas X/Y; menor deslocamento da geometria inicial, graus de
+  liberdade, redundâncias e contribuintes candidatos de conflito.
+- Prévia pura e aplicação em cópia; falha não altera o sistema original.
+- Revisão inicial das alternativas SolveSpace/PlaneGCS e limites da decisão em
+  [SKETCH-SOLVER.md](SKETCH-SOLVER.md). Nenhuma nova biblioteca de terceiros foi
+  incorporada. A auditoria completa de dependências continua pendente.
+
+Validação: 8 casos funcionais de sketch_system_tests passaram, mais inicialização
+e encerramento (10 resultados, zero falhas). Incluem cadeia de 128 pontos,
+variação de escala/ordem, persistência JSON em memória, entradas inválidas,
+conflitos, graus de liberdade e IDs estáveis. Executar sh scripts/check.sh sketch.
+Nenhuma janela aberta, pacote gerado ou arquivo do usuário alterado. A compilação
+reutiliza build/ e o empacotamento continua bloqueado.
+
+SK-02 e SK-04 passam a parciais, não concluídos. Este módulo NÃO está ligado à
+interface ou ao formato .mcad: o aplicativo distribuído não ganhou ferramentas
+de restrição nesta etapa. Falta integrar edição/arraste e migração, validar
+contornos após resolver e oferecer diagnóstico visual. Curvas, tangência e
+ângulos exigem solver não linear; não são suportados por este núcleo afim.
