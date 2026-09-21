@@ -1,5 +1,24 @@
 # Execução do backlog
 
+## 21/09/2026 — centro de giro configurável
+
+UX-05: Move / Copy permite ativar um pivô personalizado por coordenadas globais
+ou escolher um vértice CAD com o mouse. Durante a escolha aparece o corpo original;
+depois retorna a prévia com o anel no pivô escolhido. Desativar o pivô personalizado
+retorna ao centro da caixa envolvente. Escolher um pivô sem mover/girar não cria
+etapa no histórico. Cancelar restaura seleção e filtro anteriores.
+
+O pivô numérico funciona em CAD e STL; a seleção de vértices de malha STL ainda
+não é suportada. É possível usar um vértice CAD como referência para mover STL.
+Coordenadas seguem a precisão de 0,001 mm dos controles existentes. Não há novos
+campos no formato nativo: px/py/pz já eram parâmetros das transformações.
+
+Testes direcionados: customRotationPivot (CAD/STL, prévia, cancelar, undo/redo,
+persistência), pickRotationPivotVertex (clique real e operação sem alteração),
+rotationRing, freeMoveLivePreview e editSelectedElementsAndBodies.
+Build reutilizado, sem pacote novo e sem alterar dist. UX-05 continua parcial:
+isto não equivale ao aceite integral dos manipuladores nem dos 38 itens.
+
 ## 21/09/2026 — interseções curvas no encaixe inteligente
 
 SK-11: atração a cruzamentos entre segmentos/círculos/arcos. Tangências produzem

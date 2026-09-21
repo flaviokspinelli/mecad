@@ -20,6 +20,67 @@
 class UiTests : public QObject {
     Q_OBJECT
   private slots:
+    void pickRotationPivotVertex() {
+        QTemporaryDir dir;Model source;
+        source.add("box",{{"w",40},{"h",30},{"d",20}});source.save(dir.filePath("pick.mcad"));
+        Window window(dir.filePath("recovery"),false);window.openPath(source.filePath);window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));auto *v=window.findChild<Viewport *>();
+        const auto before=window.model.json();const auto filter=v->selectionFilter;
+        bool picked=false;
+        QTimer::singleShot(150,[&] {
+            auto *button=window.findChild<QPushButton *>("pickMovePivot");
+            if(!button){v->onCancelCommand();return;}
+            button->click();QTest::qWait(40);
+            const QVector3D corner(0,0,20);
+            QTest::mouseClick(v,Qt::LeftButton,Qt::NoModifier,v->project(corner).toPoint());
+            QTest::qWait(70);
+            picked=!button->isChecked() && (v->handleOrigin-corner).length()<.001;
+            v->onAcceptCommand();
+        });
+        window.findChild<QAction *>("transform")->trigger();
+        QVERIFY(picked);QCOMPARE(window.model.json(),before);
+        QCOMPARE(v->selectionFilter,filter);QVERIFY(!v->commandSelectSubelements);
+    }
+    void customRotationPivot() {
+        QTemporaryDir dir;
+        for (bool stl : {false, true}) {
+            Model source;
+            source.add("box", {{"x",100},{"y",50},{"z",20},{"w",40},{"h",30},{"d",20}});
+            if(stl) { source.exportStl(dir.filePath("pivot.stl")); source.clear(); source.importStl(dir.filePath("pivot.stl")); }
+            source.save(dir.filePath("pivot.mcad"));
+            Window window(dir.filePath("recovery"),false);window.openPath(source.filePath);
+            auto *v=window.findChild<Viewport *>();
+            const auto before=window.model.json();
+            for (bool cancel : {true,false}) {
+                bool configured=false;
+                QTimer::singleShot(100,[&] {
+                    auto *custom=window.findChild<QPushButton *>("customMovePivot");
+                    if(!custom){v->onCancelCommand();return;}
+                    custom->click();
+                    window.findChild<QDoubleSpinBox *>("movePivot_px")->setValue(100);
+                    window.findChild<QDoubleSpinBox *>("movePivot_py")->setValue(50);
+                    window.findChild<QDoubleSpinBox *>("movePivot_pz")->setValue(20);
+                    v->onRotateAngle(90); QTest::qWait(80);
+                    configured=(v->handleOrigin-QVector3D(100,50,20)).length()<.001;
+                    if(cancel)v->onCancelCommand();else v->onAcceptCommand();
+                });
+                window.findChild<QAction *>("transform")->trigger();
+                QVERIFY(configured);
+                if(cancel) {QCOMPARE(window.model.json(),before);continue;}
+                const auto p=window.model.features.back().p;
+                QCOMPARE(p["px"].toDouble(),100.);QCOMPARE(p["py"].toDouble(),50.);
+                QVector3D center;const auto mesh=window.model.triangles();
+                for(const auto &t:mesh)center+=t.a+t.b+t.c;
+                center/=mesh.size()*3;
+                QVERIFY((center-QVector3D(85,70,30)).length()<.01);
+                const auto after=window.model.json();
+                window.model.save(dir.filePath("rotated.mcad"));Model reopened;reopened.load(dir.filePath("rotated.mcad"));
+                QCOMPARE(reopened.json(),after);
+                window.findChild<QAction *>("undo")->trigger();QCOMPARE(window.model.json(),before);
+                window.findChild<QAction *>("redo")->trigger();QCOMPARE(window.model.json(),after);
+            }
+        }
+    }
     void arcIntersectionDoesNotExtendArc() {
         for(const auto &plane:QStringList{"XY","XZ","YZ"}) {
             Model model;

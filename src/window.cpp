@@ -2042,9 +2042,24 @@ void Window::transform(bool copy) {
     panel.number("z", "Z distance", 0);
     panel.choice("axis", "Rotation axis", {{"X", "X"}, {"Y", "Y"}, {"Z", "Z"}}, "Z");
     panel.number("angle", "Rotation", 0, -36000, 36000, " °");
+    for (const auto &key : QStringList{"px", "py", "pz"}) {
+        panel.number(key, "Pivot " + key.right(1).toUpper(), 0);
+        panel.nums[key]->setObjectName("movePivot_" + key);
+    }
     for (auto *spin : panel.nums)
         panel.layout->setRowVisible(spin, false);
     panel.layout->setRowVisible(panel.combos["axis"], false);
+    auto *customPivot = new QPushButton("Centro de giro personalizado");
+    customPivot->setObjectName("customMovePivot");
+    customPivot->setCheckable(true);
+    panel.layout->addRow(customPivot);
+    auto *pickPivot = new QPushButton("Escolher vértice para o centro de giro");
+    pickPivot->setObjectName("pickMovePivot");
+    pickPivot->setToolTip("Selecione um vértice CAD. Para STL, use coordenadas ou um vértice CAD de referência.");
+    pickPivot->setCheckable(true);
+    panel.layout->addRow(pickPivot);
+    customPivot->setVisible(!subelements);
+    pickPivot->setVisible(!subelements);
     auto *rotate = new QPushButton("Girar pelo mouse");
     rotate->setObjectName("rotateMode");
     rotate->setCheckable(true);
@@ -2061,10 +2076,11 @@ void Window::transform(bool copy) {
     auto *precision = new QPushButton("Precise values / rotation ▸");
     precision->setCheckable(true);
     panel.layout->addRow(precision);
-    connect(precision, &QPushButton::toggled, &panel, [&panel, precision](bool expanded) {
-        for (auto *spin : panel.nums)
-            panel.layout->setRowVisible(spin, expanded);
-        panel.layout->setRowVisible(panel.combos["axis"], expanded);
+    connect(precision, &QPushButton::toggled, &panel, [&panel, precision, rotate](bool expanded) {
+        for (const auto &key : QStringList{"x", "y", "z"})
+            panel.layout->setRowVisible(panel.nums[key], expanded);
+        panel.layout->setRowVisible(panel.nums["angle"], expanded || rotate->isChecked());
+        panel.layout->setRowVisible(panel.combos["axis"], expanded || rotate->isChecked());
         precision->setText(expanded ? "Precise values / rotation ▾" : "Precise values / rotation ▸");
         panel.adjustSize();
     });
@@ -2081,6 +2097,9 @@ void Window::transform(bool copy) {
     panel.layout->addRow(feedback);
     Model preview = model;
     QString previousSelection = selected;
+    const auto previousFilter = canvas->selectionFilter;
+    const auto previousDetails = canvas->selectedDetails;
+    const auto previousDetail = canvas->selectedDetail;
     properties->hide();
     canvas->setTool({});
     activeCommand = &panel;
@@ -2100,9 +2119,11 @@ void Window::transform(bool copy) {
             BRepBndLib::Add(model.get(parameters["source"].toString()).shape, sourceBox);
         double x, y, z, X, Y, Z;
         sourceBox.Get(x, y, z, X, Y, Z);
-        parameters["px"] = (x + X) / 2;
-        parameters["py"] = (y + Y) / 2;
-        parameters["pz"] = (z + Z) / 2;
+        if (!customPivot->isChecked()) {
+            parameters["px"] = (x + X) / 2;
+            parameters["py"] = (y + Y) / 2;
+            parameters["pz"] = (z + Z) / 2;
+        }
         return parameters;
     };
     auto applyMovement = [&](Model &work, QJsonObject parameters) {
@@ -2126,6 +2147,7 @@ void Window::transform(bool copy) {
         return results;
     };
     auto updatePreview = [&] {
+        if (pickPivot->isChecked()) return;
         try {
             auto parameters = moveParameters();
             preview = model;
@@ -2160,6 +2182,27 @@ void Window::transform(bool copy) {
     debounce.setSingleShot(true);
     debounce.setInterval(35);
     connect(&debounce, &QTimer::timeout, &panel, updatePreview);
+    connect(customPivot, &QPushButton::toggled, &panel, [&](bool enabled) {
+        if (enabled) {
+            for (int i = 0; i < 3; ++i)
+                panel.nums[QStringList{"px", "py", "pz"}[i]]->setValue(canvas->handleOrigin[i]);
+        }
+        for (const auto &key : QStringList{"px", "py", "pz"})
+            panel.layout->setRowVisible(panel.nums[key], enabled);
+        panel.adjustSize();
+        updatePreview();
+    });
+    connect(pickPivot, &QPushButton::toggled, &panel, [&](bool choosing) {
+        debounce.stop();
+        canvas->commandSelectSubelements = choosing;
+        canvas->selectionFilter = choosing ? "vertex" : previousFilter;
+        canvas->selectedDetails.clear(); canvas->selectedDetail = {}; canvas->hoveredDetail = {};
+        if (choosing) {
+            canvas->moveHandleActive = false;
+            canvas->setModel(&model);
+            feedback->setText("Clique em um vértice. A peça original é exibida durante a escolha.");
+        } else updatePreview();
+    });
     for (auto *spin : panel.nums)
         connect(spin, qOverload<double>(&QDoubleSpinBox::valueChanged), &panel, [&] {
             if (!debounce.isActive())
@@ -2171,6 +2214,15 @@ void Window::transform(bool copy) {
                 debounce.start();
         });
     commandSelection = [&](QString id) {
+        if (pickPivot->isChecked()) {
+            const auto detail = canvas->selectedDetail;
+            if (detail.kind != "vertex" || detail.geometry.isEmpty()) return;
+            customPivot->setChecked(true);
+            for (int i = 0; i < 3; ++i)
+                panel.nums[QStringList{"px", "py", "pz"}[i]]->setValue(detail.geometry.front()[i]);
+            pickPivot->setChecked(false);
+            return;
+        }
         if (grouped) return;
         int index = panel.combos["source"]->findData(id);
         if (index >= 0)
@@ -2191,6 +2243,8 @@ void Window::transform(bool copy) {
     debounce.stop();
     activeCommand.clear();
     commandSelection = {};
+    canvas->commandSelectSubelements = false;
+    canvas->selectionFilter = previousFilter;
     canvas->onMoveDistance = {};
     canvas->onMoveTranslation = {};
     canvas->onCancelCommand = {};
@@ -2212,6 +2266,11 @@ void Window::transform(bool copy) {
     else
         selected = previousSelection;
     refresh();
+    if (!accepted) {
+        canvas->selectedDetails = previousDetails;
+        canvas->selectedDetail = previousDetail;
+        canvas->update();
+    }
 }
 void Window::hole() {
     QList<QPair<QString, QString>> bodies;
