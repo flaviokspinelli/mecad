@@ -72,6 +72,7 @@ class Viewport : public QOpenGLWidget, protected QOpenGLFunctions {
     int polygonSides = 6;
     std::function<void(QString)> onSelect;
     std::function<void(QString)> onEditSketch;
+    std::function<void(SelectionTarget)> onTrimSketch;
     std::function<QString(QString, QString, double)> onDimensionEdit;
     std::function<QString(QString, QString, QString)> onDimensionExpression;
     std::function<void(QJsonObject)> onProfile;

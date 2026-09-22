@@ -1396,6 +1396,12 @@ void Viewport::mouseReleaseEvent(QMouseEvent *e) {
         }
         return;
     }
+    if (sketchMode && tool == "trim") {
+        auto trimTarget = pickDetail(s, true);
+        if (!trimTarget.feature.isEmpty() && trimTarget.kind == "edge" && onTrimSketch)
+            onTrimSketch(trimTarget);
+        return;
+    }
     if (sketchMode && !tool.isEmpty()) {
         cursor = sketchPoint(s);
         if (tool == "polyline" && draft.size() >= 3 &&

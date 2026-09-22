@@ -703,6 +703,7 @@ Window::Window(QString recoveryDirectory, bool promptRecovery, QString preferenc
     command("rectangle", "2-Point Rectangle", "R", [this] { sketchTool("rectangle"); });
     command("circle", "Center Diameter Circle", "C", [this] { sketchTool("circle"); });
     command("polyline", "Line", "L", [this] { sketchTool("polyline"); });
+    command("trim", "Trim", "T", [this] { sketchTool("trim"); });
     command("polygon", "Polygon — Polígono regular", "", [this] {
         bool ok = false;
         int sides = QInputDialog::getInt(this, "Polígono regular",
@@ -1259,6 +1260,22 @@ Window::Window(QString recoveryDirectory, bool promptRecovery, QString preferenc
         canvas->view("top");
         select(id);
         buildRibbon();
+    };
+    canvas->onTrimSketch = [this](Viewport::SelectionTarget target) {
+        if (activeCommand || target.feature.isEmpty() || target.kind != "edge")
+            return;
+        try {
+            Model work = model;
+            work.editSketchElements(target.feature, {target.index}, {}, {}, true);
+            model.commit(work.json());
+            selected = target.feature;
+            refresh();
+            status->setText("Trecho removido. Continue clicando ou pressione Esc.");
+        } catch (const Standard_Failure &error) {
+            status->setText(QString::fromUtf8(error.GetMessageString()));
+        } catch (const std::exception &error) {
+            status->setText(QString::fromUtf8(error.what()));
+        }
     };
     canvas->onDimensionExpression=[this](QString id,QString field,QString formula)->QString {
         if(activeCommand)return "Conclua ou cancele a operação atual.";
@@ -1822,7 +1839,8 @@ void Window::sketchTool(const QString &type) {
     pendingSketchTool = type;
     if (canvas->sketchMode) {
         canvas->setTool(type);
-        status->setText(type == "arc" ? "Arco: clique início, ponto intermediário e fim."
+        status->setText(type == "trim" ? "Trim: clique nas linhas para apagar; Esc para sair."
+                    : type == "arc" ? "Arco: clique início, ponto intermediário e fim."
                         : type == "polyline"
                             ? "Linha: clique nos vértices; feche clicando no início ou Shift+Enter."
                             : "Clique em dois pontos. Depois ajuste as dimensões no painel.");
