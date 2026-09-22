@@ -469,11 +469,14 @@ QAction *Window::command(QString key, QString label, QString shortcut, std::func
                     edges.insert(item.index);
                 }
                 if (complete && model.get(owner).type == "sketch") {
-                    TopTools_IndexedMapOfShape topology;
-                    TopExp::MapShapes(model.get(owner).shape, TopAbs_EDGE, topology);
                     const auto p = model.get(owner).p;
                     bool closed = p["profile"] == "rectangle" || p["profile"] == "circle" || p["closed"].toBool();
-                    if (closed && edges.size() == topology.Extent())
+                    // A seleção visual de segmentos pode conter a mesma aresta
+                    // representada por índices diferentes após o sketch ser
+                    // reconstruído. Em um sketch fechado, a intenção é o
+                    // perfil inteiro, não a quantidade exata de subelementos
+                    // atualmente destacados.
+                    if (closed && !edges.isEmpty())
                         select(owner);
                 }
             }
