@@ -9,6 +9,9 @@
 #include <QSet>
 #include <QActionGroup>
 #include <QApplication>
+#include <QDragEnterEvent>
+#include <QMimeData>
+#include <QUrl>
 #include <QCheckBox>
 #include <QCloseEvent>
 #include <QComboBox>
@@ -506,6 +509,7 @@ Window::Window(QString recoveryDirectory, bool promptRecovery, QString preferenc
         return value=="true"?true:value=="false"?false:fallback;
     };
     setObjectName("Mecad");
+    setAcceptDrops(true);
     resize(1440, 920);
     setMinimumSize(1100, 720);
     setDockOptions(QMainWindow::AnimatedDocks);
@@ -2767,6 +2771,48 @@ void Window::recoverProject() {
     status->setText(original.isEmpty() ? "Projeto não salvo recuperado. Use Save As para salvar."
                                      : "Cópia recuperada de " + original + ". Use Save As; o original foi preservado.");
 }
+void Window::dragEnterEvent(QDragEnterEvent *e) {
+    if (!e->mimeData()->hasUrls()) {
+        e->ignore();
+        return;
+    }
+    for (const auto &url : e->mimeData()->urls()) {
+        if (url.isLocalFile() && QFileInfo(url.toLocalFile()).suffix().compare("stl", Qt::CaseInsensitive) == 0) {
+            e->acceptProposedAction();
+            return;
+        }
+    }
+    e->ignore();
+}
+
+void Window::dropEvent(QDropEvent *e) {
+    if (!e->mimeData()->hasUrls()) {
+        e->ignore();
+        return;
+    }
+    for (const auto &url : e->mimeData()->urls()) {
+        if (!url.isLocalFile() || QFileInfo(url.toLocalFile()).suffix().compare("stl", Qt::CaseInsensitive) != 0)
+            continue;
+        if (!canLeave()) {
+            e->ignore();
+            return;
+        }
+        try {
+            openPath(url.toLocalFile());
+            status->setText("STL importado por arrastar e soltar: " + QFileInfo(url.toLocalFile()).fileName());
+            e->acceptProposedAction();
+        } catch (const Standard_Failure &error) {
+            status->setText(QString::fromUtf8(error.GetMessageString()));
+            e->ignore();
+        } catch (const std::exception &error) {
+            status->setText(QString::fromUtf8(error.what()));
+            e->ignore();
+        }
+        return;
+    }
+    e->ignore();
+}
+
 void Window::closeEvent(QCloseEvent *e) {
     if (activeCommand) {
         activeCommand->reject();
