@@ -1495,6 +1495,16 @@ Window::Window(QString recoveryDirectory, bool promptRecovery, QString preferenc
             return;
         QMenu menu;
         menu.addAction("Edit Feature", this, [this] { properties->show(); });
+        menu.addAction("Rename…", this, [this] {
+            if (selected.isEmpty()) return;
+            auto &feature = model.get(selected);
+            bool ok = false;
+            const auto name = QInputDialog::getText(this, "Rename feature", "Name:",
+                                                     QLineEdit::Normal, feature.name, &ok).trimmed();
+            if (!ok || name.isEmpty() || name == feature.name) return;
+            model.edit(feature.id, feature.p, name);
+            refresh();
+        });
         if (model.get(selected).type == "sketch") {
             menu.addAction("Edit Sketch", this, [this] {
                 if(model.get(selected).inactive)return;
@@ -1531,6 +1541,16 @@ Window::Window(QString recoveryDirectory, bool promptRecovery, QString preferenc
         if (!item) return;
         select(item->data(Qt::UserRole).toString());
         QMenu menu;
+        menu.addAction("Rename…", this, [this] {
+            if (selected.isEmpty()) return;
+            auto &feature = model.get(selected);
+            bool ok = false;
+            const auto name = QInputDialog::getText(this, "Rename feature", "Name:",
+                                                     QLineEdit::Normal, feature.name, &ok).trimmed();
+            if (!ok || name.isEmpty() || name == feature.name) return;
+            model.edit(feature.id, feature.p, name);
+            refresh();
+        });
         menu.addAction(commands["dependencies"]);
         menu.addAction(commands["historyEarlier"]);
         menu.addAction(commands["historyLater"]);
