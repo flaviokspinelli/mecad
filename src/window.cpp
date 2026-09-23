@@ -1,10 +1,15 @@
 #include "window.h"
 #include <BRepBndLib.hxx>
+#include <BRepTools.hxx>
+#include <BRepTools_WireExplorer.hxx>
+#include <BRep_Tool.hxx>
 #include <BRepGProp.hxx>
 #include <BRepExtrema_DistShapeShape.hxx>
 #include <GProp_GProps.hxx>
 #include <Bnd_Box.hxx>
 #include <TopExp.hxx>
+#include <TopoDS.hxx>
+#include <TopoDS_Wire.hxx>
 #include <TopTools_IndexedMapOfShape.hxx>
 #include <QSet>
 #include <QActionGroup>
@@ -458,6 +463,33 @@ QAction *Window::command(QString key, QString label, QString shortcut, std::func
                     return;
                 }
         run([&] {
+            if (key == "extrude" && canvas->selectedDetail.kind == "face" &&
+                canvas->selectedDetails.size() <= 1 && std::any_of(model.features.cbegin(), model.features.cend(),
+                    [this](const Feature &feature) { return feature.id == canvas->selectedDetail.feature; })) {
+                const auto target = canvas->selectedDetail;
+                TopTools_IndexedMapOfShape faces;
+                TopExp::MapShapes(model.get(target.feature).shape, TopAbs_FACE, faces);
+                if (target.index >= 0 && target.index < faces.Extent()) {
+                    const auto face = TopoDS::Face(faces(target.index + 1));
+                    const auto plane = Model::facePlane(model.get(target.feature).shape, target.index);
+                    const auto wire = BRepTools::OuterWire(face);
+                    BRepTools_WireExplorer explorer(wire);
+                    QJsonArray points;
+                    for (; explorer.More(); explorer.Next()) {
+                        const auto vertex = TopExp::FirstVertex(explorer.Current());
+                        if (vertex.IsNull()) continue;
+                        const auto p = BRep_Tool::Pnt(vertex);
+                        const auto local = Model::planeCoordinates(plane, {float(p.X()), float(p.Y()), float(p.Z())});
+                        points.append(QJsonArray{local.x(), local.y()});
+                    }
+                    if (points.size() >= 3) {
+                        const auto sketch = model.add("sketch", {{"profile", "polyline"}, {"points", points},
+                            {"closed", true}, {"plane", plane}, {"offset", 0.0}}, "Face profile");
+                        selected = sketch;
+                        select(sketch);
+                    }
+                }
+            }
             const auto featureExists = [this](const QString &id) {
                 return std::any_of(model.features.cbegin(), model.features.cend(),
                                    [&id](const Feature &feature) { return feature.id == id; });
