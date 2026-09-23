@@ -17,7 +17,9 @@ target_link_libraries(Mecad PRIVATE mecaui)
 if(APPLE)
     target_sources(Mecad PRIVATE assets/MecaCAD.icns)
     set_source_files_properties(assets/MecaCAD.icns PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
-    set_target_properties(Mecad PROPERTIES MACOSX_BUNDLE_ICON_FILE MecaCAD.icns)
+    set_target_properties(Mecad PROPERTIES
+        MACOSX_BUNDLE_ICON_FILE MecaCAD.icns
+        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/assets/Mecad-Info.plist.in")
 endif()
 set_target_properties(Mecad PROPERTIES MACOSX_BUNDLE_GUI_IDENTIFIER com.mecad.desktop MACOSX_BUNDLE_BUNDLE_NAME Mecad MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION} MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION})
 enable_testing()
