@@ -1436,7 +1436,33 @@ Window::Window(QString recoveryDirectory, bool promptRecovery, QString preferenc
                 TopExp::MapShapes(model.get(canvas->sketchSupport.feature).shape, TopAbs_FACE, faces);
                 p["supportFaceCount"] = faces.Extent();
             }
-            selected = model.add("sketch", p, "Sketch " + QString::number(model.features.size() + 1));
+            // While Sketch mode is active, successive line gestures belong to
+            // the same sketch. Older behavior created one feature per gesture,
+            // which made a single hand-drawn outline appear as many sketches
+            // in the Browser and prevented profile operations from seeing the
+            // complete contour.
+            if (canvas->sketchMode && !selected.isEmpty() && model.get(selected).type == "sketch" &&
+                model.get(selected).p["profile"] == "polyline" && p["profile"] == "polyline" &&
+                model.get(selected).p["plane"] == p["plane"]) {
+                auto merged = model.get(selected).p;
+                auto points = merged["points"].toArray();
+                auto incoming = p["points"].toArray();
+                if (!points.isEmpty() && !incoming.isEmpty()) {
+                    const auto last = points.last().toArray();
+                    const auto first = incoming.first().toArray();
+                    if (last.size() == 2 && first.size() == 2 &&
+                        qAbs(last[0].toDouble() - first[0].toDouble()) < 1e-5 &&
+                        qAbs(last[1].toDouble() - first[1].toDouble()) < 1e-5)
+                        incoming.removeFirst();
+                }
+                for (const auto &point : incoming)
+                    points.append(point);
+                merged["points"] = points;
+                merged["closed"] = merged["closed"].toBool() || p["closed"].toBool();
+                model.edit(selected, merged, model.get(selected).name);
+            } else {
+                selected = model.add("sketch", p, "Sketch " + QString::number(model.features.size() + 1));
+            }
             refresh();
             status->setText("Sketch criado. Ajuste as dimensões à direita ou continue desenhando.");
         });
