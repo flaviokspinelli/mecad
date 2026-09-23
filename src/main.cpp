@@ -34,7 +34,8 @@ int main(int argc, char **argv) {
             window.model.exportDxf(dir.filePath("Base-profile.dxf"), window.model.features.front().id);
     }
     for (auto arg : args)
-        if (arg.endsWith(".mcad", Qt::CaseInsensitive) || arg.endsWith(".stl", Qt::CaseInsensitive)) {
+        if (arg.endsWith(".mcad", Qt::CaseInsensitive) || arg.endsWith(".stl", Qt::CaseInsensitive) ||
+            arg.endsWith(".step", Qt::CaseInsensitive) || arg.endsWith(".stp", Qt::CaseInsensitive)) {
             try {
                 window.openPath(arg);
             } catch (const std::exception &e) {

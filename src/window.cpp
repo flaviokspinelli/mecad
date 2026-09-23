@@ -2897,12 +2897,22 @@ void Window::open() {
     if (!canLeave())
         return;
     auto path = QFileDialog::getOpenFileName(
-        this, "Open Design", {}, "Mecad / STL (*.mcad *.stl *.STL);;Mecad (*.mcad);;STL (*.stl *.STL)");
+        this, "Open Design", {},
+        "Mecad / CAD / Mesh (*.mcad *.step *.stp *.stl *.MCAD *.STEP *.STP *.STL);;"
+        "Mecad (*.mcad);;STEP (*.step *.stp *.STEP *.STP);;STL (*.stl *.STL)");
     if (!path.isEmpty())
         openPath(path);
 }
 void Window::openPath(const QString &path) {
-    if (QFileInfo(path).suffix().compare("stl", Qt::CaseInsensitive) == 0) {
+    const auto suffix = QFileInfo(path).suffix().toLower();
+    if (suffix == "step" || suffix == "stp") {
+        selected = model.importStep(path);
+        clearRecovery();
+        finishSketch();
+        refresh(true);
+        return;
+    }
+    if (suffix == "stl") {
         Model imported;
         auto id = imported.importStl(path);
         model = std::move(imported);
