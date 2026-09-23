@@ -29,6 +29,7 @@ class Window : public QMainWindow {
     void closeEvent(QCloseEvent *) override;
     void dragEnterEvent(QDragEnterEvent *) override;
     void dropEvent(QDropEvent *) override;
+    bool event(QEvent *) override;
     bool eventFilter(QObject *, QEvent *) override;
 
   private:

@@ -1653,6 +1653,22 @@ void Window::positionPanels() {
         activeCommand->raise();
     }
 }
+bool Window::event(QEvent *event) {
+    if (event->type() == QEvent::FileOpen) {
+        auto *fileEvent = static_cast<QFileOpenEvent *>(event);
+        const auto path = fileEvent->file();
+        if (!path.isEmpty()) {
+            try {
+                if (canLeave()) openPath(path);
+            } catch (const std::exception &error) {
+                QMessageBox::warning(this, "Não foi possível abrir o arquivo", QString::fromUtf8(error.what()));
+            }
+        }
+        event->accept();
+        return true;
+    }
+    return QMainWindow::event(event);
+}
 bool Window::eventFilter(QObject *object, QEvent *event) {
     if (object == canvas && event->type() == QEvent::Resize)
         positionPanels();
