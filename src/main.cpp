@@ -19,6 +19,9 @@ int main(int argc, char **argv) {
     app.setApplicationName("Mecad");
     app.setApplicationVersion("0.2.25");
     Window window;
+    // macOS delivers Finder double-clicks as QFileOpenEvent to QApplication,
+    // not directly to the main window. Let Window route that event to openPath.
+    app.installEventFilter(&window);
     window.show();
     auto args = app.arguments();
     if (args.contains("--demo"))
