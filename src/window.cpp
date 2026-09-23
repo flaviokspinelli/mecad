@@ -458,6 +458,39 @@ QAction *Window::command(QString key, QString label, QString shortcut, std::func
                     return;
                 }
         run([&] {
+            const auto featureExists = [this](const QString &id) {
+                return std::any_of(model.features.cbegin(), model.features.cend(),
+                                   [&id](const Feature &feature) { return feature.id == id; });
+            };
+            if (key == "extrude" || key == "revolve") {
+                // A sketch profile may arrive as several selected edges (and
+                // often with stale browser selections still present). Reduce
+                // that heterogeneous selection to the closed sketch that the
+                // user actually picked before the generic object guard runs.
+                QString profile;
+                for (const auto &item : canvas->selectedDetails) {
+                    if (item.feature.isEmpty() || !featureExists(item.feature))
+                        continue;
+                    const auto &feature = model.get(item.feature);
+                    if (feature.type != "sketch")
+                        continue;
+                    const auto &p = feature.p;
+                    const bool closed = p["profile"] == "rectangle" ||
+                                        p["profile"] == "circle" || p["closed"].toBool();
+                    if (closed && (item.kind == "edge" || item.kind == "face" || item.kind == "object"))
+                        profile = item.feature;
+                }
+                if (profile.isEmpty() && !canvas->selectedDetail.feature.isEmpty() &&
+                    featureExists(canvas->selectedDetail.feature)) {
+                    const auto &feature = model.get(canvas->selectedDetail.feature);
+                    const auto &p = feature.p;
+                    if (feature.type == "sketch" &&
+                        (p["profile"] == "rectangle" || p["profile"] == "circle" || p["closed"].toBool()))
+                        profile = canvas->selectedDetail.feature;
+                }
+                if (!profile.isEmpty())
+                    select(profile);
+            }
             if ((key == "extrude" || key == "revolve") && canvas->hasSubselection()) {
                 const auto items = canvas->selectedDetails;
                 QString owner;
@@ -488,6 +521,24 @@ QAction *Window::command(QString key, QString label, QString shortcut, std::func
                     // Browser multi-selection can retain older sketches. The
                     // highlighted sketch is the explicit modeling target.
                     select(selected);
+            }
+            if ((key == "extrude" || key == "revolve") && canvas->hasSubselection()) {
+                // When Shift/browser selection contains several sketches, do
+                // not let the first stale item decide the command target.
+                // Pick the most recently represented closed sketch profile.
+                QString candidate;
+                for (const auto &item : canvas->selectedDetails) {
+                    if (item.kind != "edge" || item.feature.isEmpty() || !featureExists(item.feature))
+                        continue;
+                    const auto &feature = model.get(item.feature);
+                    if (feature.type != "sketch")
+                        continue;
+                    const auto &p = feature.p;
+                    if (p["profile"] == "rectangle" || p["profile"] == "circle" || p["closed"].toBool())
+                        candidate = item.feature;
+                }
+                if (!candidate.isEmpty())
+                    select(candidate);
             }
             const QStringList bodyCommands = {"delete", "rollback", "transform", "copy",
                                               "fillet", "hole",     "boolean",   "cut",
