@@ -649,10 +649,10 @@ Window::Window(QString recoveryDirectory, bool promptRecovery, QString preferenc
         QToolButton::menu-indicator{width:0;}
         QTabBar::tab{padding:3px 17px;color:#dce2e9;background:transparent;border:0;border-bottom:2px solid transparent;font-size:10px;font-weight:600;}
         QTabBar::tab:selected{border-bottom:2px solid #d8e3ee;} QTabBar::tab:disabled{color:#a2adbb;}
-        QDockWidget{font-weight:500;background:transparent;} QDockWidget::title{background:#354353;padding:4px 8px;color:#d6dfe8;border:1px solid #49596a;font-size:11px;}
-        QTreeWidget{background:transparent;border:0;outline:0;color:#dae2ec;padding:2px 0;font-size:11px;}
-        QTreeWidget::item{height:21px;padding:0;} QTreeWidget::item:selected{background:#293747;color:#e5eef6;}
-        QTreeWidget::item:hover{background:#42566b;}
+        QDockWidget{font-weight:500;background:#273544;} QDockWidget::title{background:#354353;padding:5px 10px;color:#e6edf4;border:1px solid #49596a;font-size:12px;font-weight:600;}
+        QTreeWidget{background:#273544;border:0;outline:0;color:#e7edf3;padding:4px 0;font-size:13px;}
+        QTreeWidget::item{height:27px;padding:1px 4px;} QTreeWidget::item:selected{background:#1e5875;color:#ffffff;font-weight:600;}
+        QTreeWidget::item:hover{background:#3d566b;} QTreeWidget::branch{background:#273544;}
         QLineEdit,QDoubleSpinBox,QComboBox{background:#293644;border:1px solid #526477;border-radius:0;padding:3px 5px;color:#e0e8f0;min-height:18px;selection-background-color:#367998;}
         QLineEdit:focus,QDoubleSpinBox:focus,QComboBox:focus{border-color:#54bfea;}
         QComboBox QAbstractItemView{background:#2d3d4d;color:#e1e9f2;selection-background-color:#44657f;}
@@ -1299,13 +1299,14 @@ Window::Window(QString recoveryDirectory, bool promptRecovery, QString preferenc
     browser = new QDockWidget("BROWSER", canvas);
     browser->setObjectName("browserDock");
     browser->setFeatures(QDockWidget::NoDockWidgetFeatures);
-    browser->setFixedWidth(264);
+    browser->setMinimumWidth(300);
+    browser->setFixedWidth(320);
     tree = new QTreeWidget;
     tree->setHeaderHidden(true);
     tree->setColumnCount(2);
     tree->setColumnWidth(0, 24);
-    tree->setIconSize({14, 14});
-    tree->setIndentation(14);
+    tree->setIconSize({18, 18});
+    tree->setIndentation(18);
     tree->setUniformRowHeights(true);
     tree->setRootIsDecorated(false);
     tree->setTreePosition(1);
