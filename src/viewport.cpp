@@ -108,8 +108,12 @@ QPointF Viewport::sketchPoint(QPointF pixel) {
         return Model::planeCoordinates(plane, {float(p.X()),float(p.Y()),float(p.Z())});
     };
     for (const auto &f : model->features) {
-        if (f.inactive || f.type != "sketch" || !(f.id == selected || (f.visible && !model->consumed(f.id))) ||
-            f.p["plane"].toString("XY") != plane || std::abs(f.p["offset"].toDouble() - planeOffset) > 1e-5)
+        const bool sketchOnPlane = f.type == "sketch" &&
+            (f.id == selected || (f.visible && !model->consumed(f.id))) &&
+            f.p["plane"].toString("XY") == plane &&
+            std::abs(f.p["offset"].toDouble() - planeOffset) <= 1e-5;
+        const bool cadReference = f.type != "sketch" && f.visible && !f.inactive && !model->consumed(f.id);
+        if (!sketchOnPlane && !cadReference)
             continue;
         for (TopExp_Explorer it(f.shape, TopAbs_EDGE); it.More(); it.Next()) {
             BRepAdaptor_Curve edge(TopoDS::Edge(it.Current()));
