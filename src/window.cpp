@@ -473,10 +473,10 @@ QAction *Window::command(QString key, QString label, QString shortcut, std::func
                     const auto face = TopoDS::Face(faces(target.index + 1));
                     const auto plane = Model::facePlane(model.get(target.feature).shape, target.index);
                     const auto wire = BRepTools::OuterWire(face);
-                    BRepTools_WireExplorer explorer(wire);
+                    BRepTools_WireExplorer explorer(wire, face);
                     QJsonArray points;
                     for (; explorer.More(); explorer.Next()) {
-                        const auto vertex = TopExp::FirstVertex(explorer.Current());
+                        const auto vertex = explorer.CurrentVertex();
                         if (vertex.IsNull()) continue;
                         const auto p = BRep_Tool::Pnt(vertex);
                         const auto local = Model::planeCoordinates(plane, {float(p.X()), float(p.Y()), float(p.Z())});
