@@ -462,6 +462,28 @@ QAction *Window::command(QString key, QString label, QString shortcut, std::func
                 return std::any_of(model.features.cbegin(), model.features.cend(),
                                    [&id](const Feature &feature) { return feature.id == id; });
             };
+            const auto closedSketch = [this, &featureExists](const QString &id) {
+                if (id.isEmpty() || !featureExists(id))
+                    return false;
+                const auto &feature = model.get(id);
+                if (feature.type != "sketch")
+                    return false;
+                const auto &p = feature.p;
+                if (p["profile"] == "rectangle" || p["profile"] == "circle" || p["closed"].toBool())
+                    return true;
+                // Older files did not persist `closed` for a hand-drawn
+                // polyline. Treat coincident first/last points as the same
+                // closed profile that the user sees on screen.
+                const auto points = p["points"].toArray();
+                if (points.size() < 3)
+                    return false;
+                const auto first = points.first().toArray();
+                const auto last = points.last().toArray();
+                if (first.size() != 2 || last.size() != 2)
+                    return false;
+                return qAbs(first[0].toDouble() - last[0].toDouble()) < 1e-5 &&
+                       qAbs(first[1].toDouble() - last[1].toDouble()) < 1e-5;
+            };
             if (key == "extrude" || key == "revolve") {
                 // A sketch profile may arrive as several selected edges (and
                 // often with stale browser selections still present). Reduce
@@ -471,21 +493,48 @@ QAction *Window::command(QString key, QString label, QString shortcut, std::func
                 for (const auto &item : canvas->selectedDetails) {
                     if (item.feature.isEmpty() || !featureExists(item.feature))
                         continue;
-                    const auto &feature = model.get(item.feature);
-                    if (feature.type != "sketch")
-                        continue;
-                    const auto &p = feature.p;
-                    const bool closed = p["profile"] == "rectangle" ||
-                                        p["profile"] == "circle" || p["closed"].toBool();
-                    if (closed && (item.kind == "edge" || item.kind == "face" || item.kind == "object"))
+                    if (closedSketch(item.feature) &&
+                        (item.kind == "edge" || item.kind == "face" || item.kind == "object"))
                         profile = item.feature;
+                }
+                if (profile.isEmpty()) {
+                    // Legacy sketches created one segment at a time may lack
+                    // the persisted `closed` flag. Infer closure from the
+                    // selected segment endpoints and upgrade that sketch.
+                    for (const auto &feature : model.features) {
+                        if (feature.type != "sketch" || !featureExists(feature.id))
+                            continue;
+                        QVector<QVector3D> endpoints;
+                        for (const auto &item : canvas->selectedDetails) {
+                            if (item.feature == feature.id && item.kind == "edge" && item.geometry.size() >= 2) {
+                                endpoints << item.geometry.front() << item.geometry.back();
+                            }
+                        }
+                        if (endpoints.size() < 6)
+                            continue;
+                        bool closed = true;
+                        for (const auto &point : endpoints) {
+                            int degree = 0;
+                            for (const auto &other : endpoints)
+                                if ((point - other).length() < 0.01f)
+                                    ++degree;
+                            if (degree != 2) {
+                                closed = false;
+                                break;
+                            }
+                        }
+                        if (closed) {
+                            auto parameters = feature.p;
+                            parameters["closed"] = true;
+                            model.edit(feature.id, parameters, feature.name);
+                            profile = feature.id;
+                            break;
+                        }
+                    }
                 }
                 if (profile.isEmpty() && !canvas->selectedDetail.feature.isEmpty() &&
                     featureExists(canvas->selectedDetail.feature)) {
-                    const auto &feature = model.get(canvas->selectedDetail.feature);
-                    const auto &p = feature.p;
-                    if (feature.type == "sketch" &&
-                        (p["profile"] == "rectangle" || p["profile"] == "circle" || p["closed"].toBool()))
+                    if (closedSketch(canvas->selectedDetail.feature))
                         profile = canvas->selectedDetail.feature;
                 }
                 if (!profile.isEmpty())
