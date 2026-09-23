@@ -480,6 +480,15 @@ QAction *Window::command(QString key, QString label, QString shortcut, std::func
                         select(owner);
                 }
             }
+            if ((key == "extrude" || key == "revolve") && !selected.isEmpty() &&
+                model.get(selected).type == "sketch") {
+                const auto &p = model.get(selected).p;
+                const bool closed = p["profile"] == "rectangle" || p["profile"] == "circle" || p["closed"].toBool();
+                if (closed)
+                    // Browser multi-selection can retain older sketches. The
+                    // highlighted sketch is the explicit modeling target.
+                    select(selected);
+            }
             const QStringList bodyCommands = {"delete", "rollback", "transform", "copy",
                                               "fillet", "hole",     "boolean",   "cut",
                                               "common", "extrude",  "revolve",   "dimension"};
