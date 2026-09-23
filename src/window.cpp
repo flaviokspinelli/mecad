@@ -1303,6 +1303,7 @@ Window::Window(QString recoveryDirectory, bool promptRecovery, QString preferenc
     browser->setFixedWidth(320);
     tree = new QTreeWidget;
     tree->setHeaderHidden(true);
+    tree->setSelectionMode(QAbstractItemView::ExtendedSelection);
     tree->setColumnCount(2);
     tree->setColumnWidth(0, 24);
     tree->setIconSize({18, 18});
@@ -1469,8 +1470,16 @@ Window::Window(QString recoveryDirectory, bool promptRecovery, QString preferenc
         });
     };
     connect(tree, &QTreeWidget::itemSelectionChanged, this, [this] {
-        if (!refreshing && tree->currentItem())
-            select(tree->currentItem()->data(0, Qt::UserRole).toString());
+        if (refreshing || !tree->currentItem()) return;
+        selected = tree->currentItem()->data(0, Qt::UserRole).toString();
+        canvas->selectedDetails.clear();
+        for (auto *entry : tree->selectedItems()) {
+            const auto id = entry->data(0, Qt::UserRole).toString();
+            if (!id.isEmpty()) canvas->selectedDetails.append({id, "object", -1, {}});
+        }
+        canvas->selectedDetail = canvas->selectedDetails.isEmpty() ? Viewport::SelectionTarget{} : canvas->selectedDetails.back();
+        canvas->selected = selected;
+        canvas->update();
     });
     connect(tree, &QTreeWidget::itemClicked, this, [this](QTreeWidgetItem *item, int column) {
         if (activeCommand)
@@ -1490,10 +1499,32 @@ Window::Window(QString recoveryDirectory, bool promptRecovery, QString preferenc
         auto *item = tree->itemAt(pos);
         if (!item)
             return;
-        select(item->data(0, Qt::UserRole).toString());
+        if (!tree->selectedItems().contains(item))
+            tree->setCurrentItem(item);
+        selected = item->data(0, Qt::UserRole).toString();
         if (selected.isEmpty())
             return;
         QMenu menu;
+        if (tree->selectedItems().size() >= 2) {
+            menu.addAction("Criar grupo…", this, [this] {
+                QStringList ids;
+                for (auto *entry : tree->selectedItems()) {
+                    const auto id = entry->data(0, Qt::UserRole).toString();
+                    if (!id.isEmpty() && !ids.contains(id)) ids.append(id);
+                }
+                bool ok = false;
+                const auto name = QInputDialog::getText(this, "Criar grupo", "Nome do grupo:",
+                                                         QLineEdit::Normal, "Grupo", &ok).trimmed();
+                if (!ok || name.isEmpty() || ids.size() < 2) return;
+                for (const auto &id : ids) {
+                    auto parameters = model.get(id).p;
+                    parameters["group"] = name;
+                    model.edit(id, parameters, model.get(id).name);
+                }
+                refresh();
+            });
+            menu.addSeparator();
+        }
         menu.addAction("Edit Feature", this, [this] { properties->show(); });
         menu.addAction("Rename…", this, [this] {
             if (selected.isEmpty()) return;
@@ -1770,9 +1801,21 @@ void Window::refresh(bool fit) {
     sketches->setIcon(1, icon("folder"));
     auto *history = new QTreeWidgetItem(root, {"", "Features"});
     history->setIcon(1, icon("folder"));
+    QMap<QString, QTreeWidgetItem *> groups;
+    for (const auto &f : model.features) {
+        const auto group = f.p.value("group").toString().trimmed();
+        if (!group.isEmpty() && !groups.contains(group)) {
+            auto *groupItem = new QTreeWidgetItem(root, {"", group});
+            groupItem->setIcon(1, icon("folder"));
+            groupItem->setExpanded(true);
+            groups.insert(group, groupItem);
+        }
+    }
     for (auto &f : model.features) {
         bool consumed = model.consumed(f.id);
         auto *parent = f.type == "sketch" ? sketches : ((f.inactive || consumed || f.type == "remove") ? history : bodies);
+        const auto group = f.p.value("group").toString().trimmed();
+        if (!group.isEmpty() && groups.contains(group)) parent = groups[group];
         const QString state=f.suppressed?" [suprimida]":(f.inactive?" [dependência suprimida]":"");
         auto *item = new QTreeWidgetItem(parent, {"", f.name+state});
         item->setIcon(0, icon(f.visible && !f.inactive ? "eye" : "hidden"));
