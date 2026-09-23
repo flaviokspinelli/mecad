@@ -806,12 +806,19 @@ QString Model::importStep(const QString &path) {
     STEPControl_Reader reader;
     require(reader.ReadFile(path.toUtf8().constData()) == IFSelect_RetDone, "Não foi possível ler o STEP.");
     require(reader.TransferRoots() > 0, "O STEP não contém geometria transferível.");
-    auto shape = reader.OneShape();
-    require(!shape.IsNull(), "STEP vazio.");
-    std::ostringstream stream;
-    BRepTools::Write(shape, stream);
-    return add("import", {{"brep", QString::fromLatin1(QByteArray::fromStdString(stream.str()).toBase64())}},
-               QFileInfo(path).completeBaseName());
+    const auto base = QFileInfo(path).completeBaseName();
+    QString last;
+    const int shapeCount = reader.NbShapes();
+    for (int index = 1; index <= shapeCount; ++index) {
+        const auto shape = reader.Shape(index);
+        if (shape.IsNull()) continue;
+        std::ostringstream stream;
+        BRepTools::Write(shape, stream);
+        const auto name = shapeCount == 1 ? base : QString("%1 · componente %2").arg(base).arg(index);
+        last = add("import", {{"brep", QString::fromLatin1(QByteArray::fromStdString(stream.str()).toBase64())}}, name);
+    }
+    require(!last.isEmpty(), "STEP vazio.");
+    return last;
 }
 QString Model::importStl(const QString &path) {
     QFile file(path);
