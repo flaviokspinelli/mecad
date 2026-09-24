@@ -558,6 +558,14 @@ void Viewport::paintOverlay(QPainter &p) {
             };
             auto dimension = [&](QPointF a, QPointF b, QPointF offset, QString label, QString key,
                                  double multiplier = 1) {
+                // Never draw a segment/angle dimension directly over its
+                // geometry.  Put it on the perpendicular side of the edge.
+                if (key.startsWith("segment:") || key.startsWith("angle:")) {
+                    const QPointF d = b - a;
+                    const double length = std::hypot(d.x(), d.y());
+                    if (length > 1e-6)
+                        offset = QPointF(-d.y() / length, d.x() / length) * 28.0;
+                }
                 // Keep measurement construction lines visually separate from
                 // sketch geometry: faint/dashed lines, with the value itself
                 // remaining crisp and editable.
@@ -586,7 +594,7 @@ void Viewport::paintOverlay(QPainter &p) {
                 dimension(point(x + w, y), point(x + w, y + h), {40, 0}, QString::number(h, 'f', 2), "h");
             } else if (kind == "circle") {
                 double r = params["r"].toDouble();
-                dimension(point(x - r, y), point(x + r, y), {0, 0}, "Ø " + QString::number(r * 2, 'f', 2),
+                dimension(point(x - r, y), point(x + r, y), {0, -30}, "Ø " + QString::number(r * 2, 'f', 2),
                           "r", 2);
             } else if (kind == "polyline") {
                 const auto points = params["points"].toArray();
