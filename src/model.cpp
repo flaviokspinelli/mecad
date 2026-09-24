@@ -573,8 +573,21 @@ void Model::rebuildGeometry() {
                         BRepAlgoAPI_Cut cut(target, f.shape);
                         require(cut.IsDone(), "Não foi possível calcular o corte.");
                         f.shape = cut.Shape();
-                        require(!f.shape.IsNull() && volume(target) - volume(f.shape) > 1e-7,
-                                "A extrusão não atravessa a peça. Arraste a seta para dentro dela ou inverta o sinal da distância.");
+                        if (f.shape.IsNull() || volume(target) - volume(f.shape) <= 1e-7) {
+                            // A face may be extruded away from the target when
+                            // the manipulator is dragged in the visual normal
+                            // direction. Try the opposite side automatically.
+                            const double distance = value(p, "d", 10);
+                            const auto normal = planeNormal(sketch.p["plane"].toString("XY"));
+                            const auto reverse = BRepPrimAPI_MakePrism(
+                                face.Face(), gp_Vec(-normal.x() * distance, -normal.y() * distance, -normal.z() * distance)).Shape();
+                            BRepAlgoAPI_Cut reverseCut(target, reverse);
+                            if (reverseCut.IsDone() && !reverseCut.Shape().IsNull() &&
+                                volume(target) - volume(reverseCut.Shape()) > 1e-7)
+                                f.shape = reverseCut.Shape();
+                            else
+                                throw std::runtime_error("A extrusão não atravessa a peça. Ajuste a distância ou a posição do perfil.");
+                        }
                     } else
                         f.shape = BRepAlgoAPI_Fuse(target, f.shape).Shape();
                 }

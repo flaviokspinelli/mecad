@@ -633,7 +633,7 @@ QAction *Window::command(QString key, QString label, QString shortcut, std::func
             if(!selected.isEmpty() && model.get(selected).inactive &&
                (bodyCommands.contains(key) || key=="chamfer" || key=="sketch" || key=="measure"))
                 throw std::runtime_error("Reative a etapa e suas dependências antes de operar sobre sua geometria.");
-            if (key != "delete" && key != "transform" && key != "fillet" && key != "chamfer" &&
+            if (key != "delete" && key != "transform" && key != "fillet" && key != "chamfer" && key != "rollback" &&
                 !(key == "extrude") &&
                 (canvas->hasSubselection() || canvas->selectedDetails.size() > 1) && bodyCommands.contains(key))
                 throw std::runtime_error(
