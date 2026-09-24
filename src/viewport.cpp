@@ -565,7 +565,13 @@ void Viewport::paintOverlay(QPainter &p) {
                     const double length = std::hypot(d.x(), d.y());
                     if (length > 1e-6) {
                         const double side = key.startsWith("angle:") ? -28.0 : 28.0;
-                        offset = QPointF(-d.y() / length, d.x() / length) * side;
+                        const QPointF normal(-d.y() / length, d.x() / length);
+                        offset = normal * side;
+                        // Put angular and linear labels on different rows as
+                        // well as different sides, avoiding overlapping boxes
+                        // on near-vertical or near-horizontal segments.
+                        if (key.startsWith("angle:"))
+                            offset += QPointF(d.x() / length, d.y() / length) * 32.0;
                     }
                 }
                 // Keep measurement construction lines visually separate from
