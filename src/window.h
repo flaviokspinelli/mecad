@@ -24,6 +24,7 @@ class Window : public QMainWindow {
     void openPath(const QString &path);
     void demo();
     void pattern(bool circular);
+    void patternSketch();
     Model model;
 
   protected:

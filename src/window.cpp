@@ -992,6 +992,7 @@ Window::Window(QString recoveryDirectory, bool promptRecovery, QString preferenc
     command("copy", "Create Copy", "", [this] { transform(true); });
     command("patternLinear", "Pattern Linear", "", [this] { pattern(false); });
     command("patternCircular", "Pattern Circular", "", [this] { pattern(true); });
+    command("patternSketch", "Pattern Linear (Sketch)", "", [this] { patternSketch(); });
     command("boolean", "Combine", "", [this] { booleanOp("join"); });
     command("cut", "Combine — Cut", "", [this] { booleanOp("cut"); });
     command("common", "Combine — Intersect", "", [this] { booleanOp("common"); });
@@ -1798,7 +1799,7 @@ void Window::buildRibbon() {
         tabs->setTabText(0, "SKETCH");
         group("CREATE", {"polyline", "rectangle", "circle", "polygon", "arc", "exact"},
               {"polyline", "rectangle", "circle", "polygon", "arc", "exact"}, {"Spline", "Slot", "Text"});
-        group("MODIFY", {"dimension"}, {"dimension"}, {"Trim", "Extend", "Offset", "Mirror"},
+        group("MODIFY", {"dimension", "measure", "patternSketch"}, {"dimension", "measure", "patternSketch"}, {"Trim", "Extend", "Offset", "Mirror"},
               {"trim", "offset"});
         group("CONSTRAINTS", {"constraint_horizontal","constraint_vertical","constraint_fixed"},
               {"constraint_horizontal","constraint_vertical","constraint_fixed","constraint_distance_x","constraint_distance_y","constraint_remove"},
@@ -2634,6 +2635,37 @@ void Window::transform(bool copy) {
         canvas->update();
     }
 }
+void Window::patternSketch() {
+    if (!canvas->sketchMode || selected.isEmpty() || model.get(selected).type != "sketch")
+        throw std::runtime_error("Abra um sketch para aplicar o pattern.");
+    auto parameters = model.get(selected).p;
+    if (parameters["profile"] != "polyline")
+        throw std::runtime_error("Pattern de sketch atualmente exige um perfil poligonal.");
+    Form panel(this, "Pattern Linear — Sketch");
+    panel.number("count", "Quantity", 3, 2, 2000, "");
+    panel.choice("direction", "Direction", {{"X", "X"}, {"Y", "Y"}}, "X");
+    panel.number("spacing", "Spacing", 10, -100000, 100000, " mm");
+    panel.note("Duplica o perfil dentro do sketch atual.");
+    if (!panel.acceptForm()) return;
+    const auto values = panel.values();
+    const auto original = parameters["points"].toArray();
+    QJsonArray all = original;
+    const int count = values["count"].toInt();
+    const double spacing = values["spacing"].toDouble();
+    for (int copy = 1; copy < count; ++copy) {
+        for (const auto &entry : original) {
+            const auto point = entry.toArray();
+            const double offset = spacing * copy;
+            all.append(QJsonArray{point[0].toDouble() + (values["direction"] == "X" ? offset : 0.),
+                                  point[1].toDouble() + (values["direction"] == "Y" ? offset : 0.)});
+        }
+    }
+    parameters["points"] = all;
+    parameters["closed"] = false;
+    model.edit(selected, parameters, model.get(selected).name);
+    refresh();
+}
+
 void Window::pattern(bool circular) {
     QStringList bodies;
     for (const auto index : model.bodies()) bodies.append(model.features[index].id);
