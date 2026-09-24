@@ -607,15 +607,18 @@ void Viewport::paintOverlay(QPainter &p) {
             } else if (kind == "polyline") {
                 const auto points = params["points"].toArray();
                 if (points.size() >= 2) {
-                    const auto a = points[0].toArray();
-                    const auto b = points[1].toArray();
+                    const auto &detail = selectedDetails.empty() ? selectedDetail : selectedDetails.front();
+                    int segmentIndex = (detail.kind == "edge" && detail.index >= 0) ? detail.index : 0;
+                    segmentIndex = std::clamp(segmentIndex, 0, int(points.size()) - 2);
+                    const auto a = points[segmentIndex].toArray();
+                    const auto b = points[segmentIndex + 1].toArray();
                     const QPointF first(a.at(0).toDouble(), a.at(1).toDouble());
                     const QPointF second(b.at(0).toDouble(), b.at(1).toDouble());
                     dimension(point(first.x(), first.y()), point(second.x(), second.y()), {0, 26},
-                              QString::number(QLineF(first, second).length(), 'f', 2), "segment:0");
+                              QString::number(QLineF(first, second).length(), 'f', 2), QString("segment:%1").arg(segmentIndex));
                     dimension(point(first.x(), first.y()), point(second.x(), second.y()), {0, -26},
                               QString::number(std::atan2(second.y() - first.y(), second.x() - first.x()) * 180.0 / M_PI,
-                                              'f', 2) + "°", "angle:0");
+                                              'f', 2) + "°", QString("angle:%1").arg(segmentIndex));
                 }
             } else if(params.contains("constraintSystem")) {
                 const auto system=sketch::System::fromJson(params["constraintSystem"].toObject());
