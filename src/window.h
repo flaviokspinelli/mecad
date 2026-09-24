@@ -23,6 +23,7 @@ class Window : public QMainWindow {
     explicit Window(QString recoveryDirectory = {}, bool promptRecovery = true, QString preferencesFile = {});
     void openPath(const QString &path);
     void demo();
+    void pattern(bool circular);
     Model model;
 
   protected:

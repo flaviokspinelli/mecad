@@ -990,6 +990,8 @@ Window::Window(QString recoveryDirectory, bool promptRecovery, QString preferenc
         command(type, displayType(type), "", [this, type] { primitive(type); });
     command("transform", "Move / Copy", "M", [this] { transform(false); });
     command("copy", "Create Copy", "", [this] { transform(true); });
+    command("patternLinear", "Pattern Linear", "", [this] { pattern(false); });
+    command("patternCircular", "Pattern Circular", "", [this] { pattern(true); });
     command("boolean", "Combine", "", [this] { booleanOp("join"); });
     command("cut", "Combine — Cut", "", [this] { booleanOp("cut"); });
     command("common", "Combine — Intersect", "", [this] { booleanOp("common"); });
@@ -1814,7 +1816,7 @@ void Window::buildRibbon() {
         group("CREATE", {"sketch", "extrude", "revolve", "hole", "box", "cylinder"},
               {"sketch", "extrude", "revolve", "hole", "box", "cylinder", "sphere"},
               {"Sweep", "Loft", "Pattern", "Mirror"});
-        group("MODIFY", {"fillet", "boolean", "cut", "copy", "transform"},
+        group("MODIFY", {"fillet", "boolean", "cut", "copy", "transform", "patternLinear", "patternCircular"},
               {"fillet", "chamfer", "transform", "copy", "boolean", "cut", "common", "parameters", "expression"},
               {"Shell", "Draft", "Scale", "Split Body"});
         group("ASSEMBLE", {}, {}, {"New Component", "Joint", "As-Built Joint"}, {"joint", "component"});
@@ -2632,6 +2634,53 @@ void Window::transform(bool copy) {
         canvas->update();
     }
 }
+void Window::pattern(bool circular) {
+    QStringList bodies;
+    for (const auto index : model.bodies()) bodies.append(model.features[index].id);
+    if (bodies.isEmpty()) throw std::runtime_error("Crie um corpo antes de aplicar um pattern.");
+    Form panel(this, circular ? "Pattern Circular" : "Pattern Linear");
+    QList<QPair<QString, QString>> choices;
+    for (const auto index : model.bodies()) choices.append({model.features[index].name, model.features[index].id});
+    panel.choice("source", "Object", choices, selected);
+    panel.number("count", "Quantity", 3, 2, 2000, "");
+    if (circular) {
+        panel.choice("axis", "Axis", {{"X", "X"}, {"Y", "Y"}, {"Z", "Z"}}, "Z");
+        panel.number("angle", "Total angle", 360, -36000, 36000, " °");
+        panel.number("px", "Pivot X", 0);
+        panel.number("py", "Pivot Y", 0);
+        panel.number("pz", "Pivot Z", 0);
+    } else {
+        panel.choice("direction", "Direction", {{"X", "X"}, {"Y", "Y"}, {"Z", "Z"}}, "X");
+        panel.number("spacing", "Spacing", 50, -100000, 100000, " mm");
+    }
+    panel.note(circular ? "Cria cópias distribuídas em torno de um eixo." :
+                          "Cria cópias igualmente espaçadas em uma direção.");
+    if (!panel.acceptForm()) return;
+    const auto values = panel.values();
+    const auto source = values["source"].toString();
+    Model work = model;
+    QString last;
+    const int count = values["count"].toInt();
+    for (int i = 1; i < count; ++i) {
+        QJsonObject p{{"source", source}};
+        if (circular) {
+            p["axis"] = values["axis"];
+            p["angle"] = values["angle"].toDouble() * i / (count - 1);
+            p["px"] = values["px"]; p["py"] = values["py"]; p["pz"] = values["pz"];
+            p["x"] = 0.; p["y"] = 0.; p["z"] = 0.;
+        } else {
+            const auto distance = values["spacing"].toDouble() * i;
+            p["x"] = values["direction"] == "X" ? distance : 0.;
+            p["y"] = values["direction"] == "Y" ? distance : 0.;
+            p["z"] = values["direction"] == "Z" ? distance : 0.;
+            p["angle"] = 0.; p["axis"] = "Z";
+            p["px"] = 0.; p["py"] = 0.; p["pz"] = 0.;
+        }
+        last = work.add("copy", p, QString("Pattern %1").arg(i));
+    }
+    if (!last.isEmpty()) { model.commit(work.json()); selected = last; refresh(); }
+}
+
 bool Window::checkSketchConstraint(const QString &owner, sketch::Relation relation,
                                    const QString &first, const QString &second, QPointF value) {
     auto system=model.sketchSystem(owner);
