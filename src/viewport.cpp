@@ -1423,7 +1423,16 @@ void Viewport::mouseReleaseEvent(QMouseEvent *e) {
         if (!draft.empty() && QLineF(draft.last(), cursor).length() < 1e-5)
             return;
         draft.push_back(cursor);
-        if (draft.size() == 2 && tool == "rectangle") {
+        if (draft.size() == 2 && tool == "polyline") {
+            // A line is a two-point polyline.  Commit it immediately so the
+            // tool remains active and the next click can add another segment.
+            // Window::onProfile merges consecutive open segments into the
+            // same sketch feature.
+            QJsonArray points;
+            for (const auto &point : draft)
+                points.append(QJsonArray{point.x(), point.y()});
+            submit({{"profile", "polyline"}, {"points", points}, {"closed", false}});
+        } else if (draft.size() == 2 && tool == "rectangle") {
             auto a = draft[0], b = draft[1];
             if (std::abs(b.x() - a.x()) < 1e-5 || std::abs(b.y() - a.y()) < 1e-5) {
                 draft.resize(1);
