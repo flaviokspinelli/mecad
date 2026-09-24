@@ -558,7 +558,11 @@ void Viewport::paintOverlay(QPainter &p) {
             };
             auto dimension = [&](QPointF a, QPointF b, QPointF offset, QString label, QString key,
                                  double multiplier = 1) {
-                p.setPen(QPen(QColor("#e6bd7e"), 1));
+                // Keep measurement construction lines visually separate from
+                // sketch geometry: faint/dashed lines, with the value itself
+                // remaining crisp and editable.
+                QPen guide(QColor(230, 189, 126, 105), 1, Qt::DashLine);
+                p.setPen(guide);
                 p.drawLine(a, a + offset);
                 p.drawLine(b, b + offset);
                 p.drawLine(a + offset, b + offset);
