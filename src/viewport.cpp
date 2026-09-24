@@ -593,6 +593,9 @@ void Viewport::paintOverlay(QPainter &p) {
                     const QPointF second(b.at(0).toDouble(), b.at(1).toDouble());
                     dimension(point(first.x(), first.y()), point(second.x(), second.y()), {0, 26},
                               QString::number(QLineF(first, second).length(), 'f', 2), "segment:0");
+                    dimension(point(first.x(), first.y()), point(second.x(), second.y()), {0, -26},
+                              QString::number(std::atan2(second.y() - first.y(), second.x() - first.x()) * 180.0 / M_PI,
+                                              'f', 2) + "°", "angle:0");
                 }
             } else if(params.contains("constraintSystem")) {
                 const auto system=sketch::System::fromJson(params["constraintSystem"].toObject());
@@ -1022,6 +1025,7 @@ bool Viewport::eventFilter(QObject *object, QEvent *event) {
                 double value =
                     dimensionEditor->text().trimmed().replace(',', '.').toDouble(&ok) / dimensionMultiplier;
                 QString error;
+                const bool angular = dimensionKey.startsWith("angle:");
                 const bool bound=model->get(dimensionFeature).p.value("expressions").toObject().contains(dimensionKey);
                 if(onDimensionExpression && (dimensionKey.startsWith("constraint:") || bound || !ok)) {
                     QString formula=dimensionEditor->text().trimmed();
@@ -1032,8 +1036,8 @@ bool Viewport::eventFilter(QObject *object, QEvent *event) {
                         error=onDimensionExpression(dimensionFeature,dimensionKey,formula);
                     }
                 }
-                else if (!ok || !std::isfinite(value) || value <= 1e-5 || value > 1e6)
-                    error = "Digite uma medida positiva válida em mm.";
+                else if (!ok || !std::isfinite(value) || (angular ? std::abs(value) > 360.0 : value <= 1e-5 || value > 1e6))
+                    error = angular ? "Digite um ângulo entre -360° e 360°." : "Digite uma medida positiva válida em mm.";
                 else if (onDimensionEdit)
                     error = onDimensionEdit(dimensionFeature, dimensionKey, value);
                 if (error.isEmpty()) {
