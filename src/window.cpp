@@ -464,7 +464,7 @@ QAction *Window::command(QString key, QString label, QString shortcut, std::func
                 }
         run([&] {
             if (key == "extrude" && canvas->selectedDetail.kind == "face" &&
-                canvas->selectedDetails.size() <= 1 && std::any_of(model.features.cbegin(), model.features.cend(),
+                std::any_of(model.features.cbegin(), model.features.cend(),
                     [this](const Feature &feature) { return feature.id == canvas->selectedDetail.feature; })) {
                 const auto target = canvas->selectedDetail;
                 TopTools_IndexedMapOfShape faces;
@@ -484,7 +484,9 @@ QAction *Window::command(QString key, QString label, QString shortcut, std::func
                     }
                     if (points.size() >= 3) {
                         const auto sketch = model.add("sketch", {{"profile", "polyline"}, {"points", points},
-                            {"closed", true}, {"plane", plane}, {"offset", 0.0}}, "Face profile");
+                            {"closed", true}, {"plane", plane}, {"offset", 0.0},
+                            {"support", target.feature}, {"supportFace", target.index},
+                            {"supportFaceCount", faces.Extent()}}, "Face profile");
                         selected = sketch;
                         select(sketch);
                     }
@@ -2166,7 +2168,9 @@ void Window::extrude(bool revolve) {
     if (editing.isEmpty() && !selected.isEmpty() && model.get(selected).type == "sketch")
         initialProfile = selected;
     sketches.prepend({"Select a profile…", ""});
-    const auto originalTarget = initial["target"].toString();
+    QString originalTarget = initial["target"].toString();
+    if (originalTarget.isEmpty() && !initialProfile.isEmpty() && model.get(initialProfile).type == "sketch")
+        originalTarget = model.get(initialProfile).p["support"].toString();
     if (!originalTarget.isEmpty() && !bodies.contains({model.get(originalTarget).name, originalTarget}))
         bodies.append({model.get(originalTarget).name, originalTarget});
     Form panel(this, editing.isEmpty() ? (revolve ? "Revolve" : "Extrude")
