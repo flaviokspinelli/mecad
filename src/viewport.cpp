@@ -563,8 +563,10 @@ void Viewport::paintOverlay(QPainter &p) {
                 if (key.startsWith("segment:") || key.startsWith("angle:")) {
                     const QPointF d = b - a;
                     const double length = std::hypot(d.x(), d.y());
-                    if (length > 1e-6)
-                        offset = QPointF(-d.y() / length, d.x() / length) * 28.0;
+                    if (length > 1e-6) {
+                        const double side = key.startsWith("angle:") ? -28.0 : 28.0;
+                        offset = QPointF(-d.y() / length, d.x() / length) * side;
+                    }
                 }
                 // Keep measurement construction lines visually separate from
                 // sketch geometry: faint/dashed lines, with the value itself
