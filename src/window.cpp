@@ -1815,7 +1815,7 @@ void Window::buildRibbon() {
         tabs->setTabText(0, "SOLID");
         group("CREATE", {"sketch", "extrude", "revolve", "hole", "box", "cylinder"},
               {"sketch", "extrude", "revolve", "hole", "box", "cylinder", "sphere"},
-              {"Sweep", "Loft", "Pattern", "Mirror"});
+              {"Sweep", "Loft", "Mirror"});
         group("MODIFY", {"fillet", "boolean", "cut", "copy", "transform", "patternLinear", "patternCircular"},
               {"fillet", "chamfer", "transform", "copy", "boolean", "cut", "common", "parameters", "expression"},
               {"Shell", "Draft", "Scale", "Split Body"});
