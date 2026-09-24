@@ -2216,6 +2216,19 @@ void Window::extrude(bool revolve) {
     QString initialProfile = initial["source"].toString();
     if (editing.isEmpty() && !selected.isEmpty() && model.get(selected).type == "sketch")
         initialProfile = selected;
+    if (initialProfile.isEmpty() && editing.isEmpty()) {
+        // Edge selections from patterned solids do not carry a sketch id.
+        // Prefer the latest closed sketch as the modeling profile so the
+        // command still opens with a usable arrow and preview.
+        for (auto it = model.features.crbegin(); it != model.features.crend(); ++it) {
+            if (it->inactive || it->type != "sketch") continue;
+            const auto &p = it->p;
+            if (p["profile"] == "rectangle" || p["profile"] == "circle" || p["closed"].toBool()) {
+                initialProfile = it->id;
+                break;
+            }
+        }
+    }
     sketches.prepend({"Select a profile…", ""});
     QString originalTarget = initial["target"].toString();
     if (originalTarget.isEmpty() && !initialProfile.isEmpty() && model.get(initialProfile).type == "sketch")
