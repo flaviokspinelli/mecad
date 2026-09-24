@@ -635,6 +635,7 @@ QAction *Window::command(QString key, QString label, QString shortcut, std::func
                 throw std::runtime_error("Reative a etapa e suas dependências antes de operar sobre sua geometria.");
             if (key != "delete" && key != "transform" && key != "fillet" && key != "chamfer" &&
                 !(key == "extrude" && !faceTarget.feature.isEmpty()) &&
+                !(key == "extrude" && !selected.isEmpty() && model.get(selected).type == "sketch") &&
                 (canvas->hasSubselection() || canvas->selectedDetails.size() > 1) && bodyCommands.contains(key))
                 throw std::runtime_error(
                     "Há subelementos ou vários itens selecionados. Esta ferramenta ainda atua em um objeto inteiro; "
