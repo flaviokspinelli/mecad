@@ -463,10 +463,14 @@ QAction *Window::command(QString key, QString label, QString shortcut, std::func
                     return;
                 }
         run([&] {
-            if (key == "extrude" && canvas->selectedDetail.kind == "face" &&
+            Viewport::SelectionTarget faceTarget;
+            if (canvas->selectedDetail.kind == "face") faceTarget = canvas->selectedDetail;
+            else for (auto it = canvas->selectedDetails.crbegin(); it != canvas->selectedDetails.crend(); ++it)
+                if (it->kind == "face") { faceTarget = *it; break; }
+            if (key == "extrude" && faceTarget.kind == "face" &&
                 std::any_of(model.features.cbegin(), model.features.cend(),
-                    [this](const Feature &feature) { return feature.id == canvas->selectedDetail.feature; })) {
-                const auto target = canvas->selectedDetail;
+                    [&faceTarget](const Feature &feature) { return feature.id == faceTarget.feature; })) {
+                const auto target = faceTarget;
                 TopTools_IndexedMapOfShape faces;
                 TopExp::MapShapes(model.get(target.feature).shape, TopAbs_FACE, faces);
                 if (target.index >= 0 && target.index < faces.Extent()) {
