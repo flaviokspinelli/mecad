@@ -1396,6 +1396,27 @@ Window::Window(QString recoveryDirectory, bool promptRecovery, QString preferenc
             const auto &feature = model.get(id);
             auto parameters = feature.p;
             auto name = feature.name;
+            if (key.startsWith("segment:")) {
+                bool ok = false;
+                const int segment = key.mid(QString("segment:").size()).toInt(&ok);
+                auto points = parameters["points"].toArray();
+                if (!ok || segment < 0 || segment + 1 >= points.size())
+                    return "Segmento inválido.";
+                const auto a = points[segment].toArray();
+                const auto b = points[segment + 1].toArray();
+                const QPointF start(a.at(0).toDouble(), a.at(1).toDouble());
+                const QPointF end(b.at(0).toDouble(), b.at(1).toDouble());
+                const double length = QLineF(start, end).length();
+                if (length <= 1e-9 || value <= 1e-5)
+                    return "Digite uma medida positiva válida em mm.";
+                const QPointF scaled = start + (end - start) * (value / length);
+                points[segment + 1] = QJsonArray{scaled.x(), scaled.y()};
+                parameters["points"] = points;
+                model.edit(id, parameters, name);
+                selected = id;
+                refresh();
+                return {};
+            }
             parameters[key] = value;
             model.edit(id, parameters, name);
             selected = id;

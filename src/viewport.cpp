@@ -584,6 +584,16 @@ void Viewport::paintOverlay(QPainter &p) {
                 double r = params["r"].toDouble();
                 dimension(point(x - r, y), point(x + r, y), {0, 0}, "Ø " + QString::number(r * 2, 'f', 2),
                           "r", 2);
+            } else if (kind == "polyline") {
+                const auto points = params["points"].toArray();
+                if (points.size() >= 2) {
+                    const auto a = points[0].toArray();
+                    const auto b = points[1].toArray();
+                    const QPointF first(a.at(0).toDouble(), a.at(1).toDouble());
+                    const QPointF second(b.at(0).toDouble(), b.at(1).toDouble());
+                    dimension(point(first.x(), first.y()), point(second.x(), second.y()), {0, 26},
+                              QString::number(QLineF(first, second).length(), 'f', 2), "segment:0");
+                }
             } else if(params.contains("constraintSystem")) {
                 const auto system=sketch::System::fromJson(params["constraintSystem"].toObject());
                 if(constraintDiagnostics.contains(f.id)) {
