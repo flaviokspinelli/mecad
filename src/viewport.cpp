@@ -643,9 +643,15 @@ void Viewport::paintOverlay(QPainter &p) {
         p.setBrush(QColor("#62dbbf"));
         for (auto point : draft)
             p.drawEllipse(pixel(point), 3, 3);
+        // Dimensions shown while drawing are relative to the point where the
+        // gesture started.  Using the absolute sketch coordinates here made
+        // the readout appear to be measured from the screen/origin center.
+        const QPointF origin = draft.front();
+        const double dx = cursor.x() - origin.x();
+        const double dy = cursor.y() - origin.y();
         p.setPen(QColor("#c7eee5"));
         p.drawText(b + QPointF(14, -14),
-                   QString("%1, %2 mm").arg(cursor.x(), 0, 'f', 1).arg(cursor.y(), 0, 'f', 1));
+                   QString("%1, %2 mm").arg(dx, 0, 'f', 1).arg(dy, 0, 'f', 1));
     }
     p.setPen(light ? QColor("#475569") : QColor("#a4b3c5"));
     p.setFont(QFont("Helvetica Neue", 11));
